@@ -19,8 +19,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { usePvP } from "@/hooks/usePvP";
 import ActionCard from "@/components/ActionCard";
 import KiMeter from "@/components/KiMeter";
+import { BattleArena, PixelPortrait } from "@/components/pixel-art";
 import { colors, fontSize, spacing } from "@/lib/theme";
 import type { Action } from "@/lib/api";
+
+// Default characters for PvP (no character select in PvP flow yet)
+const PVP_PLAYER_CHAR = "haneul";
+const PVP_OPPONENT_CHAR = "bora";
 
 const ACTIONS: Action[] = ["charge", "block", "attack", "energy_wave", "teleport"];
 
@@ -77,6 +82,10 @@ export default function PvPScreen() {
         {/* LOBBY */}
         {phase === "lobby" && (
           <View style={styles.centerArea}>
+            <BattleArena
+              playerCharacterId={PVP_PLAYER_CHAR}
+              aiCharacterId={PVP_OPPONENT_CHAR}
+            />
             <Text style={styles.title}>PvP Mode</Text>
             <Text style={styles.subtitle}>기싸움 — vs Real Player</Text>
             <Text style={styles.tagline}>
@@ -120,7 +129,10 @@ export default function PvPScreen() {
         {/* MATCHED */}
         {phase === "matched" && (
           <View style={styles.centerArea}>
-            <Text style={styles.bigEmoji}>⚔️</Text>
+            <BattleArena
+              playerCharacterId={PVP_PLAYER_CHAR}
+              aiCharacterId={PVP_OPPONENT_CHAR}
+            />
             <Text style={styles.statusTitle}>Match Found!</Text>
             <Text style={styles.statusSubtext}>vs {opponentName}</Text>
             <ActivityIndicator size="large" color={colors.yellow} />
@@ -130,6 +142,10 @@ export default function PvPScreen() {
         {/* PLAYING */}
         {phase === "playing" && gameState && (
           <View style={styles.gameArea}>
+            <BattleArena
+              playerCharacterId={PVP_PLAYER_CHAR}
+              aiCharacterId={PVP_OPPONENT_CHAR}
+            />
             <View style={styles.scoreHeader}>
               <Text style={styles.roundInfo}>
                 Round {gameState.round_number} • Turn {gameState.turn}
@@ -276,13 +292,13 @@ export default function PvPScreen() {
         {/* MATCH END */}
         {phase === "match_end" && matchResult && (
           <View style={styles.centerArea}>
-            <Text style={styles.bigEmoji}>
-              {matchResult.winner === "you"
-                ? "🏆"
-                : matchResult.winner === "opponent"
-                  ? "💀"
-                  : "🤝"}
-            </Text>
+            {matchResult.winner === "you" ? (
+              <PixelPortrait characterId={PVP_PLAYER_CHAR} size="lg" />
+            ) : matchResult.winner === "opponent" ? (
+              <PixelPortrait characterId={PVP_OPPONENT_CHAR} size="lg" />
+            ) : (
+              <Text style={styles.bigEmoji}>🤝</Text>
+            )}
             <Text
               style={[
                 styles.matchResultText,

@@ -8,6 +8,7 @@
 import { View, Text, ScrollView, StyleSheet } from "react-native";
 import KiMeter from "./KiMeter";
 import AIThinking from "./AIThinking";
+import { PixelPortrait } from "@/components/pixel-art";
 import { colors, fontSize, spacing } from "@/lib/theme";
 import type { GameState, TurnOutcome } from "@/lib/api";
 import type { Character } from "@/lib/characters";
@@ -41,23 +42,21 @@ export default function MatchHUD({
 }: MatchHUDProps) {
   const round = gameState.current_round;
 
-  // Display labels: use character emoji+name if available, else fallback
-  const playerLabel = playerCharacter
-    ? `${playerCharacter.emoji} ${playerCharacter.name}`
-    : playerName;
-  const aiLabel = aiCharacter
-    ? `${aiCharacter.emoji} ${aiCharacter.name}`
-    : "AI";
+  // Display labels: character name only (portraits shown separately)
+  const playerLabel = playerCharacter ? playerCharacter.name : playerName;
+  const aiLabel = aiCharacter ? aiCharacter.name : "AI";
+  const playerCharId = playerCharacter?.id;
+  const aiCharId = aiCharacter?.id;
 
   return (
     <View style={styles.container}>
       {/* Round Score */}
       <View style={styles.scoreRow}>
-        <ScoreDots label={playerLabel} wins={gameState.rounds_won_p1} color={colors.green} />
+        <ScoreDots label={playerLabel} wins={gameState.rounds_won_p1} color={colors.green} characterId={playerCharId} />
         <Text style={styles.turnCounter}>
           Turn {round?.turn_number ?? 0} / 20
         </Text>
-        <ScoreDots label={aiLabel} wins={gameState.rounds_won_p2} color={colors.red} />
+        <ScoreDots label={aiLabel} wins={gameState.rounds_won_p2} color={colors.red} characterId={aiCharId} />
       </View>
 
       {/* Ki Meters */}
@@ -104,13 +103,16 @@ function ScoreDots({
   label,
   wins,
   color,
+  characterId,
 }: {
   label: string;
   wins: number;
   color: string;
+  characterId?: string;
 }) {
   return (
     <View style={styles.scoreDotsContainer}>
+      {characterId && <PixelPortrait characterId={characterId} size="sm" />}
       <Text style={[styles.scoreLabel, { color }]}>{label}</Text>
       <View style={styles.dots}>
         {[0, 1].map((i) => (

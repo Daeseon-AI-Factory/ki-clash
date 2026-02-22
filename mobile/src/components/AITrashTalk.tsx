@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { View, Text, StyleSheet, Animated } from "react-native";
 import { colors, fontSize, spacing } from "@/lib/theme";
 import type { Character } from "@/lib/characters";
+import { PixelPortrait } from "@/components/pixel-art";
 
 interface AITrashTalkProps {
   character: Character;
@@ -52,7 +53,7 @@ export default function AITrashTalk({ character, turnNumber }: AITrashTalkProps)
         },
       ]}
     >
-      <Text style={styles.emoji}>{character.emoji}</Text>
+      <PixelPortrait characterId={character.id} size="sm" />
       <Text style={styles.text}>
         &ldquo;{line}&rdquo;
       </Text>

@@ -28,6 +28,7 @@ import TurnReveal, { getShakeIntensity } from "@/components/TurnReveal";
 import CharacterSelect from "@/components/CharacterSelect";
 import AITrashTalk from "@/components/AITrashTalk";
 import MuteButton from "@/components/MuteButton";
+import { BattleArena, PixelPortrait } from "@/components/pixel-art";
 import { colors, fontSize, spacing } from "@/lib/theme";
 import type { Difficulty, TurnOutcome } from "@/lib/api";
 
@@ -79,12 +80,12 @@ export default function GameScreen() {
     [aiCharacterId]
   );
 
-  // Display names using character emoji+name when available
+  // Display names: name only (portraits shown via pixel art)
   const playerDisplayName = playerCharacter
-    ? `${playerCharacter.emoji} ${playerCharacter.name}`
+    ? playerCharacter.name
     : playerName;
   const aiDisplayName = aiCharacter
-    ? `${aiCharacter.emoji} ${aiCharacter.name}`
+    ? aiCharacter.name
     : "AI";
 
   // Initialize with difficulty on mount — goes to character_select
@@ -178,6 +179,12 @@ export default function GameScreen() {
           {/* PLAYING */}
           {phase === "playing" && gameState && (
             <View style={styles.gameArea}>
+              {playerCharacterId && aiCharacterId && (
+                <BattleArena
+                  playerCharacterId={playerCharacterId}
+                  aiCharacterId={aiCharacterId}
+                />
+              )}
               <MatchHUD
                 gameState={gameState}
                 playerName={playerName}
@@ -203,6 +210,12 @@ export default function GameScreen() {
           {/* REVEALING */}
           {phase === "revealing" && (
             <View style={styles.gameArea}>
+              {playerCharacterId && aiCharacterId && (
+                <BattleArena
+                  playerCharacterId={playerCharacterId}
+                  aiCharacterId={aiCharacterId}
+                />
+              )}
               {gameState && (
                 <MatchHUD
                   gameState={gameState}
@@ -231,6 +244,12 @@ export default function GameScreen() {
           {/* ROUND END */}
           {phase === "round_end" && lastRound && (
             <View style={styles.gameArea}>
+              {playerCharacterId && aiCharacterId && (
+                <BattleArena
+                  playerCharacterId={playerCharacterId}
+                  aiCharacterId={aiCharacterId}
+                />
+              )}
               {gameState && (
                 <MatchHUD
                   gameState={gameState}
@@ -286,13 +305,13 @@ export default function GameScreen() {
           {/* MATCH END */}
           {phase === "match_end" && matchResult && (
             <View style={styles.matchEndArea}>
-              <Text style={styles.matchEmoji}>
-                {matchResult.winner === "p1"
-                  ? "🏆"
-                  : matchResult.winner === "p2"
-                    ? "💀"
-                    : "🤝"}
-              </Text>
+              {matchResult.winner === "p1" && playerCharacterId ? (
+                <PixelPortrait characterId={playerCharacterId} size="lg" />
+              ) : matchResult.winner === "p2" && aiCharacterId ? (
+                <PixelPortrait characterId={aiCharacterId} size="lg" />
+              ) : (
+                <Text style={styles.matchEmoji}>🤝</Text>
+              )}
               <Text
                 style={[
                   styles.matchResultText,

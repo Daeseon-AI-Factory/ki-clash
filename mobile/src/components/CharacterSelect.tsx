@@ -9,6 +9,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import * as Haptics from "expo-haptics";
 import { CHARACTERS } from "@/lib/characters";
 import { colors, fontSize, spacing } from "@/lib/theme";
+import { PixelPortrait } from "@/components/pixel-art";
 
 interface CharacterSelectProps {
   onSelect: (characterId: string) => void;
@@ -35,7 +36,7 @@ export default function CharacterSelect({ onSelect }: CharacterSelectProps) {
             onPress={() => handleSelect(char.id)}
             activeOpacity={0.7}
           >
-            <Text style={styles.emoji}>{char.emoji}</Text>
+            <PixelPortrait characterId={char.id} size="lg" />
             <Text style={styles.name}>{char.name}</Text>
             <Text style={styles.koreanName}>{char.koreanName}</Text>
             <Text style={styles.bio} numberOfLines={2}>
