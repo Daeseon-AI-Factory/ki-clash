@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useGame } from "@/hooks/useGame";
 import { useSoundEffects } from "@/hooks/useSoundEffects";
+import { getCharacter } from "@/lib/characters";
 import type { Difficulty, TurnOutcome } from "@/lib/api";
 import Link from "next/link";
 import GameBoard from "@/components/GameBoard";
@@ -42,6 +43,24 @@ export default function Home() {
 
   const { play, muted, toggleMute } = useSoundEffects();
   const [shakeClass, setShakeClass] = useState("");
+
+  // Derive character objects from IDs (memoized to avoid re-lookups)
+  const playerCharacter = useMemo(
+    () => (playerCharacterId ? getCharacter(playerCharacterId) : undefined),
+    [playerCharacterId]
+  );
+  const aiCharacter = useMemo(
+    () => (aiCharacterId ? getCharacter(aiCharacterId) : undefined),
+    [aiCharacterId]
+  );
+
+  // Display names using character emoji+name when available
+  const playerDisplayName = playerCharacter
+    ? `${playerCharacter.emoji} ${playerCharacter.name}`
+    : playerName;
+  const aiDisplayName = aiCharacter
+    ? `${aiCharacter.emoji} ${aiCharacter.name}`
+    : "AI";
 
   // Track previous phase to detect transitions
   const prevPhaseRef = useRef(phase);
@@ -122,7 +141,7 @@ export default function Home() {
       {/* PLAYING — Main game with inline selection timer */}
       {phase === "playing" && gameState && (
         <div className="w-full max-w-2xl space-y-6">
-          <MatchHUD gameState={gameState} playerName={playerName} showAIThinking />
+          <MatchHUD gameState={gameState} playerName={playerName} showAIThinking playerCharacter={playerCharacter} aiCharacter={aiCharacter} />
           <GameBoard
             playerKi={gameState.current_round?.p1_ki ?? 0}
             disabled={false}
@@ -135,8 +154,8 @@ export default function Home() {
       {/* REVEALING — Turn result */}
       {phase === "revealing" && (
         <div className="w-full max-w-2xl space-y-6">
-          {gameState && <MatchHUD gameState={gameState} playerName={playerName} />}
-          <TurnReveal turnResult={lastTurn} visible={true} onOutcomeRevealed={handleOutcomeRevealed} />
+          {gameState && <MatchHUD gameState={gameState} playerName={playerName} playerCharacter={playerCharacter} aiCharacter={aiCharacter} />}
+          <TurnReveal turnResult={lastTurn} visible={true} onOutcomeRevealed={handleOutcomeRevealed} playerName={playerDisplayName} aiName={aiDisplayName} />
           <button
             onClick={continueFromReveal}
             className="w-full max-w-2xl py-3 bg-gray-700 hover:bg-gray-600 rounded-xl
@@ -150,8 +169,8 @@ export default function Home() {
       {/* ROUND END */}
       {phase === "round_end" && lastRound && (
         <div className="w-full max-w-2xl space-y-6">
-          {gameState && <MatchHUD gameState={gameState} playerName={playerName} />}
-          <TurnReveal turnResult={lastTurn} visible={true} onOutcomeRevealed={handleOutcomeRevealed} />
+          {gameState && <MatchHUD gameState={gameState} playerName={playerName} playerCharacter={playerCharacter} aiCharacter={aiCharacter} />}
+          <TurnReveal turnResult={lastTurn} visible={true} onOutcomeRevealed={handleOutcomeRevealed} playerName={playerDisplayName} aiName={aiDisplayName} />
           <div className="text-center py-6 bg-gray-800 rounded-xl">
             <p className="text-sm text-gray-400 uppercase tracking-wider">
               Round {lastRound.round_number} Complete

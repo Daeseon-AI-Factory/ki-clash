@@ -1,6 +1,7 @@
 "use client";
 
-import type { GameState, RoundResult } from "@/lib/api";
+import type { GameState } from "@/lib/api";
+import type { Character } from "@/lib/characters";
 import KiMeter from "./KiMeter";
 import AIThinking from "./AIThinking";
 
@@ -9,28 +10,46 @@ interface MatchHUDProps {
   playerName: string;
   /** Show animated "AI is analyzing..." below AI ki meter */
   showAIThinking?: boolean;
+  /** Player's chosen character (shows emoji+name when set) */
+  playerCharacter?: Character;
+  /** AI's assigned character (shows emoji+name when set) */
+  aiCharacter?: Character;
 }
 
 /**
  * Heads-up display showing:
- * - Round score (stars)
+ * - Round score (stars) with character emoji+name
  * - Ki meters for both players
  * - Turn counter
  * - Turn history (last few moves)
  */
-export default function MatchHUD({ gameState, playerName, showAIThinking }: MatchHUDProps) {
+export default function MatchHUD({
+  gameState,
+  playerName,
+  showAIThinking,
+  playerCharacter,
+  aiCharacter,
+}: MatchHUDProps) {
   const round = gameState.current_round;
   const playerKi = round?.p1_ki ?? 0;
   const aiKi = round?.p2_ki ?? 0;
   const turnNumber = round?.turn_number ?? 0;
   const roundNumber = round?.round_number ?? gameState.round_results.length;
 
+  // Display labels: use character emoji+name if available, else fallback
+  const playerLabel = playerCharacter
+    ? `${playerCharacter.emoji} ${playerCharacter.name}`
+    : playerName;
+  const aiLabel = aiCharacter
+    ? `${aiCharacter.emoji} ${aiCharacter.name}`
+    : "AI";
+
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4">
       {/* Round score */}
       <div className="flex justify-center items-center gap-4">
         <ScoreDots
-          label={playerName}
+          label={playerLabel}
           wins={gameState.rounds_won_p1}
           color="green"
         />
@@ -42,13 +61,13 @@ export default function MatchHUD({ gameState, playerName, showAIThinking }: Matc
             {gameState.rounds_won_p1} — {gameState.rounds_won_p2}
           </p>
         </div>
-        <ScoreDots label="AI" wins={gameState.rounds_won_p2} color="red" />
+        <ScoreDots label={aiLabel} wins={gameState.rounds_won_p2} color="red" />
       </div>
 
       {/* Ki meters */}
       <div className="space-y-2">
-        <KiMeter ki={playerKi} label={`${playerName} (You)`} isPlayer={true} />
-        <KiMeter ki={aiKi} label="AI Opponent" isPlayer={false} />
+        <KiMeter ki={playerKi} label={playerLabel} isPlayer={true} />
+        <KiMeter ki={aiKi} label={aiLabel} isPlayer={false} />
         {showAIThinking && <AIThinking />}
       </div>
 
@@ -71,8 +90,8 @@ export default function MatchHUD({ gameState, playerName, showAIThinking }: Matc
               >
                 <span>T{turn.turn_number}</span>
                 <span>
-                  You: {turn.p1_action.replace("_", " ")} vs AI:{" "}
-                  {turn.p2_action.replace("_", " ")}
+                  {playerCharacter?.emoji ?? "You"}: {turn.p1_action.replace("_", " ")} vs{" "}
+                  {aiCharacter?.emoji ?? "AI"}: {turn.p2_action.replace("_", " ")}
                 </span>
                 <span className="font-medium">
                   {turn.outcome.replace("_", " ")}
