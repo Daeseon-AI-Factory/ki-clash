@@ -2,6 +2,7 @@
 
 import { useGame } from "@/hooks/useGame";
 import type { Difficulty } from "@/lib/api";
+import Link from "next/link";
 import GameBoard from "@/components/GameBoard";
 import MatchHUD from "@/components/MatchHUD";
 import TurnReveal from "@/components/TurnReveal";
@@ -152,6 +153,16 @@ export default function Home() {
             Play Again
           </button>
         </div>
+      )}
+
+      {/* PvP link on lobby */}
+      {phase === "lobby" && (
+        <Link
+          href="/pvp"
+          className="mt-4 text-sm text-red-400 hover:text-red-300 transition-colors"
+        >
+          vs Real Player (PvP) →
+        </Link>
       )}
     </div>
   );
