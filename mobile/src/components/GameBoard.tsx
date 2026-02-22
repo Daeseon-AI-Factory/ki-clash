@@ -1,14 +1,15 @@
 /**
  * GameBoard — grid of 5 action cards with select-and-confirm flow.
  *
- * Tap a card to select it. A confirm button appears at the bottom.
- * Tap confirm to submit the action. This prevents accidental plays.
+ * Includes an inline countdown timer that ticks during selection.
+ * When timer hits 0, auto-submits "charge" (safest default).
  */
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import * as Haptics from "expo-haptics";
 import ActionCard from "./ActionCard";
+import Countdown from "./Countdown";
 import { colors, fontSize, spacing } from "@/lib/theme";
 import type { Action } from "@/lib/api";
 
@@ -18,12 +19,15 @@ interface GameBoardProps {
   playerKi: number;
   disabled: boolean;
   onSubmit: (action: Action) => void;
+  /** Called on each countdown beat for sound triggers */
+  onCountdownBeat?: () => void;
 }
 
 export default function GameBoard({
   playerKi,
   disabled,
   onSubmit,
+  onCountdownBeat,
 }: GameBoardProps) {
   const [selected, setSelected] = useState<Action | null>(null);
 
@@ -46,8 +50,23 @@ export default function GameBoard({
     }
   };
 
+  /** Auto-submit Charge when timer expires */
+  const handleTimeout = useCallback(() => {
+    onSubmit("charge");
+    setSelected(null);
+  }, [onSubmit]);
+
   return (
     <View style={styles.container}>
+      {/* Selection countdown timer */}
+      {!disabled && (
+        <Countdown
+          seconds={3}
+          onTimeout={handleTimeout}
+          onBeat={onCountdownBeat}
+        />
+      )}
+
       <View style={styles.grid}>
         {ACTIONS.map((action) => (
           <ActionCard

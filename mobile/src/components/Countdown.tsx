@@ -1,136 +1,167 @@
 /**
- * Countdown — 3-beat countdown overlay (3 → 2 → 1 → REVEAL!).
+ * Countdown — inline selection timer bar.
  *
- * Uses Animated.sequence with spring scaling for each beat.
- * Calls onBeat on each number and onComplete when finished.
+ * A shrinking bar with countdown number that ticks during action selection.
+ * When it hits 0, fires onTimeout (auto-submits Charge).
+ * Uses Animated.timing for smooth bar animation.
  */
 
-import { useEffect, useRef, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  Animated,
-  Dimensions,
-} from "react-native";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { View, Text, StyleSheet, Animated } from "react-native";
 import * as Haptics from "expo-haptics";
-import { colors, fontSize } from "@/lib/theme";
+import { colors, fontSize, spacing } from "@/lib/theme";
 
 interface CountdownProps {
-  onComplete: () => void;
-  onBeat?: (beat: number) => void;
+  /** Total seconds for the timer */
+  seconds?: number;
+  /** Called when timer reaches 0 */
+  onTimeout: () => void;
+  /** Called on each second tick for sound triggers */
+  onBeat?: () => void;
+  /** Set to true to pause/reset the timer */
+  paused?: boolean;
 }
 
-const BEAT_DURATION_MS = 700;
-const BEATS = [3, 2, 1];
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const DEFAULT_SECONDS = 3;
 
-export default function Countdown({ onComplete, onBeat }: CountdownProps) {
-  const [currentBeat, setCurrentBeat] = useState(0);
-  const scaleAnim = useRef(new Animated.Value(0)).current;
-  const opacityAnim = useRef(new Animated.Value(0)).current;
+export default function Countdown({
+  seconds = DEFAULT_SECONDS,
+  onTimeout,
+  onBeat,
+  paused = false,
+}: CountdownProps) {
+  const [remaining, setRemaining] = useState(seconds);
+  const barAnim = useRef(new Animated.Value(1)).current;
+  const startTimeRef = useRef(Date.now());
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const firedRef = useRef(false);
+  const lastBeatRef = useRef(seconds);
 
   useEffect(() => {
-    onBeat?.(BEATS[0]);
+    if (paused) return;
+
+    // Reset state
+    startTimeRef.current = Date.now();
+    setRemaining(seconds);
+    firedRef.current = false;
+    lastBeatRef.current = seconds;
+    barAnim.setValue(1);
+
+    // Fire initial beat
+    onBeat?.();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    const timers: ReturnType<typeof setTimeout>[] = [];
+    // Animate bar from 1 → 0
+    Animated.timing(barAnim, {
+      toValue: 0,
+      duration: seconds * 1000,
+      useNativeDriver: false, // width% needs non-native driver
+    }).start();
 
-    // Animate first beat in
-    animateBeatIn();
+    // Tick every 100ms to update the number display
+    intervalRef.current = setInterval(() => {
+      const elapsed = (Date.now() - startTimeRef.current) / 1000;
+      const left = Math.max(0, seconds - elapsed);
+      setRemaining(left);
 
-    BEATS.forEach((beat, index) => {
-      if (index > 0) {
-        timers.push(
-          setTimeout(() => {
-            setCurrentBeat(index);
-            onBeat?.(beat);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            animateBeatIn();
-          }, BEAT_DURATION_MS * index)
-        );
+      // Fire beat on each whole-second boundary
+      const currentSecond = Math.ceil(left);
+      if (currentSecond < lastBeatRef.current && currentSecond > 0) {
+        lastBeatRef.current = currentSecond;
+        onBeat?.();
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
-    });
 
-    // REVEAL phase
-    timers.push(
-      setTimeout(() => {
-        setCurrentBeat(3);
+      if (left <= 0 && !firedRef.current) {
+        firedRef.current = true;
+        onBeat?.();
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        animateBeatIn();
-      }, BEAT_DURATION_MS * BEATS.length)
-    );
+        onTimeout();
+        if (intervalRef.current) clearInterval(intervalRef.current);
+      }
+    }, 100);
 
-    // Fire completion
-    timers.push(
-      setTimeout(() => {
-        onComplete();
-      }, BEAT_DURATION_MS * (BEATS.length + 1))
-    );
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      barAnim.stopAnimation();
+    };
+  }, [seconds, paused, onTimeout, onBeat, barAnim]);
 
-    return () => timers.forEach(clearTimeout);
-  }, [onComplete, onBeat]);
+  const displayNumber = Math.ceil(remaining);
+  const fraction = remaining / seconds;
 
-  function animateBeatIn() {
-    scaleAnim.setValue(0);
-    opacityAnim.setValue(0);
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        friction: 4,
-        tension: 100,
-        useNativeDriver: true,
-      }),
-      Animated.timing(opacityAnim, {
-        toValue: 1,
-        duration: 150,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }
+  // Color transitions: green → yellow → red
+  const barColor =
+    fraction > 0.5
+      ? colors.green
+      : fraction > 0.25
+        ? colors.yellow
+        : colors.red;
 
-  const display = currentBeat < 3 ? String(BEATS[currentBeat]) : "REVEAL!";
-  const isReveal = currentBeat === 3;
+  const textColor =
+    fraction > 0.5
+      ? colors.green
+      : fraction > 0.25
+        ? colors.yellow
+        : colors.red;
+
+  // Bar width as percentage via animated interpolation
+  const barWidth = barAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0%", "100%"],
+  });
 
   return (
-    <View style={styles.overlay}>
-      <Animated.Text
-        style={[
-          isReveal ? styles.revealText : styles.beatText,
-          {
-            opacity: opacityAnim,
-            transform: [{ scale: scaleAnim }],
-          },
-        ]}
-      >
-        {display}
-      </Animated.Text>
+    <View style={styles.container}>
+      {/* Header row */}
+      <View style={styles.headerRow}>
+        <Text style={styles.label}>Choose your action!</Text>
+        <Text style={[styles.number, { color: textColor }]}>
+          {displayNumber}
+        </Text>
+      </View>
+
+      {/* Bar track */}
+      <View style={styles.barTrack}>
+        <Animated.View
+          style={[
+            styles.barFill,
+            { width: barWidth, backgroundColor: barColor },
+          ]}
+        />
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
-    backgroundColor: "rgba(0,0,0,0.6)",
+  container: {
+    gap: 4,
+  },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    justifyContent: "center",
-    zIndex: 50,
   },
-  beatText: {
-    fontSize: 96,
-    fontWeight: "900",
-    color: colors.textPrimary,
+  label: {
+    fontSize: fontSize.xs,
+    color: colors.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
-  revealText: {
-    fontSize: 56,
+  number: {
+    fontSize: fontSize.lg,
     fontWeight: "900",
-    color: colors.yellow,
+    fontVariant: ["tabular-nums"],
+  },
+  barTrack: {
+    height: 8,
+    backgroundColor: colors.surfaceHover,
+    borderRadius: 4,
+    overflow: "hidden",
+  },
+  barFill: {
+    height: "100%",
+    borderRadius: 4,
   },
 });

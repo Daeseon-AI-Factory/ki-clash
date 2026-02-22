@@ -2,7 +2,7 @@
  * MatchHUD — heads-up display showing match state.
  *
  * Displays round score (dots), ki meters, turn counter,
- * and a scrollable turn history.
+ * and a scrollable turn history. Shows character emoji+name when available.
  */
 
 import { View, Text, ScrollView, StyleSheet } from "react-native";
@@ -10,12 +10,17 @@ import KiMeter from "./KiMeter";
 import AIThinking from "./AIThinking";
 import { colors, fontSize, spacing } from "@/lib/theme";
 import type { GameState, TurnOutcome } from "@/lib/api";
+import type { Character } from "@/lib/characters";
 
 interface MatchHUDProps {
   gameState: GameState;
   playerName: string;
   /** Show animated "AI is analyzing..." below AI ki meter */
   showAIThinking?: boolean;
+  /** Player's chosen character (shows emoji+name when set) */
+  playerCharacter?: Character;
+  /** AI's assigned character (shows emoji+name when set) */
+  aiCharacter?: Character;
 }
 
 const OUTCOME_SHORT: Record<TurnOutcome, { text: string; color: string }> = {
@@ -27,25 +32,39 @@ const OUTCOME_SHORT: Record<TurnOutcome, { text: string; color: string }> = {
   neutral: { text: "—", color: colors.textMuted },
 };
 
-export default function MatchHUD({ gameState, playerName, showAIThinking }: MatchHUDProps) {
+export default function MatchHUD({
+  gameState,
+  playerName,
+  showAIThinking,
+  playerCharacter,
+  aiCharacter,
+}: MatchHUDProps) {
   const round = gameState.current_round;
+
+  // Display labels: use character emoji+name if available, else fallback
+  const playerLabel = playerCharacter
+    ? `${playerCharacter.emoji} ${playerCharacter.name}`
+    : playerName;
+  const aiLabel = aiCharacter
+    ? `${aiCharacter.emoji} ${aiCharacter.name}`
+    : "AI";
 
   return (
     <View style={styles.container}>
       {/* Round Score */}
       <View style={styles.scoreRow}>
-        <ScoreDots label={playerName} wins={gameState.rounds_won_p1} color={colors.green} />
+        <ScoreDots label={playerLabel} wins={gameState.rounds_won_p1} color={colors.green} />
         <Text style={styles.turnCounter}>
           Turn {round?.turn_number ?? 0} / 20
         </Text>
-        <ScoreDots label="AI" wins={gameState.rounds_won_p2} color={colors.red} />
+        <ScoreDots label={aiLabel} wins={gameState.rounds_won_p2} color={colors.red} />
       </View>
 
       {/* Ki Meters */}
       {round && (
         <View style={styles.kiSection}>
-          <KiMeter ki={round.p1_ki} label={playerName} isPlayer={true} />
-          <KiMeter ki={round.p2_ki} label="AI" isPlayer={false} />
+          <KiMeter ki={round.p1_ki} label={playerLabel} isPlayer={true} />
+          <KiMeter ki={round.p2_ki} label={aiLabel} isPlayer={false} />
           {showAIThinking && <AIThinking />}
         </View>
       )}

@@ -23,6 +23,10 @@ interface TurnRevealProps {
   visible: boolean;
   /** Called when outcome stage begins — used to trigger screen shake */
   onOutcomeRevealed?: (outcome: TurnOutcome) => void;
+  /** Player display name for flip card label (default: "You") */
+  playerName?: string;
+  /** AI display name for flip card label (default: "AI") */
+  aiName?: string;
 }
 
 const ACTION_EMOJI: Record<string, string> = {
@@ -65,6 +69,8 @@ export default function TurnReveal({
   turnResult,
   visible,
   onOutcomeRevealed,
+  playerName = "You",
+  aiName = "AI",
 }: TurnRevealProps) {
   const [stage, setStage] = useState<RevealStage>("face_down");
   const flipAnim = useRef(new Animated.Value(0)).current;
@@ -168,7 +174,7 @@ export default function TurnReveal({
         <FlipCard
           emoji={ACTION_EMOJI[turnResult.p1_action] || "?"}
           label={turnResult.p1_action.replace("_", " ")}
-          who="You"
+          who={playerName}
           whoColor={colors.green}
           frontRotate={frontRotate}
           backRotate={backRotate}
@@ -179,7 +185,7 @@ export default function TurnReveal({
         <FlipCard
           emoji={ACTION_EMOJI[turnResult.p2_action] || "?"}
           label={turnResult.p2_action.replace("_", " ")}
-          who="AI"
+          who={aiName}
           whoColor={colors.red}
           frontRotate={frontRotate}
           backRotate={backRotate}

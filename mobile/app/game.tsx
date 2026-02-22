@@ -3,11 +3,11 @@
  *
  * Receives difficulty as a route param from the lobby.
  * Uses useGame hook for game state management.
- * Includes countdown, sound effects, card flip reveal, screen shake,
- * and AI thinking indicator for full "game feel".
+ * Includes inline selection timer, character select, AI trash talk,
+ * card flip reveal, screen shake, and sound effects.
  */
 
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -21,10 +21,12 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useGame } from "@/hooks/useGame";
 import { useSoundEffects, type SoundName } from "@/hooks/useSoundEffects";
+import { getCharacter } from "@/lib/characters";
 import GameBoard from "@/components/GameBoard";
 import MatchHUD from "@/components/MatchHUD";
 import TurnReveal, { getShakeIntensity } from "@/components/TurnReveal";
-import Countdown from "@/components/Countdown";
+import CharacterSelect from "@/components/CharacterSelect";
+import AITrashTalk from "@/components/AITrashTalk";
 import MuteButton from "@/components/MuteButton";
 import { colors, fontSize, spacing } from "@/lib/theme";
 import type { Difficulty, TurnOutcome } from "@/lib/api";
@@ -49,10 +51,12 @@ export default function GameScreen() {
     lastRound,
     matchResult,
     playerName,
+    playerCharacterId,
+    aiCharacterId,
     error,
+    initGame,
     startGame,
     playAction,
-    onCountdownComplete,
     continueFromReveal,
     continueFromRound,
   } = useGame();
@@ -65,19 +69,38 @@ export default function GameScreen() {
   // Track previous phase for sound triggers
   const prevPhaseRef = useRef(phase);
 
-  // Auto-start game when screen mounts
+  // Derive character objects from IDs
+  const playerCharacter = useMemo(
+    () => (playerCharacterId ? getCharacter(playerCharacterId) : undefined),
+    [playerCharacterId]
+  );
+  const aiCharacter = useMemo(
+    () => (aiCharacterId ? getCharacter(aiCharacterId) : undefined),
+    [aiCharacterId]
+  );
+
+  // Display names using character emoji+name when available
+  const playerDisplayName = playerCharacter
+    ? `${playerCharacter.emoji} ${playerCharacter.name}`
+    : playerName;
+  const aiDisplayName = aiCharacter
+    ? `${aiCharacter.emoji} ${aiCharacter.name}`
+    : "AI";
+
+  // Initialize with difficulty on mount — goes to character_select
   useEffect(() => {
     if (difficulty) {
-      startGame(difficulty as Difficulty);
+      initGame(difficulty as Difficulty);
     }
-  }, [difficulty, startGame]);
+  }, [difficulty, initGame]);
 
   // Play sounds on phase transitions
   useEffect(() => {
     const prevPhase = prevPhaseRef.current;
     prevPhaseRef.current = phase;
 
-    if (prevPhase === "countdown" && phase !== "countdown" && phase !== "loading") {
+    // Reveal sound when transitioning from loading to a result phase
+    if (prevPhase === "loading" && phase !== "loading" && phase !== "playing" && phase !== "character_select") {
       play("reveal");
 
       if (lastTurn) {
@@ -108,7 +131,6 @@ export default function GameScreen() {
     (outcome: TurnOutcome) => {
       const intensity = getShakeIntensity(outcome);
       if (intensity > 0) {
-        // Quick shake sequence using translateX
         Animated.sequence([
           Animated.timing(shakeAnim, { toValue: intensity, duration: 50, useNativeDriver: true }),
           Animated.timing(shakeAnim, { toValue: -intensity, duration: 50, useNativeDriver: true }),
@@ -140,6 +162,11 @@ export default function GameScreen() {
             </View>
           )}
 
+          {/* CHARACTER SELECT */}
+          {phase === "character_select" && (
+            <CharacterSelect onSelect={startGame} />
+          )}
+
           {/* LOADING */}
           {phase === "loading" && (
             <View style={styles.center}>
@@ -155,22 +182,20 @@ export default function GameScreen() {
                 gameState={gameState}
                 playerName={playerName}
                 showAIThinking
+                playerCharacter={playerCharacter}
+                aiCharacter={aiCharacter}
               />
+              {aiCharacter && (
+                <AITrashTalk
+                  character={aiCharacter}
+                  turnNumber={gameState.current_round?.turn_number ?? 0}
+                />
+              )}
               <GameBoard
                 playerKi={gameState.current_round?.p1_ki ?? 0}
                 disabled={false}
                 onSubmit={playAction}
-              />
-            </View>
-          )}
-
-          {/* COUNTDOWN */}
-          {phase === "countdown" && gameState && (
-            <View style={styles.gameArea}>
-              <MatchHUD gameState={gameState} playerName={playerName} />
-              <Countdown
-                onComplete={onCountdownComplete}
-                onBeat={handleCountdownBeat}
+                onCountdownBeat={handleCountdownBeat}
               />
             </View>
           )}
@@ -179,12 +204,19 @@ export default function GameScreen() {
           {phase === "revealing" && (
             <View style={styles.gameArea}>
               {gameState && (
-                <MatchHUD gameState={gameState} playerName={playerName} />
+                <MatchHUD
+                  gameState={gameState}
+                  playerName={playerName}
+                  playerCharacter={playerCharacter}
+                  aiCharacter={aiCharacter}
+                />
               )}
               <TurnReveal
                 turnResult={lastTurn}
                 visible={true}
                 onOutcomeRevealed={handleOutcomeRevealed}
+                playerName={playerDisplayName}
+                aiName={aiDisplayName}
               />
               <TouchableOpacity
                 style={styles.nextButton}
@@ -200,12 +232,19 @@ export default function GameScreen() {
           {phase === "round_end" && lastRound && (
             <View style={styles.gameArea}>
               {gameState && (
-                <MatchHUD gameState={gameState} playerName={playerName} />
+                <MatchHUD
+                  gameState={gameState}
+                  playerName={playerName}
+                  playerCharacter={playerCharacter}
+                  aiCharacter={aiCharacter}
+                />
               )}
               <TurnReveal
                 turnResult={lastTurn}
                 visible={true}
                 onOutcomeRevealed={handleOutcomeRevealed}
+                playerName={playerDisplayName}
+                aiName={aiDisplayName}
               />
               <View style={styles.roundEndBox}>
                 <Text style={styles.roundLabel}>
@@ -249,10 +288,10 @@ export default function GameScreen() {
             <View style={styles.matchEndArea}>
               <Text style={styles.matchEmoji}>
                 {matchResult.winner === "p1"
-                  ? "\uD83C\uDFC6"
+                  ? "🏆"
                   : matchResult.winner === "p2"
-                    ? "\uD83D\uDC80"
-                    : "\uD83E\uDD1D"}
+                    ? "💀"
+                    : "🤝"}
               </Text>
               <Text
                 style={[
