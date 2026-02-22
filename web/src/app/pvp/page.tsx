@@ -4,7 +4,13 @@ import { usePvP } from "@/hooks/usePvP";
 import ActionCard from "@/components/ActionCard";
 import KiMeter from "@/components/KiMeter";
 import type { Action } from "@/lib/api";
+import type { PixelAction } from "@/lib/pixel-art-types";
 import Link from "next/link";
+import { BattleArena, PixelPortrait } from "@/components/pixel-art";
+import { AdBanner, InterstitialAd } from "@/components/ads";
+import { usePixelAnimation } from "@/hooks/usePixelAnimation";
+import { useAdTiming } from "@/hooks/useAdTiming";
+import { useEffect, useRef } from "react";
 
 const ACTIONS: Action[] = ["charge", "block", "attack", "energy_wave", "teleport"];
 
@@ -14,16 +20,28 @@ const OUTCOME_DISPLAY: Record<string, { text: string; color: string }> = {
   clash: { text: "CLASH!", color: "text-yellow-400" },
   blocked: { text: "BLOCKED!", color: "text-blue-400" },
   dodged: { text: "DODGED!", color: "text-purple-400" },
-  neutral: { text: "—", color: "text-gray-400" },
+  neutral: { text: "\u2014", color: "text-gray-400" },
 };
 
 const ACTION_EMOJI: Record<string, string> = {
-  charge: "⚡",
-  block: "🛡️",
-  attack: "👊",
-  energy_wave: "🔥",
-  teleport: "💨",
+  charge: "\u26A1",
+  block: "\uD83D\uDEE1\uFE0F",
+  attack: "\uD83D\uDC4A",
+  energy_wave: "\uD83D\uDD25",
+  teleport: "\uD83D\uDCA8",
 };
+
+const ACTION_TO_PIXEL: Record<Action, PixelAction> = {
+  charge: "charge",
+  block: "block",
+  attack: "attack",
+  energy_wave: "energyWave",
+  teleport: "teleport",
+};
+
+// Fixed characters for PvP (no character select in PvP flow yet)
+const PLAYER_CHAR_ID = "haneul";
+const OPPONENT_CHAR_ID = "bora";
 
 export default function PvPPage() {
   const {
@@ -44,8 +62,27 @@ export default function PvPPage() {
     backToLobby,
   } = usePvP();
 
+  const { action: pixelAction, phase: pixelPhase, triggerAction: triggerPixel } = usePixelAnimation();
+  const { showInterstitial, onMatchEnd, dismissInterstitial } = useAdTiming();
+
+  // Trigger pixel animation on turn reveal
+  const prevPhase = useRef(phase);
+  useEffect(() => {
+    const prev = prevPhase.current;
+    prevPhase.current = phase;
+
+    if (phase === "revealing" && prev !== "revealing" && turnResult) {
+      triggerPixel(ACTION_TO_PIXEL[turnResult.your_action as Action]);
+    }
+    if (phase === "match_end" && prev !== "match_end") {
+      onMatchEnd();
+    }
+  }, [phase, turnResult, triggerPixel, onMatchEnd]);
+
   return (
     <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4">
+      <InterstitialAd show={showInterstitial} onDismiss={dismissInterstitial} />
+
       {/* Error display */}
       {error && (
         <div className="mb-4 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-300 text-sm max-w-md">
@@ -63,6 +100,12 @@ export default function PvPPage() {
               Find an opponent and battle in real-time.
             </p>
           </div>
+
+          <BattleArena
+            playerCharacterId={PLAYER_CHAR_ID}
+            aiCharacterId={OPPONENT_CHAR_ID}
+          />
+
           <button
             onClick={findMatch}
             className="w-full py-4 bg-red-600 hover:bg-red-500 rounded-xl
@@ -76,13 +119,17 @@ export default function PvPPage() {
           >
             ← Back to AI Mode
           </Link>
+          <AdBanner adSlot={process.env.NEXT_PUBLIC_ADSENSE_BANNER_SLOT || ""} className="mt-4" />
         </div>
       )}
 
       {/* SEARCHING */}
       {phase === "searching" && (
         <div className="text-center space-y-6 max-w-md">
-          <div className="text-6xl animate-pulse">🔍</div>
+          <BattleArena
+            playerCharacterId={PLAYER_CHAR_ID}
+            aiCharacterId={OPPONENT_CHAR_ID}
+          />
           <div>
             <p className="text-xl font-bold">Searching for opponent...</p>
             <p className="text-sm text-gray-400 mt-2">
@@ -102,7 +149,10 @@ export default function PvPPage() {
       {/* MATCHED — brief transition */}
       {phase === "matched" && (
         <div className="text-center space-y-4">
-          <div className="text-6xl">⚔️</div>
+          <BattleArena
+            playerCharacterId={PLAYER_CHAR_ID}
+            aiCharacterId={OPPONENT_CHAR_ID}
+          />
           <p className="text-2xl font-bold">Match Found!</p>
           <p className="text-gray-400">vs {opponentName}</p>
           <div className="text-4xl animate-spin">⚡</div>
@@ -121,6 +171,11 @@ export default function PvPPage() {
               You {roundsWonYou} — {roundsWonOpponent} {opponentName || "Opponent"}
             </p>
           </div>
+
+          <BattleArena
+            playerCharacterId={PLAYER_CHAR_ID}
+            aiCharacterId={OPPONENT_CHAR_ID}
+          />
 
           <div className="space-y-2">
             <KiMeter ki={gameState.your_ki} label="You" isPlayer={true} />
@@ -142,7 +197,7 @@ export default function PvPPage() {
           </div>
 
           <p className="text-center text-xs text-gray-500">
-            {gameState.time_limit}s to choose — auto-Charge if you don't pick
+            {gameState.time_limit}s to choose — auto-Charge if you don&apos;t pick
           </p>
         </div>
       )}
@@ -150,10 +205,13 @@ export default function PvPPage() {
       {/* WAITING — submitted, waiting for opponent */}
       {phase === "waiting" && (
         <div className="text-center space-y-4">
-          <div className="text-4xl animate-pulse">⏳</div>
+          <BattleArena
+            playerCharacterId={PLAYER_CHAR_ID}
+            aiCharacterId={OPPONENT_CHAR_ID}
+          />
           <p className="text-lg font-medium">Waiting for opponent...</p>
           <p className="text-sm text-gray-400">
-            You've locked in your action
+            You&apos;ve locked in your action
           </p>
         </div>
       )}
@@ -161,9 +219,16 @@ export default function PvPPage() {
       {/* REVEALING — turn result */}
       {phase === "revealing" && turnResult && (
         <div className="w-full max-w-md space-y-6">
+          <BattleArena
+            playerCharacterId={PLAYER_CHAR_ID}
+            aiCharacterId={OPPONENT_CHAR_ID}
+            action={pixelAction}
+            phase={pixelPhase}
+          />
+
           <div className="flex items-center justify-center gap-8 py-6">
             <div className="flex flex-col items-center">
-              <span className="text-4xl">{ACTION_EMOJI[turnResult.your_action] || "❓"}</span>
+              <span className="text-4xl">{ACTION_EMOJI[turnResult.your_action] || "\u2753"}</span>
               <span className="text-sm text-gray-400 mt-1">
                 {turnResult.your_action.replace("_", " ")}
               </span>
@@ -171,7 +236,7 @@ export default function PvPPage() {
             </div>
             <span className="text-2xl font-bold text-gray-500">VS</span>
             <div className="flex flex-col items-center">
-              <span className="text-4xl">{ACTION_EMOJI[turnResult.opponent_action] || "❓"}</span>
+              <span className="text-4xl">{ACTION_EMOJI[turnResult.opponent_action] || "\u2753"}</span>
               <span className="text-sm text-gray-400 mt-1">
                 {turnResult.opponent_action.replace("_", " ")}
               </span>
@@ -198,6 +263,12 @@ export default function PvPPage() {
       {/* ROUND END */}
       {phase === "round_end" && roundResult && (
         <div className="w-full max-w-md text-center space-y-6">
+          <BattleArena
+            playerCharacterId={PLAYER_CHAR_ID}
+            aiCharacterId={OPPONENT_CHAR_ID}
+            action={pixelAction}
+            phase={pixelPhase}
+          />
           <div className="py-6 bg-gray-800 rounded-xl">
             <p className="text-sm text-gray-400 uppercase tracking-wider">
               Round {roundResult.round_number} Complete
@@ -228,9 +299,15 @@ export default function PvPPage() {
       {phase === "match_end" && matchResult && (
         <div className="w-full max-w-md text-center space-y-6">
           <div className="py-8">
-            <p className="text-6xl mb-4">
-              {matchResult.winner === "you" ? "🏆" : matchResult.winner === "opponent" ? "💀" : "🤝"}
-            </p>
+            <div className="flex justify-center mb-4">
+              {matchResult.winner === "you" ? (
+                <PixelPortrait characterId={PLAYER_CHAR_ID} size="lg" />
+              ) : matchResult.winner === "opponent" ? (
+                <PixelPortrait characterId={OPPONENT_CHAR_ID} size="lg" />
+              ) : (
+                <p className="text-6xl">🤝</p>
+              )}
+            </div>
             <p
               className={`text-4xl font-black ${
                 matchResult.winner === "you"
