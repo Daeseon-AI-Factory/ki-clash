@@ -115,7 +115,7 @@ export default function Home() {
       {/* PLAYING — Main game */}
       {phase === "playing" && gameState && (
         <div className="w-full max-w-2xl space-y-6">
-          <MatchHUD gameState={gameState} playerName={playerName} />
+          <MatchHUD gameState={gameState} playerName={playerName} showAIThinking />
           <GameBoard
             playerKi={gameState.current_round?.p1_ki ?? 0}
             disabled={false}

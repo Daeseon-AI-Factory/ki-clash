@@ -2,10 +2,13 @@
 
 import type { GameState, RoundResult } from "@/lib/api";
 import KiMeter from "./KiMeter";
+import AIThinking from "./AIThinking";
 
 interface MatchHUDProps {
   gameState: GameState;
   playerName: string;
+  /** Show animated "AI is analyzing..." below AI ki meter */
+  showAIThinking?: boolean;
 }
 
 /**
@@ -15,7 +18,7 @@ interface MatchHUDProps {
  * - Turn counter
  * - Turn history (last few moves)
  */
-export default function MatchHUD({ gameState, playerName }: MatchHUDProps) {
+export default function MatchHUD({ gameState, playerName, showAIThinking }: MatchHUDProps) {
   const round = gameState.current_round;
   const playerKi = round?.p1_ki ?? 0;
   const aiKi = round?.p2_ki ?? 0;
@@ -46,6 +49,7 @@ export default function MatchHUD({ gameState, playerName }: MatchHUDProps) {
       <div className="space-y-2">
         <KiMeter ki={playerKi} label={`${playerName} (You)`} isPlayer={true} />
         <KiMeter ki={aiKi} label="AI Opponent" isPlayer={false} />
+        {showAIThinking && <AIThinking />}
       </div>
 
       {/* Turn counter */}
