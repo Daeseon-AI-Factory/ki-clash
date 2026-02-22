@@ -10,6 +10,7 @@ import GameBoard from "@/components/GameBoard";
 import MatchHUD from "@/components/MatchHUD";
 import TurnReveal, { getShakeClass } from "@/components/TurnReveal";
 import CharacterSelect from "@/components/CharacterSelect";
+import AITrashTalk from "@/components/AITrashTalk";
 import MuteButton from "@/components/MuteButton";
 
 /** Map turn outcomes to sound names */
@@ -142,6 +143,12 @@ export default function Home() {
       {phase === "playing" && gameState && (
         <div className="w-full max-w-2xl space-y-6">
           <MatchHUD gameState={gameState} playerName={playerName} showAIThinking playerCharacter={playerCharacter} aiCharacter={aiCharacter} />
+          {aiCharacter && (
+            <AITrashTalk
+              character={aiCharacter}
+              turnNumber={gameState.current_round?.turn_number ?? 0}
+            />
+          )}
           <GameBoard
             playerKi={gameState.current_round?.p1_ki ?? 0}
             disabled={false}
