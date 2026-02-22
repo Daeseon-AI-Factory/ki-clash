@@ -1,13 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useGame } from "@/hooks/useGame";
 import { useSoundEffects } from "@/hooks/useSoundEffects";
 import type { Difficulty, TurnOutcome } from "@/lib/api";
 import Link from "next/link";
 import GameBoard from "@/components/GameBoard";
 import MatchHUD from "@/components/MatchHUD";
-import TurnReveal from "@/components/TurnReveal";
+import TurnReveal, { getShakeClass } from "@/components/TurnReveal";
 import Countdown from "@/components/Countdown";
 import MuteButton from "@/components/MuteButton";
 
@@ -39,6 +39,7 @@ export default function Home() {
   } = useGame();
 
   const { play, muted, toggleMute } = useSoundEffects();
+  const [shakeClass, setShakeClass] = useState("");
 
   // Track previous phase to detect transitions
   const prevPhaseRef = useRef(phase);
@@ -78,8 +79,18 @@ export default function Home() {
     play("countdown_beat");
   }, [play]);
 
+  /** Screen shake when outcome is revealed inside TurnReveal */
+  const handleOutcomeRevealed = useCallback((outcome: TurnOutcome) => {
+    const cls = getShakeClass(outcome);
+    if (cls) {
+      setShakeClass(cls);
+      // Remove class after animation completes so it can re-trigger
+      setTimeout(() => setShakeClass(""), 500);
+    }
+  }, []);
+
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4">
+    <div className={`min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4 ${shakeClass}`}>
       {/* Mute toggle */}
       <MuteButton muted={muted} onToggle={toggleMute} />
 
@@ -128,7 +139,7 @@ export default function Home() {
       {phase === "revealing" && (
         <div className="w-full max-w-2xl space-y-6">
           {gameState && <MatchHUD gameState={gameState} playerName={playerName} />}
-          <TurnReveal turnResult={lastTurn} visible={true} />
+          <TurnReveal turnResult={lastTurn} visible={true} onOutcomeRevealed={handleOutcomeRevealed} />
           <button
             onClick={continueFromReveal}
             className="w-full max-w-2xl py-3 bg-gray-700 hover:bg-gray-600 rounded-xl
@@ -143,7 +154,7 @@ export default function Home() {
       {phase === "round_end" && lastRound && (
         <div className="w-full max-w-2xl space-y-6">
           {gameState && <MatchHUD gameState={gameState} playerName={playerName} />}
-          <TurnReveal turnResult={lastTurn} visible={true} />
+          <TurnReveal turnResult={lastTurn} visible={true} onOutcomeRevealed={handleOutcomeRevealed} />
           <div className="text-center py-6 bg-gray-800 rounded-xl">
             <p className="text-sm text-gray-400 uppercase tracking-wider">
               Round {lastRound.round_number} Complete
