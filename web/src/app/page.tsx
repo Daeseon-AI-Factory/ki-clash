@@ -59,7 +59,7 @@ export default function Home() {
   const { play, muted, toggleMute } = useSoundEffects();
   const [shakeClass, setShakeClass] = useState("");
   const { action: pixelAction, phase: pixelPhase, triggerAction: triggerPixelAction } = usePixelAnimation();
-  const { showInterstitial, onMatchEnd, dismissInterstitial } = useAdTiming();
+  const { showInterstitial, showAds, onMatchEnd, dismissInterstitial } = useAdTiming();
 
   // Derive character objects from IDs (memoized to avoid re-lookups)
   const playerCharacter = useMemo(
@@ -135,8 +135,8 @@ export default function Home() {
       {/* Mute toggle */}
       <MuteButton muted={muted} onToggle={toggleMute} />
 
-      {/* Interstitial ad overlay (between matches) */}
-      <InterstitialAd show={showInterstitial} onDismiss={dismissInterstitial} />
+      {/* Interstitial ad overlay (between matches, hidden if ad-free) */}
+      {showAds && <InterstitialAd show={showInterstitial} onDismiss={dismissInterstitial} />}
 
       {/* Error display */}
       {error && (
@@ -149,7 +149,7 @@ export default function Home() {
       {phase === "lobby" && (
         <>
           <LobbyScreen onStart={selectDifficulty} />
-          <AdBanner adSlot={process.env.NEXT_PUBLIC_ADSENSE_BANNER_SLOT || ""} className="mt-6 w-full max-w-md" />
+          {showAds && <AdBanner adSlot={process.env.NEXT_PUBLIC_ADSENSE_BANNER_SLOT || ""} className="mt-6 w-full max-w-md" />}
         </>
       )}
 
@@ -339,6 +339,18 @@ export default function Home() {
             className="text-sm text-gray-400 hover:text-gray-300 transition-colors"
           >
             Match History →
+          </Link>
+          <Link
+            href="/ranked"
+            className="text-sm text-yellow-400 hover:text-yellow-300 transition-colors"
+          >
+            Ranked Leaderboard →
+          </Link>
+          <Link
+            href="/shop"
+            className="text-sm text-green-400 hover:text-green-300 transition-colors"
+          >
+            Shop — Remove Ads →
           </Link>
         </div>
       )}
