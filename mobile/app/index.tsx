@@ -86,6 +86,16 @@ export default function LobbyScreen() {
         >
           <Text style={styles.navLinkText}>Match History</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navLink}
+          onPress={() => router.push("/ranked")}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.navLinkText, { color: colors.yellow }]}>
+            Ranked Leaderboard
+          </Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );

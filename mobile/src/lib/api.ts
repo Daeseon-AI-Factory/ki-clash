@@ -223,3 +223,37 @@ export interface MatchSummary {
 export async function getMatchHistory(): Promise<MatchSummary[]> {
   return apiFetch<MatchSummary[]>("/api/v1/players/me/matches");
 }
+
+// --- Ranked ---
+
+export interface LeaderboardEntry {
+  rank: number;
+  player_id: string;
+  display_name: string;
+  elo_rating: number;
+  ranked_wins: number;
+  ranked_losses: number;
+}
+
+export interface PlayerRank {
+  rank: number;
+  player_id: string;
+  display_name: string;
+  elo_rating: number;
+  ranked_wins: number;
+  ranked_losses: number;
+}
+
+export async function getLeaderboard(limit = 50): Promise<LeaderboardEntry[]> {
+  return apiFetch<LeaderboardEntry[]>(`/api/v1/ranked/leaderboard?limit=${limit}`);
+}
+
+export async function getMyRank(): Promise<PlayerRank | null> {
+  return apiFetch<PlayerRank | null>("/api/v1/ranked/me");
+}
+
+// --- Purchases ---
+
+export async function getAdFreeStatus(): Promise<{ ad_free: boolean }> {
+  return apiFetch<{ ad_free: boolean }>("/api/v1/purchases/ad-free-status");
+}
