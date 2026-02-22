@@ -208,3 +208,18 @@ export async function submitAction(
 export async function getMyProfile(): Promise<PlayerProfile> {
   return apiFetch<PlayerProfile>("/api/v1/players/me");
 }
+
+export interface MatchSummary {
+  id: string;
+  match_type: string;
+  winner: string | null;
+  rounds_won_p1: number;
+  rounds_won_p2: number;
+  total_turns: number;
+  opponent_name: string | null;
+  created_at: string;
+}
+
+export async function getMatchHistory(): Promise<MatchSummary[]> {
+  return apiFetch<MatchSummary[]>("/api/v1/players/me/matches");
+}

@@ -70,6 +70,22 @@ export default function LobbyScreen() {
         >
           <Text style={styles.tutorialLinkText}>Tutorial — Learn the basics</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navLink}
+          onPress={() => router.push("/invite")}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.navLinkText}>Challenge a Friend</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navLink}
+          onPress={() => router.push("/history")}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.navLinkText}>Match History</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -155,5 +171,12 @@ const styles = StyleSheet.create({
   tutorialLinkText: {
     fontSize: fontSize.sm,
     color: colors.blue,
+  },
+  navLink: {
+    padding: spacing.sm,
+  },
+  navLinkText: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
   },
 });
