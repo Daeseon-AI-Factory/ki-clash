@@ -54,13 +54,23 @@ export default function LobbyScreen() {
         ))}
       </View>
 
-      <TouchableOpacity
-        style={styles.pvpLink}
-        onPress={() => router.push("/pvp")}
-        activeOpacity={0.7}
-      >
-        <Text style={styles.pvpLinkText}>vs Real Player (PvP) →</Text>
-      </TouchableOpacity>
+      <View style={styles.navLinks}>
+        <TouchableOpacity
+          style={styles.pvpLink}
+          onPress={() => router.push("/pvp")}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.pvpLinkText}>vs Real Player (PvP) →</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.tutorialLink}
+          onPress={() => router.push("/tutorial")}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.tutorialLinkText}>Tutorial — Learn the basics</Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
@@ -127,12 +137,23 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     flex: 1,
   },
-  pvpLink: {
+  navLinks: {
     marginTop: spacing.xl,
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  pvpLink: {
     padding: spacing.md,
   },
   pvpLinkText: {
     fontSize: fontSize.sm,
     color: colors.red,
+  },
+  tutorialLink: {
+    padding: spacing.sm,
+  },
+  tutorialLinkText: {
+    fontSize: fontSize.sm,
+    color: colors.blue,
   },
 });
