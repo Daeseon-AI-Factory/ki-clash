@@ -328,6 +328,18 @@ export default function Home() {
           >
             vs Real Player (PvP) →
           </Link>
+          <Link
+            href="/invite"
+            className="text-sm text-purple-400 hover:text-purple-300 transition-colors"
+          >
+            Challenge a Friend →
+          </Link>
+          <Link
+            href="/history"
+            className="text-sm text-gray-400 hover:text-gray-300 transition-colors"
+          >
+            Match History →
+          </Link>
         </div>
       )}
     </div>
