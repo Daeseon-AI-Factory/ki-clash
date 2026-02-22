@@ -6,6 +6,7 @@ import Link from "next/link";
 import GameBoard from "@/components/GameBoard";
 import MatchHUD from "@/components/MatchHUD";
 import TurnReveal from "@/components/TurnReveal";
+import Countdown from "@/components/Countdown";
 
 export default function Home() {
   const {
@@ -18,6 +19,7 @@ export default function Home() {
     error,
     startGame,
     playAction,
+    onCountdownComplete,
     continueFromReveal,
     continueFromRound,
     backToLobby,
@@ -52,6 +54,14 @@ export default function Home() {
             disabled={false}
             onSubmit={playAction}
           />
+        </div>
+      )}
+
+      {/* COUNTDOWN — 3-beat rhythm before reveal */}
+      {phase === "countdown" && gameState && (
+        <div className="w-full max-w-2xl space-y-6">
+          <MatchHUD gameState={gameState} playerName={playerName} />
+          <Countdown onComplete={onCountdownComplete} />
         </div>
       )}
 
