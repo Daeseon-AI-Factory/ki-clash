@@ -120,6 +120,11 @@ project-root/
 - Conventional commits in English
 - Branch: `feat/user-auth`, `fix/payment-webhook`
 
+### Task Pipeline Rule
+- Complete one task → immediately `git commit` with conventional commit format
+- Must commit before starting the next task
+- Fix requests are handled after the current task is done
+
 ### Testing
 - pytest + pytest-asyncio
 - Mirror source structure in tests/
