@@ -65,6 +65,10 @@ export default function PvPPage() {
   const { action: pixelAction, phase: pixelPhase, triggerAction: triggerPixel } = usePixelAnimation();
   const { showInterstitial, onMatchEnd, dismissInterstitial } = useAdTiming();
 
+  // Derive AI pixel action from turnResult — synced to same phase as player
+  const aiPixelAction: PixelAction | null =
+    pixelAction && turnResult ? ACTION_TO_PIXEL[turnResult.opponent_action as Action] : null;
+
   // Trigger pixel animation on turn reveal
   const prevPhase = useRef(phase);
   useEffect(() => {
@@ -222,7 +226,8 @@ export default function PvPPage() {
           <BattleArena
             playerCharacterId={PLAYER_CHAR_ID}
             aiCharacterId={OPPONENT_CHAR_ID}
-            action={pixelAction}
+            playerAction={pixelAction}
+            aiAction={aiPixelAction}
             phase={pixelPhase}
           />
 
@@ -266,7 +271,8 @@ export default function PvPPage() {
           <BattleArena
             playerCharacterId={PLAYER_CHAR_ID}
             aiCharacterId={OPPONENT_CHAR_ID}
-            action={pixelAction}
+            playerAction={pixelAction}
+            aiAction={aiPixelAction}
             phase={pixelPhase}
           />
           <div className="py-6 bg-gray-800 rounded-xl">

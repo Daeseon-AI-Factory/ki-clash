@@ -49,6 +49,10 @@ export default function TutorialPage() {
     triggerAction: triggerPixel,
   } = usePixelAnimation();
 
+  // Derive AI pixel action — synced to same phase as player
+  const aiPixelAction: PixelAction | null =
+    pixelAct && aiAction ? ACTION_TO_PIXEL[aiAction as Action] : null;
+
   const handleSubmit = (action: Action) => {
     submitAction(action);
     triggerPixel(ACTION_TO_PIXEL[action]);
@@ -161,7 +165,8 @@ export default function TutorialPage() {
           <BattleArena
             playerCharacterId="haneul"
             aiCharacterId="bora"
-            action={pixelAct}
+            playerAction={pixelAct}
+            aiAction={aiPixelAction}
             phase={pixelPhase}
           />
 

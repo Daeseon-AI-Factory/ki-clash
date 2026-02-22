@@ -4,11 +4,11 @@ import { useState, useCallback, useRef } from "react";
 import type { PixelAction, PixelPhase } from "@/lib/pixel-art-types";
 
 interface UsePixelAnimationOptions {
-  /** Duration of windup phase in ms (default: 200) */
+  /** Duration of windup phase in ms (default: 600) */
   windupMs?: number;
-  /** Duration of impact phase in ms (default: 300) */
+  /** Duration of impact phase in ms (default: 800) */
   impactMs?: number;
-  /** Duration of recover phase in ms (default: 300) */
+  /** Duration of recover phase in ms (default: 600) */
   recoverMs?: number;
 }
 
@@ -24,14 +24,14 @@ interface UsePixelAnimationReturn {
  * Shared animation state machine for pixel art fighters.
  *
  * Drives a deterministic timing sequence:
- *   idle → windup (200ms) → impact (300ms) → recover (300ms) → idle
+ *   idle → windup (600ms) → impact (800ms) → recover (600ms) → idle
  *
  * Timings are configurable. Promoted from the test-animations prototype.
  */
 export function usePixelAnimation(
   options: UsePixelAnimationOptions = {}
 ): UsePixelAnimationReturn {
-  const { windupMs = 200, impactMs = 300, recoverMs = 300 } = options;
+  const { windupMs = 600, impactMs = 800, recoverMs = 600 } = options;
 
   const [action, setAction] = useState<PixelAction | null>(null);
   const [phase, setPhase] = useState<PixelPhase>("idle");

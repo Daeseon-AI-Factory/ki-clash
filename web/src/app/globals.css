@@ -56,7 +56,7 @@ body {
 }
 
 .card-flip-inner {
-  transition: transform 0.5s ease-in-out;
+  transition: transform 0.8s ease-in-out;
   transform-style: preserve-3d;
   position: relative;
 }
@@ -102,7 +102,7 @@ body {
 }
 
 .animate-outcome-pop {
-  animation: outcome-pop 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: outcome-pop 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 /* Screen shake variants */
@@ -138,15 +138,15 @@ body {
 }
 
 .animate-shake-strong {
-  animation: shake-strong 0.4s ease-out;
+  animation: shake-strong 0.6s ease-out;
 }
 
 .animate-shake-medium {
-  animation: shake-medium 0.3s ease-out;
+  animation: shake-medium 0.5s ease-out;
 }
 
 .animate-shake-light {
-  animation: shake-light 0.2s ease-out;
+  animation: shake-light 0.4s ease-out;
 }
 
 /* Fade in — used for AI trash talk speech bubble */

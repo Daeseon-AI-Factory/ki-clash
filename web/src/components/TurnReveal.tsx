@@ -79,9 +79,9 @@ interface TurnRevealProps {
 /**
  * Dramatic turn reveal with staged animation:
  * 1. face_down (0ms) — both cards show "?" card backs
- * 2. flipping (0→500ms) — CSS 3D rotateY flip reveals actions
- * 3. paused (500→800ms) — cards visible, outcome hidden
- * 4. outcome (800ms+) — outcome text pops in with bounce
+ * 2. flipping (0→800ms) — CSS 3D rotateY flip reveals actions
+ * 3. paused (800→1800ms) — cards visible, outcome hidden (suspense)
+ * 4. outcome (1800ms+) — outcome text pops in with bounce
  */
 export default function TurnReveal({
   turnResult,
@@ -107,18 +107,18 @@ export default function TurnReveal({
     setStage("face_down");
 
     timersRef.current.push(
-      setTimeout(() => setStage("flipping"), 100) // brief pause before flip
+      setTimeout(() => setStage("flipping"), 300) // brief pause before flip
     );
 
     timersRef.current.push(
-      setTimeout(() => setStage("paused"), 600) // after 500ms flip
+      setTimeout(() => setStage("paused"), 1100) // after 800ms flip
     );
 
     timersRef.current.push(
       setTimeout(() => {
         setStage("outcome");
         onOutcomeRevealed?.(turnResult.outcome);
-      }, 900)
+      }, 2100) // 1s suspense pause after cards shown
     );
 
     return () => {

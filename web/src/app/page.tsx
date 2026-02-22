@@ -61,6 +61,10 @@ export default function Home() {
   const { action: pixelAction, phase: pixelPhase, triggerAction: triggerPixelAction } = usePixelAnimation();
   const { showInterstitial, showAds, onMatchEnd, dismissInterstitial } = useAdTiming();
 
+  // Derive AI pixel action from lastTurn — synced to same phase as player
+  const aiPixelAction: PixelAction | null =
+    pixelAction && lastTurn ? ACTION_TO_PIXEL[lastTurn.p2_action] : null;
+
   // Derive character objects from IDs (memoized to avoid re-lookups)
   const playerCharacter = useMemo(
     () => (playerCharacterId ? getCharacter(playerCharacterId) : undefined),
@@ -199,7 +203,8 @@ export default function Home() {
             <BattleArena
               playerCharacterId={playerCharacterId}
               aiCharacterId={aiCharacterId}
-              action={pixelAction}
+              playerAction={pixelAction}
+              aiAction={aiPixelAction}
               phase={pixelPhase}
             />
           )}
@@ -222,7 +227,8 @@ export default function Home() {
             <BattleArena
               playerCharacterId={playerCharacterId}
               aiCharacterId={aiCharacterId}
-              action={pixelAction}
+              playerAction={pixelAction}
+              aiAction={aiPixelAction}
               phase={pixelPhase}
             />
           )}

@@ -98,17 +98,17 @@ export default function TurnReveal({
         setStage("flipping");
         Animated.timing(flipAnim, {
           toValue: 1,
-          duration: 500,
+          duration: 800,
           useNativeDriver: true,
         }).start();
-      }, 100)
+      }, 300)
     );
 
     // Stage 2→3: Pause
     timersRef.current.push(
       setTimeout(() => {
         setStage("paused");
-      }, 600)
+      }, 1100)
     );
 
     // Stage 3→4: Outcome
@@ -135,7 +135,7 @@ export default function TurnReveal({
           tension: 100,
           useNativeDriver: true,
         }).start();
-      }, 900)
+      }, 2100)
     );
 
     return () => {

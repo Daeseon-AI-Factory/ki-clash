@@ -53,7 +53,7 @@ export default function PixelFighter({
     width: dims.width * px,
     height: dims.height * px,
     position: "relative",
-    transition: "all 0.15s ease-out",
+    transition: "all 0.4s ease-out",
   };
 
   // Build transform list — right-side fighters are mirrored
@@ -107,7 +107,7 @@ export default function PixelFighter({
             width: px,
             height: px,
             boxShadow: shadow,
-            transition: "all 0.15s ease-out",
+            transition: "all 0.4s ease-out",
           }}
         />
       </div>
