@@ -7,12 +7,15 @@
 
 import { View, Text, ScrollView, StyleSheet } from "react-native";
 import KiMeter from "./KiMeter";
+import AIThinking from "./AIThinking";
 import { colors, fontSize, spacing } from "@/lib/theme";
 import type { GameState, TurnOutcome } from "@/lib/api";
 
 interface MatchHUDProps {
   gameState: GameState;
   playerName: string;
+  /** Show animated "AI is analyzing..." below AI ki meter */
+  showAIThinking?: boolean;
 }
 
 const OUTCOME_SHORT: Record<TurnOutcome, { text: string; color: string }> = {
@@ -24,7 +27,7 @@ const OUTCOME_SHORT: Record<TurnOutcome, { text: string; color: string }> = {
   neutral: { text: "—", color: colors.textMuted },
 };
 
-export default function MatchHUD({ gameState, playerName }: MatchHUDProps) {
+export default function MatchHUD({ gameState, playerName, showAIThinking }: MatchHUDProps) {
   const round = gameState.current_round;
 
   return (
@@ -43,6 +46,7 @@ export default function MatchHUD({ gameState, playerName }: MatchHUDProps) {
         <View style={styles.kiSection}>
           <KiMeter ki={round.p1_ki} label={playerName} isPlayer={true} />
           <KiMeter ki={round.p2_ki} label="AI" isPlayer={false} />
+          {showAIThinking && <AIThinking />}
         </View>
       )}
 
