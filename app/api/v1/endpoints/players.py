@@ -24,6 +24,10 @@ async def get_my_profile(
         wins=player.wins,
         losses=player.losses,
         draws=player.draws,
+        elo_rating=player.elo_rating,
+        ranked_wins=player.ranked_wins,
+        ranked_losses=player.ranked_losses,
+        ad_free=player.ad_free,
         created_at=player.created_at,
     )
 

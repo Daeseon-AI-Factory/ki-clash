@@ -13,6 +13,10 @@ class PlayerProfileResponse(BaseModel):
     wins: int
     losses: int
     draws: int
+    elo_rating: int
+    ranked_wins: int
+    ranked_losses: int
+    ad_free: bool
     created_at: datetime
 
 

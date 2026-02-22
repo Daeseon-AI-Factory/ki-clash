@@ -35,5 +35,10 @@ class Settings(BaseSettings):
     # CORS
     cors_origins: list[str] = ["http://localhost:3000"]
 
+    # Stripe (optional — payment features disabled if not set)
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_ad_free_price_id: str = ""
+
 
 settings = Settings()
