@@ -8,6 +8,7 @@ import Link from "next/link";
 import GameBoard from "@/components/GameBoard";
 import MatchHUD from "@/components/MatchHUD";
 import TurnReveal, { getShakeClass } from "@/components/TurnReveal";
+import CharacterSelect from "@/components/CharacterSelect";
 import MuteButton from "@/components/MuteButton";
 
 /** Map turn outcomes to sound names */
@@ -28,7 +29,10 @@ export default function Home() {
     lastRound,
     matchResult,
     playerName,
+    playerCharacterId,
+    aiCharacterId,
     error,
+    selectDifficulty,
     startGame,
     playAction,
     continueFromReveal,
@@ -48,7 +52,7 @@ export default function Home() {
     prevPhaseRef.current = phase;
 
     // Reveal sound when entering revealing/round_end/match_end from loading
-    if (prevPhase === "loading" && phase !== "loading" && phase !== "playing" && phase !== "lobby") {
+    if (prevPhase === "loading" && phase !== "loading" && phase !== "playing" && phase !== "lobby" && phase !== "character_select") {
       play("reveal");
 
       // Outcome sound after a short delay (let reveal sweep finish)
@@ -100,7 +104,12 @@ export default function Home() {
       )}
 
       {/* LOBBY — Choose difficulty */}
-      {phase === "lobby" && <LobbyScreen onStart={startGame} />}
+      {phase === "lobby" && <LobbyScreen onStart={selectDifficulty} />}
+
+      {/* CHARACTER SELECT — Pick your fighter */}
+      {phase === "character_select" && (
+        <CharacterSelect onSelect={startGame} />
+      )}
 
       {/* LOADING */}
       {phase === "loading" && (
