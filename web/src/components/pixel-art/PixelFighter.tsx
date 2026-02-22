@@ -47,53 +47,91 @@ export default function PixelFighter({
 
   if (!frame) return null;
 
-  const isAttacker = side === "left";
-
   const wrapperStyle: React.CSSProperties = {
     width: dims.width * px,
     height: dims.height * px,
     position: "relative",
-    transition: "all 0.4s ease-out",
   };
 
   // Build transform list — right-side fighters are mirrored
   const transforms: string[] = side === "right" ? ["scaleX(-1)"] : [];
 
+  // Phase-based transition timing for dynamic feel
+  if (phase === "windup") {
+    wrapperStyle.transition = "all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)"; // overshoot
+  } else if (phase === "impact") {
+    wrapperStyle.transition = "all 0.15s cubic-bezier(0, 0, 0.2, 1)"; // snap fast
+  } else if (phase === "recover") {
+    wrapperStyle.transition = "all 0.6s cubic-bezier(0.22, 1, 0.36, 1)"; // ease out
+  } else {
+    wrapperStyle.transition = "all 0.4s ease-out";
+  }
+
+  // Each fighter animates their own action independently
   if (action && phase !== "idle") {
-    if (action === "charge" && isAttacker) {
-      if (phase === "windup" || phase === "impact") transforms.push("scale(1.3)");
-      if (phase === "recover") transforms.push("scale(1.1)");
-    }
+    switch (action) {
+      case "charge":
+        if (phase === "windup") {
+          transforms.push("translateY(8px)", "scale(0.85)"); // crouch to gather energy
+        }
+        if (phase === "impact") {
+          transforms.push("translateY(-12px)", "scale(1.4)"); // burst upward with power
+        }
+        if (phase === "recover") {
+          transforms.push("translateY(-2px)", "scale(1.1)"); // float down, still powered
+        }
+        break;
 
-    if (action === "block" && !isAttacker) {
-      if (phase === "windup" || phase === "impact") transforms.push("scale(0.9)");
-    }
+      case "block":
+        if (phase === "windup") {
+          transforms.push("translateY(6px)", "translateX(-6px)", "scale(0.8)", "rotate(-5deg)"); // crouch & brace
+        }
+        if (phase === "impact") {
+          transforms.push("translateY(4px)", "translateX(-10px)", "scale(0.75)", "rotate(-8deg)"); // absorb hit
+        }
+        if (phase === "recover") {
+          transforms.push("translateY(2px)", "scale(0.95)"); // stand back up
+        }
+        break;
 
-    if (action === "attack") {
-      if (isAttacker) {
-        if (phase === "windup") transforms.push("translateX(-8px)");
-        if (phase === "impact") transforms.push("translateX(40px)");
-        if (phase === "recover") transforms.push("translateX(0)");
-      } else {
-        if (phase === "impact") transforms.push("translateX(6px)");
-      }
-    }
+      case "attack":
+        if (phase === "windup") {
+          transforms.push("translateX(-20px)", "translateY(6px)", "rotate(-12deg)"); // big pullback, crouch
+        }
+        if (phase === "impact") {
+          transforms.push("translateX(55px)", "translateY(-8px)", "rotate(6deg)"); // lunge forward, leap
+        }
+        if (phase === "recover") {
+          transforms.push("translateX(12px)", "translateY(2px)", "rotate(2deg)"); // land & bounce back
+        }
+        break;
 
-    if (action === "energyWave" && isAttacker) {
-      if (phase === "windup") transforms.push("scale(1.2)");
-      if (phase === "impact") transforms.push("scale(0.9)");
-    }
+      case "energyWave":
+        if (phase === "windup") {
+          transforms.push("translateX(-10px)", "translateY(-6px)", "scale(1.3)", "rotate(-6deg)"); // lean back, power up
+        }
+        if (phase === "impact") {
+          transforms.push("translateX(-14px)", "translateY(4px)", "scale(0.8)", "rotate(4deg)"); // recoil from blast
+        }
+        if (phase === "recover") {
+          transforms.push("translateX(-4px)", "scale(1.05)"); // settle
+        }
+        break;
 
-    if (action === "teleport" && isAttacker) {
-      if (phase === "windup") wrapperStyle.opacity = 0.4;
-      if (phase === "impact") {
-        wrapperStyle.opacity = 0;
-        transforms.push("translateY(-20px)");
-      }
-      if (phase === "recover") {
-        wrapperStyle.opacity = 1;
-        transforms.push("translateX(30px)");
-      }
+      case "teleport":
+        if (phase === "windup") {
+          wrapperStyle.opacity = 0.3;
+          transforms.push("scale(0.6)", "translateY(-14px)", "rotate(15deg)"); // phase out, spin
+        }
+        if (phase === "impact") {
+          wrapperStyle.opacity = 0;
+          transforms.push("scale(0.3)", "translateY(-40px)", "rotate(30deg)"); // vanish upward
+        }
+        if (phase === "recover") {
+          wrapperStyle.opacity = 1;
+          transforms.push("translateX(40px)", "translateY(6px)", "scale(1.15)", "rotate(-5deg)"); // reappear behind, land
+        }
+        break;
     }
   }
 

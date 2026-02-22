@@ -3,7 +3,7 @@
 import type { PixelAction, PixelPhase } from "@/lib/pixel-art-types";
 import { getCharacter } from "@/lib/characters";
 import PixelFighter from "./PixelFighter";
-import { PixelBeam, PixelShield, PixelFlash } from "./PixelEffects";
+import { PixelBeam, PixelShield, PixelFlash, PixelChargeAura, PixelTeleportTrail } from "./PixelEffects";
 import Scanlines from "./Scanlines";
 
 interface BattleArenaProps {
@@ -49,9 +49,20 @@ export default function BattleArena({
   return (
     <div className="relative w-full max-w-2xl mx-auto bg-gray-800/40 rounded-xl p-4 overflow-hidden">
       <Scanlines />
+
+      {/* Impact flash — triggers on any attack/energyWave from either fighter */}
       <PixelFlash action={resolvedPlayerAction} phase={phase} />
-      <PixelBeam action={resolvedPlayerAction} phase={phase} color={playerColor} />
-      <PixelShield action={resolvedAiAction} phase={phase} color={aiColor} />
+      <PixelFlash action={resolvedAiAction} phase={phase} />
+
+      {/* Per-fighter effects */}
+      <PixelBeam action={resolvedPlayerAction} phase={phase} color={playerColor} side="left" />
+      <PixelBeam action={resolvedAiAction} phase={phase} color={aiColor} side="right" />
+      <PixelShield action={resolvedPlayerAction} phase={phase} color={playerColor} side="left" />
+      <PixelShield action={resolvedAiAction} phase={phase} color={aiColor} side="right" />
+      <PixelChargeAura action={resolvedPlayerAction} phase={phase} color={playerColor} side="left" />
+      <PixelChargeAura action={resolvedAiAction} phase={phase} color={aiColor} side="right" />
+      <PixelTeleportTrail action={resolvedPlayerAction} phase={phase} side="left" />
+      <PixelTeleportTrail action={resolvedAiAction} phase={phase} side="right" />
 
       <div className="flex items-center justify-around w-full px-6 relative z-10">
         <PixelFighter
