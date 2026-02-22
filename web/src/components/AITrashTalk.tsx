@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import type { Character } from "@/lib/characters";
+import { PixelPortrait } from "@/components/pixel-art";
 
 interface AITrashTalkProps {
   character: Character;
@@ -29,7 +30,9 @@ export default function AITrashTalk({ character, turnNumber }: AITrashTalkProps)
         className="bg-gray-800/80 border border-gray-700 rounded-xl px-4 py-3
                     flex items-start gap-3"
       >
-        <span className="text-2xl flex-shrink-0">{character.emoji}</span>
+        <div className="flex-shrink-0">
+          <PixelPortrait characterId={character.id} size="sm" />
+        </div>
         <p className="text-sm text-gray-300 italic leading-relaxed">
           &ldquo;{line}&rdquo;
         </p>

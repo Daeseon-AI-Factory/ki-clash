@@ -1,6 +1,7 @@
 "use client";
 
 import { CHARACTERS } from "@/lib/characters";
+import { PixelPortrait } from "@/components/pixel-art";
 
 interface CharacterSelectProps {
   onSelect: (characterId: string) => void;
@@ -39,7 +40,7 @@ export default function CharacterSelect({ onSelect }: CharacterSelectProps) {
               e.currentTarget.style.borderColor = "";
             }}
           >
-            <span className="text-4xl">{char.emoji}</span>
+            <PixelPortrait characterId={char.id} size="lg" />
             <div>
               <p className="font-bold text-white">{char.name}</p>
               <p className="text-xs text-gray-400">{char.koreanName}</p>

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useGame } from "@/hooks/useGame";
 import { useSoundEffects } from "@/hooks/useSoundEffects";
 import { getCharacter } from "@/lib/characters";
-import type { Difficulty, TurnOutcome } from "@/lib/api";
+import type { Action, Difficulty, TurnOutcome } from "@/lib/api";
 import Link from "next/link";
 import GameBoard from "@/components/GameBoard";
 import MatchHUD from "@/components/MatchHUD";
@@ -12,6 +12,9 @@ import TurnReveal, { getShakeClass } from "@/components/TurnReveal";
 import CharacterSelect from "@/components/CharacterSelect";
 import AITrashTalk from "@/components/AITrashTalk";
 import MuteButton from "@/components/MuteButton";
+import { BattleArena, PixelPortrait } from "@/components/pixel-art";
+import { usePixelAnimation } from "@/hooks/usePixelAnimation";
+import type { PixelAction } from "@/lib/pixel-art-types";
 
 /** Map turn outcomes to sound names */
 const OUTCOME_SOUND: Record<TurnOutcome, "hit" | "clash" | "block" | "dodge" | "charge"> = {
@@ -21,6 +24,15 @@ const OUTCOME_SOUND: Record<TurnOutcome, "hit" | "clash" | "block" | "dodge" | "
   blocked: "block",
   dodged: "dodge",
   neutral: "charge",
+};
+
+/** Map backend Action to PixelAction for battle arena animation */
+const ACTION_TO_PIXEL: Record<Action, PixelAction> = {
+  charge: "charge",
+  block: "block",
+  attack: "attack",
+  energy_wave: "energyWave",
+  teleport: "teleport",
 };
 
 export default function Home() {
@@ -44,6 +56,7 @@ export default function Home() {
 
   const { play, muted, toggleMute } = useSoundEffects();
   const [shakeClass, setShakeClass] = useState("");
+  const { action: pixelAction, phase: pixelPhase, triggerAction: triggerPixelAction } = usePixelAnimation();
 
   // Derive character objects from IDs (memoized to avoid re-lookups)
   const playerCharacter = useMemo(
@@ -55,12 +68,12 @@ export default function Home() {
     [aiCharacterId]
   );
 
-  // Display names using character emoji+name when available
+  // Display names: name only (pixel portraits handle visual identity)
   const playerDisplayName = playerCharacter
-    ? `${playerCharacter.emoji} ${playerCharacter.name}`
+    ? playerCharacter.name
     : playerName;
   const aiDisplayName = aiCharacter
-    ? `${aiCharacter.emoji} ${aiCharacter.name}`
+    ? aiCharacter.name
     : "AI";
 
   // Track previous phase to detect transitions
@@ -71,13 +84,15 @@ export default function Home() {
     const prevPhase = prevPhaseRef.current;
     prevPhaseRef.current = phase;
 
-    // Reveal sound when entering revealing/round_end/match_end from loading
+    // Reveal sound + pixel animation when entering revealing/round_end/match_end from loading
     if (prevPhase === "loading" && phase !== "loading" && phase !== "playing" && phase !== "lobby" && phase !== "character_select") {
       play("reveal");
 
       // Outcome sound after a short delay (let reveal sweep finish)
       if (lastTurn) {
         setTimeout(() => play(OUTCOME_SOUND[lastTurn.outcome]), 300);
+        // Trigger pixel arena animation matching the player's action
+        triggerPixelAction(ACTION_TO_PIXEL[lastTurn.p1_action]);
       }
     }
 
@@ -143,6 +158,12 @@ export default function Home() {
       {phase === "playing" && gameState && (
         <div className="w-full max-w-2xl space-y-6">
           <MatchHUD gameState={gameState} playerName={playerName} showAIThinking playerCharacter={playerCharacter} aiCharacter={aiCharacter} />
+          {playerCharacterId && aiCharacterId && (
+            <BattleArena
+              playerCharacterId={playerCharacterId}
+              aiCharacterId={aiCharacterId}
+            />
+          )}
           {aiCharacter && (
             <AITrashTalk
               character={aiCharacter}
@@ -162,6 +183,14 @@ export default function Home() {
       {phase === "revealing" && (
         <div className="w-full max-w-2xl space-y-6">
           {gameState && <MatchHUD gameState={gameState} playerName={playerName} playerCharacter={playerCharacter} aiCharacter={aiCharacter} />}
+          {playerCharacterId && aiCharacterId && (
+            <BattleArena
+              playerCharacterId={playerCharacterId}
+              aiCharacterId={aiCharacterId}
+              action={pixelAction}
+              phase={pixelPhase}
+            />
+          )}
           <TurnReveal turnResult={lastTurn} visible={true} onOutcomeRevealed={handleOutcomeRevealed} playerName={playerDisplayName} aiName={aiDisplayName} />
           <button
             onClick={continueFromReveal}
@@ -177,6 +206,14 @@ export default function Home() {
       {phase === "round_end" && lastRound && (
         <div className="w-full max-w-2xl space-y-6">
           {gameState && <MatchHUD gameState={gameState} playerName={playerName} playerCharacter={playerCharacter} aiCharacter={aiCharacter} />}
+          {playerCharacterId && aiCharacterId && (
+            <BattleArena
+              playerCharacterId={playerCharacterId}
+              aiCharacterId={aiCharacterId}
+              action={pixelAction}
+              phase={pixelPhase}
+            />
+          )}
           <TurnReveal turnResult={lastTurn} visible={true} onOutcomeRevealed={handleOutcomeRevealed} playerName={playerDisplayName} aiName={aiDisplayName} />
           <div className="text-center py-6 bg-gray-800 rounded-xl">
             <p className="text-sm text-gray-400 uppercase tracking-wider">
@@ -215,9 +252,15 @@ export default function Home() {
       {phase === "match_end" && matchResult && (
         <div className="w-full max-w-md text-center space-y-6">
           <div className="py-8">
-            <p className="text-6xl mb-4">
-              {matchResult.winner === "p1" ? "🏆" : matchResult.winner === "p2" ? "💀" : "🤝"}
-            </p>
+            <div className="flex justify-center mb-4">
+              {matchResult.winner === "p1" && playerCharacterId ? (
+                <PixelPortrait characterId={playerCharacterId} size="lg" />
+              ) : matchResult.winner === "p2" && aiCharacterId ? (
+                <PixelPortrait characterId={aiCharacterId} size="lg" />
+              ) : (
+                <p className="text-6xl">🤝</p>
+              )}
+            </div>
             <p
               className={`text-4xl font-black ${
                 matchResult.winner === "p1"
