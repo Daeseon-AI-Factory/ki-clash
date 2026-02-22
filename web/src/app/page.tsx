@@ -1,12 +1,25 @@
 "use client";
 
+import { useCallback, useEffect, useRef } from "react";
 import { useGame } from "@/hooks/useGame";
-import type { Difficulty } from "@/lib/api";
+import { useSoundEffects } from "@/hooks/useSoundEffects";
+import type { Difficulty, TurnOutcome } from "@/lib/api";
 import Link from "next/link";
 import GameBoard from "@/components/GameBoard";
 import MatchHUD from "@/components/MatchHUD";
 import TurnReveal from "@/components/TurnReveal";
 import Countdown from "@/components/Countdown";
+import MuteButton from "@/components/MuteButton";
+
+/** Map turn outcomes to sound names */
+const OUTCOME_SOUND: Record<TurnOutcome, "hit" | "clash" | "block" | "dodge" | "charge"> = {
+  p1_wins_round: "hit",
+  p2_wins_round: "hit",
+  clash: "clash",
+  blocked: "block",
+  dodged: "dodge",
+  neutral: "charge",
+};
 
 export default function Home() {
   const {
@@ -25,8 +38,51 @@ export default function Home() {
     backToLobby,
   } = useGame();
 
+  const { play, muted, toggleMute } = useSoundEffects();
+
+  // Track previous phase to detect transitions
+  const prevPhaseRef = useRef(phase);
+
+  // Play sounds on phase transitions
+  useEffect(() => {
+    const prevPhase = prevPhaseRef.current;
+    prevPhaseRef.current = phase;
+
+    // Reveal sound when entering revealing/round_end/match_end from countdown
+    if (prevPhase === "countdown" && phase !== "countdown" && phase !== "loading") {
+      play("reveal");
+
+      // Outcome sound after a short delay (let reveal sweep finish)
+      if (lastTurn) {
+        setTimeout(() => play(OUTCOME_SOUND[lastTurn.outcome]), 300);
+      }
+    }
+
+    // Round result sounds
+    if (phase === "round_end" && lastRound) {
+      setTimeout(() => {
+        play(lastRound.winner === "p1" ? "round_win" : "round_lose");
+      }, 600);
+    }
+
+    // Match result sounds
+    if (phase === "match_end" && matchResult) {
+      setTimeout(() => {
+        play(matchResult.winner === "p1" ? "round_win" : "round_lose");
+      }, 600);
+    }
+  }, [phase, lastTurn, lastRound, matchResult, play]);
+
+  /** Countdown beat handler — plays click sound on each beat number */
+  const handleCountdownBeat = useCallback(() => {
+    play("countdown_beat");
+  }, [play]);
+
   return (
     <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4">
+      {/* Mute toggle */}
+      <MuteButton muted={muted} onToggle={toggleMute} />
+
       {/* Error display */}
       {error && (
         <div className="mb-4 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-300 text-sm">
@@ -61,7 +117,10 @@ export default function Home() {
       {phase === "countdown" && gameState && (
         <div className="w-full max-w-2xl space-y-6">
           <MatchHUD gameState={gameState} playerName={playerName} />
-          <Countdown onComplete={onCountdownComplete} />
+          <Countdown
+            onComplete={onCountdownComplete}
+            onBeat={handleCountdownBeat}
+          />
         </div>
       )}
 
