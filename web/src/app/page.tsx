@@ -13,7 +13,9 @@ import CharacterSelect from "@/components/CharacterSelect";
 import AITrashTalk from "@/components/AITrashTalk";
 import MuteButton from "@/components/MuteButton";
 import { BattleArena, PixelPortrait } from "@/components/pixel-art";
+import { AdBanner, InterstitialAd } from "@/components/ads";
 import { usePixelAnimation } from "@/hooks/usePixelAnimation";
+import { useAdTiming } from "@/hooks/useAdTiming";
 import type { PixelAction } from "@/lib/pixel-art-types";
 
 /** Map turn outcomes to sound names */
@@ -57,6 +59,7 @@ export default function Home() {
   const { play, muted, toggleMute } = useSoundEffects();
   const [shakeClass, setShakeClass] = useState("");
   const { action: pixelAction, phase: pixelPhase, triggerAction: triggerPixelAction } = usePixelAnimation();
+  const { showInterstitial, onMatchEnd, dismissInterstitial } = useAdTiming();
 
   // Derive character objects from IDs (memoized to avoid re-lookups)
   const playerCharacter = useMemo(
@@ -103,13 +106,14 @@ export default function Home() {
       }, 600);
     }
 
-    // Match result sounds
+    // Match result sounds + ad trigger
     if (phase === "match_end" && matchResult) {
       setTimeout(() => {
         play(matchResult.winner === "p1" ? "round_win" : "round_lose");
       }, 600);
+      onMatchEnd();
     }
-  }, [phase, lastTurn, lastRound, matchResult, play]);
+  }, [phase, lastTurn, lastRound, matchResult, play, onMatchEnd]);
 
   /** Countdown beat handler — plays click sound on each tick */
   const handleCountdownBeat = useCallback(() => {
@@ -131,6 +135,9 @@ export default function Home() {
       {/* Mute toggle */}
       <MuteButton muted={muted} onToggle={toggleMute} />
 
+      {/* Interstitial ad overlay (between matches) */}
+      <InterstitialAd show={showInterstitial} onDismiss={dismissInterstitial} />
+
       {/* Error display */}
       {error && (
         <div className="mb-4 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-300 text-sm">
@@ -139,7 +146,12 @@ export default function Home() {
       )}
 
       {/* LOBBY — Choose difficulty */}
-      {phase === "lobby" && <LobbyScreen onStart={selectDifficulty} />}
+      {phase === "lobby" && (
+        <>
+          <LobbyScreen onStart={selectDifficulty} />
+          <AdBanner adSlot={process.env.NEXT_PUBLIC_ADSENSE_BANNER_SLOT || ""} className="mt-6 w-full max-w-md" />
+        </>
+      )}
 
       {/* CHARACTER SELECT — Pick your fighter */}
       {phase === "character_select" && (
@@ -301,14 +313,22 @@ export default function Home() {
         </div>
       )}
 
-      {/* PvP link on lobby */}
+      {/* Navigation links on lobby */}
       {phase === "lobby" && (
-        <Link
-          href="/pvp"
-          className="mt-4 text-sm text-red-400 hover:text-red-300 transition-colors"
-        >
-          vs Real Player (PvP) →
-        </Link>
+        <div className="mt-4 flex flex-col items-center gap-2">
+          <Link
+            href="/tutorial"
+            className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+          >
+            How to Play (Tutorial) →
+          </Link>
+          <Link
+            href="/pvp"
+            className="text-sm text-red-400 hover:text-red-300 transition-colors"
+          >
+            vs Real Player (PvP) →
+          </Link>
+        </div>
       )}
     </div>
   );
