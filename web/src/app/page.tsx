@@ -8,7 +8,6 @@ import Link from "next/link";
 import GameBoard from "@/components/GameBoard";
 import MatchHUD from "@/components/MatchHUD";
 import TurnReveal, { getShakeClass } from "@/components/TurnReveal";
-import Countdown from "@/components/Countdown";
 import MuteButton from "@/components/MuteButton";
 
 /** Map turn outcomes to sound names */
@@ -32,7 +31,6 @@ export default function Home() {
     error,
     startGame,
     playAction,
-    onCountdownComplete,
     continueFromReveal,
     continueFromRound,
     backToLobby,
@@ -49,8 +47,8 @@ export default function Home() {
     const prevPhase = prevPhaseRef.current;
     prevPhaseRef.current = phase;
 
-    // Reveal sound when entering revealing/round_end/match_end from countdown
-    if (prevPhase === "countdown" && phase !== "countdown" && phase !== "loading") {
+    // Reveal sound when entering revealing/round_end/match_end from loading
+    if (prevPhase === "loading" && phase !== "loading" && phase !== "playing" && phase !== "lobby") {
       play("reveal");
 
       // Outcome sound after a short delay (let reveal sweep finish)
@@ -74,7 +72,7 @@ export default function Home() {
     }
   }, [phase, lastTurn, lastRound, matchResult, play]);
 
-  /** Countdown beat handler — plays click sound on each beat number */
+  /** Countdown beat handler — plays click sound on each tick */
   const handleCountdownBeat = useCallback(() => {
     play("countdown_beat");
   }, [play]);
@@ -112,7 +110,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* PLAYING — Main game */}
+      {/* PLAYING — Main game with inline selection timer */}
       {phase === "playing" && gameState && (
         <div className="w-full max-w-2xl space-y-6">
           <MatchHUD gameState={gameState} playerName={playerName} showAIThinking />
@@ -120,17 +118,7 @@ export default function Home() {
             playerKi={gameState.current_round?.p1_ki ?? 0}
             disabled={false}
             onSubmit={playAction}
-          />
-        </div>
-      )}
-
-      {/* COUNTDOWN — 3-beat rhythm before reveal */}
-      {phase === "countdown" && gameState && (
-        <div className="w-full max-w-2xl space-y-6">
-          <MatchHUD gameState={gameState} playerName={playerName} />
-          <Countdown
-            onComplete={onCountdownComplete}
-            onBeat={handleCountdownBeat}
+            onCountdownBeat={handleCountdownBeat}
           />
         </div>
       )}

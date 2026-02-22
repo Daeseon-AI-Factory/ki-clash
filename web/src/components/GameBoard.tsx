@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import type { Action } from "@/lib/api";
 import ActionCard from "./ActionCard";
+import Countdown from "./Countdown";
 
 const ACTIONS: Action[] = ["charge", "block", "attack", "energy_wave", "teleport"];
 
@@ -10,17 +11,22 @@ interface GameBoardProps {
   playerKi: number;
   disabled: boolean;
   onSubmit: (action: Action) => void;
+  /** Called on each countdown beat for sound triggers */
+  onCountdownBeat?: () => void;
 }
 
 /**
- * Game board showing 5 action cards in a row.
- * Player taps a card to select, then confirms by tapping again or
- * the selection auto-submits.
+ * Game board showing 5 action cards in a row with an inline countdown timer.
+ *
+ * The timer ticks during action selection. When it hits 0, auto-submits
+ * "charge" (the safest default — costs 0 ki and builds resources).
+ * Player can tap to select, then confirm before the timer expires.
  */
 export default function GameBoard({
   playerKi,
   disabled,
   onSubmit,
+  onCountdownBeat,
 }: GameBoardProps) {
   const [selected, setSelected] = useState<Action | null>(null);
 
@@ -43,8 +49,25 @@ export default function GameBoard({
     }
   };
 
+  /** Auto-submit Charge when timer expires */
+  const handleTimeout = useCallback(() => {
+    onSubmit("charge");
+    setSelected(null);
+  }, [onSubmit]);
+
   return (
     <div className="w-full max-w-2xl mx-auto">
+      {/* Selection countdown timer */}
+      {!disabled && (
+        <div className="mb-4">
+          <Countdown
+            seconds={3}
+            onTimeout={handleTimeout}
+            onBeat={onCountdownBeat}
+          />
+        </div>
+      )}
+
       {/* Action cards grid */}
       <div className="grid grid-cols-5 gap-2 sm:gap-3 mb-4">
         {ACTIONS.map((action) => (
