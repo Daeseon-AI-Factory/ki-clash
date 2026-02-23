@@ -3,7 +3,11 @@
 import type { PixelAction, PixelPhase } from "@/lib/pixel-art-types";
 import { getCharacter } from "@/lib/characters";
 import PixelFighter from "./PixelFighter";
-import { PixelBeam, PixelShield, PixelFlash, PixelChargeAura, PixelTeleportTrail } from "./PixelEffects";
+import {
+  PixelBeam, PixelEnergyBall, PixelShield, PixelFlash,
+  PixelChargeAura, PixelTeleportTrail,
+  PixelVictoryBurst, PixelDefeatSmoke,
+} from "./PixelEffects";
 import Scanlines from "./Scanlines";
 
 interface BattleArenaProps {
@@ -61,8 +65,14 @@ export default function BattleArena({
       <PixelShield action={resolvedAiAction} phase={phase} color={aiColor} side="right" />
       <PixelChargeAura action={resolvedPlayerAction} phase={phase} color={playerColor} side="left" />
       <PixelChargeAura action={resolvedAiAction} phase={phase} color={aiColor} side="right" />
+      <PixelEnergyBall action={resolvedPlayerAction} phase={phase} color={playerColor} side="left" />
+      <PixelEnergyBall action={resolvedAiAction} phase={phase} color={aiColor} side="right" />
       <PixelTeleportTrail action={resolvedPlayerAction} phase={phase} side="left" />
       <PixelTeleportTrail action={resolvedAiAction} phase={phase} side="right" />
+      <PixelVictoryBurst action={resolvedPlayerAction} phase={phase} color={playerColor} side="left" />
+      <PixelVictoryBurst action={resolvedAiAction} phase={phase} color={aiColor} side="right" />
+      <PixelDefeatSmoke action={resolvedPlayerAction} phase={phase} side="left" />
+      <PixelDefeatSmoke action={resolvedAiAction} phase={phase} side="right" />
 
       <div className="flex items-center justify-around w-full px-6 relative z-10">
         <PixelFighter

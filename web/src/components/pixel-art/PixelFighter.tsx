@@ -132,6 +132,34 @@ export default function PixelFighter({
           transforms.push("translateX(40px)", "translateY(6px)", "scale(1.15)", "rotate(-5deg)"); // reappear behind, land
         }
         break;
+
+      case "victory":
+        wrapperStyle.transition = "all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)";
+        if (phase === "windup") {
+          transforms.push("translateY(6px)", "scale(1.1)"); // crouch before jump
+        }
+        if (phase === "impact") {
+          transforms.push("translateY(-24px)", "scale(1.5)", "rotate(5deg)"); // jump up, big scale
+        }
+        if (phase === "recover") {
+          transforms.push("translateY(-4px)", "scale(1.3)"); // float, stay big
+        }
+        break;
+
+      case "defeat":
+        wrapperStyle.transition = "all 0.8s cubic-bezier(0.22, 1, 0.36, 1)";
+        if (phase === "windup") {
+          transforms.push("translateX(-4px)", "rotate(-5deg)"); // stagger
+        }
+        if (phase === "impact") {
+          wrapperStyle.opacity = 0.5;
+          transforms.push("translateY(12px)", "translateX(-16px)", "scale(0.7)", "rotate(-25deg)"); // fall down
+        }
+        if (phase === "recover") {
+          wrapperStyle.opacity = 0.3;
+          transforms.push("translateY(16px)", "translateX(-20px)", "scale(0.6)", "rotate(-30deg)"); // stay down
+        }
+        break;
     }
   }
 

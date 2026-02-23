@@ -14,20 +14,11 @@ interface EffectProps {
 }
 
 /**
- * Pixel-art energy beam — a growing block of bright pixels.
- * Only renders during energyWave impact phase.
+ * Energy ball — glowing orb that charges during windup before beam fires.
+ * Only renders during energyWave windup phase.
  */
-export function PixelBeam({ action, phase, color, side = "left" }: EffectProps) {
-  if (action !== "energyWave" || phase !== "impact") return null;
-
-  const PX = DEFAULT_PX;
-  const beamPixels: string[] = [];
-  for (let i = 0; i < 24; i++) {
-    for (let j = 0; j < 4; j++) {
-      const c = (i + j) % 3 === 0 ? W : color;
-      beamPixels.push(`${i * PX}px ${j * PX}px 0 ${c}`);
-    }
-  }
+export function PixelEnergyBall({ action, phase, color, side = "left" }: EffectProps) {
+  if (action !== "energyWave" || phase !== "windup") return null;
 
   const isLeft = side === "left";
 
@@ -35,19 +26,67 @@ export function PixelBeam({ action, phase, color, side = "left" }: EffectProps) 
     <div
       className="absolute"
       style={{
-        left: isLeft ? "25%" : undefined,
-        right: isLeft ? undefined : "25%",
-        top: "44%",
-        zIndex: 5,
-        animation: "pixel-beam-grow 0.4s steps(6) forwards",
-        transform: isLeft ? undefined : "scaleX(-1)",
+        left: isLeft ? "28%" : undefined,
+        right: isLeft ? undefined : "28%",
+        top: "38%",
+        zIndex: 6,
+        animation: "pixel-energy-ball 0.6s ease-in-out infinite",
       }}
     >
       <div
         style={{
-          width: PX,
-          height: PX,
-          boxShadow: beamPixels.join(", "),
+          width: 20,
+          height: 20,
+          borderRadius: "50%",
+          background: `radial-gradient(circle, ${W} 20%, ${color} 50%, transparent 70%)`,
+          boxShadow: `0 0 12px 4px ${color}, 0 0 24px 8px ${color}40`,
+        }}
+      />
+    </div>
+  );
+}
+
+/**
+ * Pixel-art energy beam — wide beam that fires across the arena.
+ * Only renders during energyWave impact phase.
+ */
+export function PixelBeam({ action, phase, color, side = "left" }: EffectProps) {
+  if (action !== "energyWave" || (phase !== "impact" && phase !== "recover")) return null;
+
+  const isLeft = side === "left";
+
+  return (
+    <div
+      className="absolute"
+      style={{
+        left: isLeft ? "20%" : undefined,
+        right: isLeft ? undefined : "20%",
+        top: "36%",
+        width: "60%",
+        zIndex: 5,
+        animation: "pixel-beam-grow 0.6s cubic-bezier(0, 0, 0.2, 1) forwards",
+        transform: isLeft ? undefined : "scaleX(-1)",
+      }}
+    >
+      {/* Main beam body */}
+      <div
+        style={{
+          height: 8,
+          background: `linear-gradient(90deg, ${W}, ${color} 20%, ${color} 80%, ${W})`,
+          boxShadow: `0 0 8px 2px ${color}, 0 0 20px 4px ${color}60`,
+          borderRadius: 4,
+        }}
+      />
+      {/* Core glow line */}
+      <div
+        style={{
+          height: 3,
+          marginTop: -5,
+          marginLeft: "5%",
+          marginRight: "5%",
+          background: W,
+          borderRadius: 2,
+          opacity: 0.8,
         }}
       />
     </div>
@@ -191,6 +230,80 @@ export function PixelTeleportTrail({ action, phase, side = "left" }: {
         className="w-6 h-8 rounded-sm"
         style={{
           background: `linear-gradient(135deg, rgba(168,85,247,0.4), rgba(168,85,247,0))`,
+        }}
+      />
+    </div>
+  );
+}
+
+/**
+ * Victory sparkles — golden particles bursting around the winner.
+ */
+export function PixelVictoryBurst({ action, phase, color, side = "left" }: EffectProps) {
+  if (action !== "victory" || phase === "idle") return null;
+
+  const isLeft = side === "left";
+  const gold = "#FFD700";
+
+  return (
+    <>
+      {/* Burst particles */}
+      {[0, 1, 2, 3, 4, 5].map((i) => (
+        <div
+          key={i}
+          className="absolute"
+          style={{
+            left: isLeft ? `${18 + i * 5}%` : undefined,
+            right: isLeft ? undefined : `${18 + i * 5}%`,
+            top: `${20 + (i % 3) * 12}%`,
+            zIndex: 6,
+            animation: `pixel-victory-sparkle 1s ease-out ${i * 0.1}s infinite`,
+          }}
+        >
+          <div
+            style={{
+              width: 4,
+              height: 4,
+              borderRadius: "50%",
+              background: i % 2 === 0 ? gold : color,
+              boxShadow: `0 0 6px 2px ${i % 2 === 0 ? gold : color}`,
+            }}
+          />
+        </div>
+      ))}
+    </>
+  );
+}
+
+/**
+ * Defeat impact — dark overlay and smoke around the loser.
+ */
+export function PixelDefeatSmoke({ action, phase, side = "left" }: {
+  action: PixelAction | null;
+  phase: PixelPhase;
+  side?: "left" | "right";
+}) {
+  if (action !== "defeat" || phase === "idle" || phase === "windup") return null;
+
+  const isLeft = side === "left";
+
+  return (
+    <div
+      className="absolute"
+      style={{
+        left: isLeft ? "15%" : undefined,
+        right: isLeft ? undefined : "15%",
+        top: "40%",
+        zIndex: 4,
+        animation: "pixel-defeat-smoke 1.2s ease-out forwards",
+      }}
+    >
+      <div
+        style={{
+          width: 40,
+          height: 30,
+          borderRadius: "50%",
+          background: "radial-gradient(circle, rgba(100,100,100,0.4) 30%, transparent 70%)",
         }}
       />
     </div>

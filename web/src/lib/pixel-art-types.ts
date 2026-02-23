@@ -15,7 +15,9 @@ export type PixelAction =
   | "block"
   | "attack"
   | "energyWave"
-  | "teleport";
+  | "teleport"
+  | "victory"
+  | "defeat";
 
 /** Animation phase state machine: idle → windup → impact → recover → idle */
 export type PixelPhase = "idle" | "windup" | "impact" | "recover";

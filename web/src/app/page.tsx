@@ -59,11 +59,26 @@ export default function Home() {
   const { play, muted, toggleMute } = useSoundEffects();
   const [shakeClass, setShakeClass] = useState("");
   const { action: pixelAction, phase: pixelPhase, triggerAction: triggerPixelAction } = usePixelAnimation();
+  const {
+    action: finishAction,
+    phase: finishPhase,
+    triggerAction: triggerFinish,
+  } = usePixelAnimation({ windupMs: 600, impactMs: 1000, recoverMs: 1200 });
   const { showInterstitial, showAds, onMatchEnd, dismissInterstitial } = useAdTiming();
 
   // Derive AI pixel action from lastTurn — synced to same phase as player
   const aiPixelAction: PixelAction | null =
     pixelAction && lastTurn ? ACTION_TO_PIXEL[lastTurn.p2_action] : null;
+
+  // Derive finish actions — winner gets "victory", loser gets "defeat"
+  const playerFinishAction: PixelAction | null =
+    finishAction && matchResult
+      ? matchResult.winner === "p1" ? "victory" : matchResult.winner === "p2" ? "defeat" : "victory"
+      : null;
+  const aiFinishAction: PixelAction | null =
+    finishAction && matchResult
+      ? matchResult.winner === "p2" ? "victory" : matchResult.winner === "p1" ? "defeat" : "victory"
+      : null;
 
   // Derive character objects from IDs (memoized to avoid re-lookups)
   const playerCharacter = useMemo(
@@ -110,14 +125,15 @@ export default function Home() {
       }, 600);
     }
 
-    // Match result sounds + ad trigger
+    // Match result sounds + victory/defeat animation + ad trigger
     if (phase === "match_end" && matchResult) {
+      triggerFinish(matchResult.winner === "p1" ? "victory" : "defeat");
       setTimeout(() => {
         play(matchResult.winner === "p1" ? "round_win" : "round_lose");
       }, 600);
       onMatchEnd();
     }
-  }, [phase, lastTurn, lastRound, matchResult, play, onMatchEnd]);
+  }, [phase, lastTurn, lastRound, matchResult, play, onMatchEnd, triggerFinish]);
 
   /** Countdown beat handler — plays click sound on each tick */
   const handleCountdownBeat = useCallback(() => {
@@ -268,19 +284,21 @@ export default function Home() {
 
       {/* MATCH END */}
       {phase === "match_end" && matchResult && (
-        <div className="w-full max-w-md text-center space-y-6">
-          <div className="py-8">
-            <div className="flex justify-center mb-4">
-              {matchResult.winner === "p1" && playerCharacterId ? (
-                <PixelPortrait characterId={playerCharacterId} size="lg" />
-              ) : matchResult.winner === "p2" && aiCharacterId ? (
-                <PixelPortrait characterId={aiCharacterId} size="lg" />
-              ) : (
-                <p className="text-6xl">🤝</p>
-              )}
-            </div>
+        <div className="w-full max-w-2xl text-center space-y-6">
+          {/* Battle arena with victory/defeat animation */}
+          {playerCharacterId && aiCharacterId && (
+            <BattleArena
+              playerCharacterId={playerCharacterId}
+              aiCharacterId={aiCharacterId}
+              playerAction={playerFinishAction}
+              aiAction={aiFinishAction}
+              phase={finishPhase}
+            />
+          )}
+
+          <div className="py-4">
             <p
-              className={`text-4xl font-black ${
+              className={`text-5xl font-black animate-match-result-slam ${
                 matchResult.winner === "p1"
                   ? "text-green-400"
                   : matchResult.winner === "p2"
