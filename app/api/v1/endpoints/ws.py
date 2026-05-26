@@ -127,48 +127,38 @@ async def game_ws(
 
     await _ws_manager.connect(websocket, room_id, player_id)
 
-    # Check if this is a reconnect to an existing session
+    # Get-or-create the session. If matchmaking didn't pair this game,
+    # the WS request is for a game that doesn't exist.
     session = _game_sessions.get(game_uuid)
-
     if session is None:
-        # First connection — check if matchmaking created this game
-        if game_uuid in _matchmaking.active_games:
-            from app.modules.ki_clash.game_session import PvPGameSession
-
-            state = _matchmaking.active_games[game_uuid]
-            p1_id, p2_id = _matchmaking.game_players[game_uuid]
-
-            session = PvPGameSession(
-                game_state=state,
-                player1_id=p1_id,
-                player2_id=p2_id,
-                ws_manager=_ws_manager,
-            )
-            _game_sessions[game_uuid] = session
-
-            # Start the game when both players are connected
-            if _ws_manager.room_size(room_id) >= 2:
-                await session.start()
-        else:
-            await websocket.send_json(
-                ws_msg.error_msg("Game not found")
-            )
+        if game_uuid not in _matchmaking.active_games:
+            await websocket.send_json(ws_msg.error_msg("Game not found"))
             await websocket.close()
             return
-    else:
-        # Reconnect scenario
-        if session.is_player(player_id):
-            await session.handle_reconnect(player_id)
 
-            # If both players are now connected and game hasn't started yet
-            if _ws_manager.room_size(room_id) >= 2 and session.state.current_round:
-                if session._p1_action is None and session._p2_action is None:
-                    await session.start()
+        from app.modules.ki_clash.game_session import PvPGameSession
 
-    # Check if both players connected — start game if so
-    if session and _ws_manager.room_size(room_id) >= 2:
-        if session._timeout_task is None and session.state.status == MatchStatus.IN_PROGRESS:
-            await session.start()
+        state = _matchmaking.active_games[game_uuid]
+        p1_id, p2_id = _matchmaking.game_players[game_uuid]
+        session = PvPGameSession(
+            game_state=state,
+            player1_id=p1_id,
+            player2_id=p2_id,
+            ws_manager=_ws_manager,
+        )
+        _game_sessions[game_uuid] = session
+
+    # Single connect path — session.handle_connect() decides internally
+    # whether to treat this as first-connect (silent) or reconnect (notify
+    # opponent + cancel forfeit timer). Fixes Phase 3 Bug 1.
+    if session.is_player(player_id):
+        await session.handle_connect(player_id)
+
+    # Start the match once both players have connected. session.start()
+    # is idempotent so safe even if invoked again here on a reconnect.
+    # Fixes Phase 3 Bug 2.
+    if _ws_manager.room_size(room_id) >= 2:
+        await session.start()
 
     try:
         while True:

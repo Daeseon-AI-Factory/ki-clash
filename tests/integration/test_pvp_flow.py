@@ -77,44 +77,35 @@ class TestMatchFlowBasics:
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# Known-bug invariants — currently xfail, will pass after Phase 3
+# Regression tests — these document the 4 bugs discovered on 2026-05-26
+# and FIXED in Phase 3. They were `xfail` until the fixes landed; they are
+# now plain assertions so any regression turns the suite red.
 # ════════════════════════════════════════════════════════════════════════════
 
 
-class TestKnownBugs:
-    """Each test captures one bug discovered by the simulator on 2026-05-26.
+class TestPhase3Regressions:
+    """Each test corresponds to a bug from the 2026-05-26 simulator session.
+    Phase 3 fixed all four; these tests now guard against regression."""
 
-    These are xfail today and become real passes when Phase 3 fixes them —
-    at which point remove the marker. The strict=False option allows them
-    to occasionally pass without breaking the suite (concurrency timing).
-    """
-
-    @pytest.mark.xfail(
-        reason="Bug 1: opponent_reconnected fires on first connect "
-        "(ws.py:158-162 lacks first-connect vs reconnect distinction). "
-        "Fix scheduled for Phase 3.",
-        strict=False,
-    )
     def test_no_spurious_opponent_reconnected_on_first_connect(
         self, match: MatchRecording
     ) -> None:
-        """No player should receive opponent_reconnected when no disconnect happened."""
+        """Phase 3 Bug 1 — `opponent_reconnected` must NOT fire when the
+        opponent first connects to the game WS (only on actual reconnect
+        after disconnect)."""
         spurious = match.of_type("opponent_reconnected")
         assert len(spurious) == 0, (
             f"Got {len(spurious)} opponent_reconnected events but no player "
-            f"disconnected during this match."
+            f"disconnected during this match. "
+            f"Regression of Phase 3 Bug 1 — check PvPGameSession.handle_connect()."
         )
 
-    @pytest.mark.xfail(
-        reason="Bug 2: waiting_for_action fires twice per turn because "
-        "session.start() is called from two paths in ws.py (lines 151 & 171). "
-        "Fix scheduled for Phase 3 — add idempotency guard.",
-        strict=False,
-    )
     def test_waiting_for_action_exactly_once_per_turn_per_player(
         self, match: MatchRecording
     ) -> None:
-        """Each (player, round, turn) combo should appear in waiting_for_action exactly once."""
+        """Phase 3 Bug 2 — each (round, turn) combo must trigger exactly one
+        `waiting_for_action` per player. Duplicates indicate `session.start()`
+        is being called more than once (lost idempotency)."""
         for player in ("P1", "P2"):
             keys = []
             for event in match.for_player_of_type(player, "waiting_for_action"):
@@ -122,20 +113,16 @@ class TestKnownBugs:
             duplicates = [k for k, c in Counter(keys).items() if c > 1]
             assert not duplicates, (
                 f"{player} received waiting_for_action multiple times for "
-                f"these (round, turn) combos: {duplicates}"
+                f"these (round, turn) combos: {duplicates}. "
+                f"Regression of Phase 3 Bug 2 — check session.start() idempotency."
             )
 
-    @pytest.mark.xfail(
-        reason="Bug 3: action_confirmed and turn_result can arrive out of order "
-        "because broadcasts cross between two players' sockets with awaits in "
-        "between. Fix scheduled for Phase 3 — single atomic broadcast.",
-        strict=False,
-    )
     def test_action_confirmed_arrives_before_subsequent_turn_result(
         self, match: MatchRecording
     ) -> None:
-        """After each submit_action, the action_confirmed for it should arrive
-        before the turn_result that supersedes it."""
+        """Phase 3 Bug 3 — for each submit_action, the corresponding
+        action_confirmed should arrive before the next turn_result. Out-of-
+        order delivery confuses client-side turn correlation."""
         for player in ("P1", "P2"):
             events = match.for_player(player)
             submit_indices = [
@@ -143,7 +130,6 @@ class TestKnownBugs:
                 if e.direction == "send" and e.type == "submit_action"
             ]
             for idx in submit_indices:
-                # Find the next action_confirmed and the next turn_result
                 next_confirmed_idx = next(
                     (i for i in range(idx + 1, len(events))
                      if events[i].type == "action_confirmed"),
@@ -158,21 +144,14 @@ class TestKnownBugs:
                     continue
                 assert next_confirmed_idx < next_result_idx, (
                     f"{player} received turn_result before action_confirmed "
-                    f"at events[{idx}]"
+                    f"at events[{idx}]. Regression of Phase 3 Bug 3."
                 )
 
     def test_turn_result_carries_turn_sequence_number(
         self, match: MatchRecording
     ) -> None:
-        """turn_result events must include turn_number so clients can
-        correlate them with their submissions and ignore stale ones.
-
-        NOTE: this was originally suspected to be a bug (Bug 4 from the
-        2026-05-26 simulator session). Closer reading of `app/schemas/ws.py`
-        showed turn_result *does* include turn_number — so this is a
-        positive regression test, not an xfail. The related concern
-        (action_confirmed lacks turn_number) is tracked separately below.
-        """
+        """`turn_result` must include turn_number so clients can correlate
+        with their submissions and ignore stale messages."""
         for player in ("P1", "P2"):
             results = match.for_player_of_type(player, "turn_result")
             turn_numbers = [r.data.get("turn_number") for r in results]
@@ -181,22 +160,17 @@ class TestKnownBugs:
                 f"(got: {turn_numbers})"
             )
 
-    @pytest.mark.xfail(
-        reason="Bug 4 (revised): action_confirmed lacks a turn_number, so "
-        "if it arrives out of order with turn_result the client can't tell "
-        "which turn it belongs to. Fix scheduled for Phase 3 — add "
-        "turn_number to action_confirmed schema in app/schemas/ws.py.",
-        strict=False,
-    )
     def test_action_confirmed_carries_turn_number(
         self, match: MatchRecording
     ) -> None:
-        """action_confirmed should include turn_number to disambiguate
-        late arrivals from current-turn confirmations."""
+        """Phase 3 Bug 4 — `action_confirmed` must include turn_number so
+        clients can correlate the confirmation with the specific
+        submission it answers."""
         for player in ("P1", "P2"):
             confirmeds = match.for_player_of_type(player, "action_confirmed")
             for c in confirmeds:
                 assert "turn_number" in c.data, (
                     f"{player}: action_confirmed missing turn_number "
-                    f"(payload: {c.data})"
+                    f"(payload: {c.data}). "
+                    f"Regression of Phase 3 Bug 4 — check ws_msg.action_confirmed()."
                 )

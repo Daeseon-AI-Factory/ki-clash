@@ -94,6 +94,19 @@ def match_result(
     }
 
 
+def action_confirmed(turn_number: int, action: str) -> dict:
+    """Sent to a player to confirm their action submission for a specific turn.
+
+    `turn_number` lets the client correlate the confirmation with its own
+    submission instead of relying on message arrival order — closes
+    the Phase 3 Bug 4 stale-message ambiguity.
+    """
+    return {
+        "type": "action_confirmed",
+        "data": {"turn_number": turn_number, "action": action},
+    }
+
+
 def opponent_disconnected(reconnect_timeout: int) -> dict:
     return {
         "type": "opponent_disconnected",

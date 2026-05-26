@@ -80,6 +80,16 @@ class PvPGameSession:
         # Disconnect tracking
         self._disconnect_tasks: dict[UUID, asyncio.Task] = {}
 
+        # Players who have connected to the game WS at least once.
+        # Used to distinguish "first connect" from "reconnect after disconnect"
+        # — only the latter should fire `opponent_reconnected` (Phase 3 Bug 1).
+        self._connected_players: set[UUID] = set()
+
+        # Idempotency flag for start() — prevents duplicate `waiting_for_action`
+        # broadcasts when game_ws() ends up calling start() more than once
+        # during the same connection sequence (Phase 3 Bug 2).
+        self._started: bool = False
+
     @property
     def room_id(self) -> str:
         return str(self.game_id)
@@ -93,8 +103,46 @@ class PvPGameSession:
         return self.p2_id if player_id == self.p1_id else self.p1_id
 
     async def start(self) -> None:
-        """Begin the game — send initial waiting_for_action to both players."""
+        """Begin the game — send initial waiting_for_action to both players.
+
+        Idempotent: subsequent calls are no-ops. This protects against
+        multiple paths in `game_ws()` triggering start() when both players
+        connect (Phase 3 Bug 2).
+        """
+        if self._started:
+            return
+        self._started = True
         await self._send_waiting_for_action()
+
+    async def handle_connect(self, player_id: UUID) -> None:
+        """Single entrypoint for a player connecting to the game WS.
+
+        Distinguishes first-connect (silent, just record presence) from
+        reconnect-after-disconnect (notify opponent, cancel forfeit timer,
+        re-send current state). Replaces the older `handle_reconnect()`
+        which was incorrectly called for every new connection (Phase 3 Bug 1).
+        """
+        if player_id in self._connected_players:
+            # True reconnect — opponent should be told.
+            task = self._disconnect_tasks.pop(player_id, None)
+            if task:
+                task.cancel()
+
+            opponent_id = self.get_opponent_id(player_id)
+            await self._ws.send_to_player(
+                opponent_id, ws_msg.opponent_reconnected()
+            )
+
+            if self.state.status == MatchStatus.IN_PROGRESS:
+                await self._send_waiting_for_action()
+
+            logger.info(
+                "player_reconnected",
+                extra={"player_id": str(player_id), "game_id": str(self.game_id)},
+            )
+        else:
+            # First connect for this player — no opponent notification.
+            self._connected_players.add(player_id)
 
     async def submit_action(self, player_id: UUID, action: Action) -> None:
         """Handle a player submitting their action for the current turn.
@@ -135,10 +183,15 @@ class PvPGameSession:
         elif player_id == self.p2_id:
             self._p2_action = action
 
-        # Confirm to the player that their action was received
+        # Confirm to the player that their action was received.
+        # The turn number lets the client correlate the confirmation with
+        # its own submission (Phase 3 Bug 4 — stale-message disambiguation).
         await self._ws.send_to_player(
             player_id,
-            {"type": "action_confirmed", "data": {"action": action.value}},
+            ws_msg.action_confirmed(
+                turn_number=current_round.turn_number + 1,
+                action=action.value,
+            ),
         )
 
         # If both players have submitted → resolve
@@ -193,23 +246,13 @@ class PvPGameSession:
         )
 
     async def handle_reconnect(self, player_id: UUID) -> None:
-        """Handle a player reconnecting after a disconnect.
+        """Deprecated — use `handle_connect()` instead.
 
-        Cancels the forfeit timer and notifies the opponent.
+        Kept temporarily to avoid breaking external imports during the
+        Phase 3 transition. Delegates to the new unified `handle_connect()`
+        which correctly distinguishes first-connect from real reconnect.
         """
-        # Cancel forfeit timer
-        task = self._disconnect_tasks.pop(player_id, None)
-        if task:
-            task.cancel()
-
-        opponent_id = self.get_opponent_id(player_id)
-        await self._ws.send_to_player(opponent_id, ws_msg.opponent_reconnected())
-
-        # Re-send current state to reconnected player
-        if self.state.status == MatchStatus.IN_PROGRESS:
-            await self._send_waiting_for_action()
-
-        logger.info("Player %s reconnected to game %s", player_id, self.game_id)
+        await self.handle_connect(player_id)
 
     async def _resolve_turn(self) -> None:
         """Resolve the turn once both actions are in."""
