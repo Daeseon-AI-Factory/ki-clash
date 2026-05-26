@@ -394,4 +394,69 @@ tests/integration/test_pvp_flow.py::TestKnownBugs::test_action_confirmed_carries
 
 **Commits:**
 - `441d65f chore: add PvP simulator + engineering log` (pre-phase setup)
-- (next commit will land the integration test)
+- `cb090f5 test: add PvP integration test capturing 4 known bugs as xfail`
+
+### Phase 2.2 — Game engine unit test gap-filling
+
+**Goal:** Audit `tests/core/test_game_engine.py` (52 tests already passing) and
+fill the highest-value gaps before moving to logging/observability.
+
+**Coverage audit (existing strengths):**
+- Full 5×5 outcome matrix (25 tests)
+- Action affordability validation
+- Per-action ki cost/gain
+- Engine lifecycle: start_match, submit_turn, round transitions
+- Turn-limit ki tiebreak (draw + P1-by-ki-margin)
+- Forfeit (both directions)
+- 2-0 Bo3 termination
+- Match draw via 3-round 1-1-tie
+- Energy Wave pierces Block
+- Teleport dodges Energy Wave
+
+**Identified gaps:**
+1. Energy Wave clash (both 3 ki → both lose 3) — never exercised
+2. 2-1 Bo3 finish (only 2-0 path tested; ~half of real matches go 3 rounds)
+3. `turn_history` accumulation in `RoundState`
+4. `round_results` accumulation in `GameState` + on the final `MatchResult`
+5. `p1_ki_before` / `p2_ki_before` recording on `TurnResult` (audit trail)
+6. `DEFAULT_TIMEOUT_ACTION` constant value + affordability invariant
+7. `game_id` uniqueness across matches
+
+**What we added** (12 new tests in 7 classes):
+- `TestEnergyWaveClash` (2 tests) — direct `resolve_turn` call + full
+  engine flow.
+- `TestMatchFinishedAt2_1` (2 tests) — both P1 and P2 winning 2-1.
+- `TestTurnHistoryAccumulation` (2 tests) — log fills, resets on new round.
+- `TestRoundResultsAccumulation` (1 test) — list grows per round +
+  appears in final `MatchResult`.
+- `TestTurnResultKiBeforeAudit` (2 tests) — before/after fields recorded
+  correctly for both basic and cost-paying actions.
+- `TestTimeoutDefaultAction` (2 tests) — constant is `CHARGE` and free,
+  which `PvPGameSession._turn_timeout()` relies on.
+- `TestGameIdUniqueness` (1 test) — 20 consecutive matches produce
+  distinct UUIDs.
+
+**Bug found while writing the tests:**
+- First version of `test_energy_wave_clash_both_lose_3_ki` called
+  `resolve_turn(p1_ki_before=...)` — wrong kwarg. Actual signature is
+  `p1_ki=...`. Tests caught the naming inconsistency between
+  `resolve_turn`'s args (`p1_ki`) and `TurnResult`'s fields (`p1_ki_before`,
+  `p1_ki_after`). Future cleanup candidate: align names.
+
+**Result:**
+```
+tests/core/test_game_engine.py
+============================== 64 passed in 0.24s ==============================
+```
+
+**Decisions:**
+- Did NOT touch the existing 52 tests — additive only. Reviewers can read
+  the new tests as a focused diff.
+- Grouped new tests into named classes for discoverability — `pytest
+  --co -q` clearly shows what each cluster covers.
+- Tested both directions for symmetry-prone scenarios (P1 wins 2-1 +
+  P2 wins 2-1) to prevent regression in only one perspective.
+
+**Next sub-phase:** 2.3 — matchmaking unit tests (Redis FIFO ordering,
+   timeout behavior, queue size invariants, race conditions). The
+   matchmaking layer has no tests today.
