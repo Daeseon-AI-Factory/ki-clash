@@ -15,11 +15,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
+from app.core.logging import configure_logging
 from app.exceptions import AppError
 from app.api.v1.router import router as v1_router
 from app.api.v1.endpoints.ws import router as ws_router, init_ws_endpoints
 from app.core.ws_manager.manager import WSManager
 from app.services.matchmaking_service import MatchmakingService
+
+# Install structured logging at import time so even pre-lifespan messages
+# (uvicorn boot, alembic, etc.) are captured in the chosen format.
+configure_logging(
+    json_mode=not settings.debug,
+    level="DEBUG" if settings.debug else "INFO",
+)
 
 
 @asynccontextmanager
