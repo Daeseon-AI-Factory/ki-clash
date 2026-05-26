@@ -770,6 +770,44 @@ for cross-worker message routing. Required for horizontal scale to
 5000+ concurrent.
 
 ---
+
+## 2026-05-26 — Phase 4 starts: design-first
+
+**Context:** Originally proposed skipping Phase 4 (see DR-11). Jason
+overrode — chose the depth-first path. Decision rationale captured in
+revised DR-11. Before writing any code, locked in the design
+decisions:
+
+- **DR-12** — Redis storage representation: single JSON blob per game,
+  keyed by `ki_clash:game:{game_id}`, serialized via Pydantic.
+- **DR-13** — Pub/sub topology: per-player channel
+  (`ki_clash:player:{player_id}`). Direct routing, no filtering.
+- **DR-14** — Concurrency control: Redis WATCH/MULTI/EXEC optimistic
+  with 3-retry budget.
+- **DR-15** — Session statefulness: workers are stateless; Redis is
+  the single source of truth. PvPGameSession becomes a façade of
+  static methods that load/mutate/save.
+
+This is more upfront design than usual because Phase 4 is the most
+architecturally consequential change in the project so far. Getting
+the shape wrong costs days of rework later.
+
+**Phase 4 work breakdown:**
+- 4.1 — `app/core/game_store.py`: Redis-backed state store implementing
+  DR-12 (save/load/watch).
+- 4.2 — Migrate `MatchmakingService.active_games` + `game_players` to
+  use the new store.
+- 4.3 — Refactor `PvPGameSession` to be stateless (DR-15) — every method
+  loads from Redis, mutates, saves.
+- 4.4 — `app/core/pubsub.py`: per-player pub/sub (DR-13) and
+  `ws_manager` integration.
+- 4.5 — Implement DR-14 atomic action submission with WATCH retry.
+- 4.6 — Multi-worker integration tests (simulate 2 workers via 2
+  client sessions, verify cross-worker messaging works).
+
+**Starting with 4.1.**
+
+---
 ---
 
 # Part 2 — Engineering Decision Reference
@@ -1417,66 +1455,363 @@ method, the session decides internally.
 
 ---
 
-## DR-11: Defer Phase 4 (Python Redis state) in favor of Phase 5 (Go)
+## DR-11: Do Phase 4 fully (Python Redis-backed state) before Phase 5
 
-**Decision:** Skip Phase 4. Go directly from Phase 3 to Phase 5 (Go
-game server) when the time comes.
+**Decision (final, 2026-05-26 evening):** Do Phase 4 fully — externalize
+all in-memory PvP state to Redis, add pub/sub for cross-worker
+messaging, use optimistic concurrency for turn atomicity. Then proceed
+to Phase 5 (Go).
+
+**Original recommendation:** Skip Phase 4 (calendar-time optimized).
+**Revised after Jason's input:** Do Phase 4 (learning-depth + production
+-safety optimized). This DR documents both the original analysis and
+the revision.
 
 **Options considered:**
-- A) **Skip Phase 4, do Phase 5 directly** ← chosen
-- B) Do Phase 4 fully (Python Redis-backed state) then Phase 5
+- A) Skip Phase 4, do Phase 5 directly (original recommendation)
+- B) **Do Phase 4 fully (Python Redis-backed state) then Phase 5** ← chosen
 - C) Do Phase 4 minimally (just the active_games dict externalization)
   then Phase 5
 - D) Skip Phase 5; stay on Python with Phase 4 forever
 
 **Trade-off table:**
 
-| Dimension | Skip 4 | Full 4 | Minimal 4 | Skip 5 |
+| Dimension | Skip 4 | Full 4 (chosen) | Minimal 4 | Skip 5 |
 |---|---|---|---|---|
-| Time to scalable system | **~3 weeks** (just Phase 5) | ~5 weeks | ~4 weeks | Forever stuck at 5-10k cap |
-| Code written that gets thrown away | None | ~600 LOC | ~200 LOC | None |
-| Learning value (distributed systems) | High (in Go) | High (in Python, then re-learned in Go) | Low | Low |
-| Risk of "stuck in Python" trap | None | Medium | Low | High |
-| Production scalability ceiling | 50–100k concurrent | 5–10k (Python ceiling) | 5–10k | 5–10k |
+| Time to scalable system | ~3 weeks (just Phase 5) | **~5 weeks** (chosen — accept extra time for depth) | ~4 weeks | Forever stuck at 5-10k cap |
+| Code written that gets thrown away | None | ~600 LOC (but runs in prod meanwhile) | ~200 LOC | None |
+| Learning value (distributed systems) | Phase-5-only (in Go) | **Phase-4 + Phase-5 reinforced** (in Python then Go) | Low | Low |
+| Risk of "stuck in Python" trap | None | Low (Phase 5 still committed) | Low | High |
+| Production scalability ceiling | 50–100k concurrent | 50–100k (after Phase 5) | 50–100k | 5–10k |
+| Production safety in interim (weeks before Phase 5 ships) | At 5-10k Python cap | **Horizontally scaled Python** | Limited gain | At cap |
+| Phase 5 risk profile | Greenfield distributed in unfamiliar lang | **Translation of working reference** | Mixed | N/A |
 
-**Reasoning chain:**
-1. **Phase 4 work is throwaway.** Externalizing state to Redis in
-   Python is essentially the same work as doing it from scratch in Go.
-   The patterns are identical (Redis hash for game state, pub/sub for
-   events, optimistic concurrency for turn submission).
-2. **No interim scaling benefit.** Even with Phase 4 done, Python's
-   ceiling is still ~10k concurrent connections per instance.
-   Horizontal scaling helps but Python instances are 5-10x more
-   resource-hungry than Go ones at the same concurrency.
-3. **Skipping Phase 4 saves ~2 weeks.** Time better spent on Phase 5
-   directly, or on visual polish (Jason's higher-priority concern).
-4. **No urgency.** Current MVP cap (~100 users) is way below either
-   Python or Go's ceiling. Optimization deferred is optimization
-   correctly timed.
-5. **If Jason hits scaling problems before Go is ready, the bridge is
-   "run multiple Python instances behind a load balancer."** This
-   doesn't require Phase 4 — just statelessness of the HTTP layer
-   (already true) and sticky WebSocket routing (load balancer feature).
+**Reasoning chain (chosen path B):**
+1. **Distributed-systems patterns are learning capital.** Building
+   Redis-backed state in Python first teaches the patterns (WATCH/
+   MULTI/EXEC, pub/sub fan-out, optimistic concurrency, JSON
+   serialization round-trips) in a familiar language. The Go rewrite
+   in Phase 5 is then a *translation* exercise, not a discovery
+   exercise — much faster and lower risk.
+2. **Production safety in the interim.** Until Phase 5 ships, Ki Clash
+   runs on Python. Even if Jason picks up unexpected user growth
+   during this window, Phase 4 unlocks horizontal Python scaling
+   (multiple uvicorn instances behind a load balancer). The "throwaway"
+   framing was wrong: the Python implementation runs in production
+   for weeks-to-months between Phase 4 ship and Phase 5 ship.
+3. **The Go port becomes a low-risk translation.** With Phase 4 done,
+   Phase 5 has a working reference implementation in Python with
+   integration tests + simulator validating correctness. Phase 5 only
+   has to reproduce the semantics in a different language, not
+   re-design the system.
+4. **Jason's stated learning goal.** Per memory `[[user-creator-
+   ambitions]]` and the explicit "engineer growth" preference,
+   throwing away learning depth to save 2 weeks is a bad trade.
+5. **Original "throwaway" framing was incomplete.** It treated Phase 4
+   purely as code-to-write. With learning, production safety, and
+   Phase-5 de-risking factored in, the work is not throwaway at all.
 
-**Meta-pattern: "Throwaway work is throwaway only if you don't learn
-from it"**
-- Reasonable Phase 4 could be done as a learning exercise (distributed
-  systems in Python) but the production code would still be Go
-- For Jason, the learning value lives in Phase 5 directly (Go is the
-  new language to learn)
-- **Generalizable principle: when a stepping-stone phase would be
-  thrown away anyway, ask "does the stepping-stone teach something the
-  destination doesn't?" If no, skip.**
+**Why I changed my recommendation:** The original DR-11 optimized for
+calendar time. Jason's explicit ranking — "engineer growth" first,
+"throwaway work" framing second — flipped the calculation. The
+revised decision is the right one for Jason's stated objectives.
+
+**Meta-pattern: "Optimization target determines the right answer"**
+- Calendar time → skip Phase 4
+- Learning depth → do Phase 4
+- Production safety → do Phase 4
+- Same data, different optimization target, different decisions
+- **Generalizable principle: before recommending a path, name the
+  objective function explicitly. The right answer changes with the
+  objective. When the user says "make it for X", weight X.**
 
 **Interview framing:**
-> "Phase 4 was originally distributed-state-in-Python, but I cut it
-> because the work is throwaway — Phase 5 (Go game server) would
-> rewrite all of it. The learning value of building it in Python first
-> wasn't there since the same distributed-systems patterns get
-> reinforced when building them in Go. The two-week saving goes to
-> Phase 5 directly. The fallback if Jason hits Python's ceiling before
-> Go is ready is sticky WebSocket routing across multiple Python
-> instances, which doesn't require Phase 4."
+> "I had two viable paths: skip the Python distributed-state phase to
+> save ~2 weeks, or do it before the Go port for learning depth and
+> production safety. The team optimization target was engineering
+> growth, not calendar speed, so we did the full Python Redis-backed
+> implementation first. This gave us a working reference
+> implementation with tests, which de-risked the Go port. Going the
+> short path would have saved weeks but left us re-discovering
+> distributed-systems patterns in an unfamiliar language under
+> pressure."
+
+---
+
+## DR-12: PvP state storage representation in Redis
+
+**Decision:** Single JSON blob per game keyed by `ki_clash:game:{game_id}`,
+serialized via Pydantic `model_dump_json()`.
+
+**Options considered:**
+- A) **Single JSON blob per game** ← chosen
+- B) Redis hash with one field per attribute (`HSET ...`)
+- C) Multiple keys per game with naming convention
+- D) Redis JSON module (RedisJSON) for native JSON paths
+
+**Trade-off table:**
+
+| Dimension | JSON blob | Hash fields | Multi-key | RedisJSON |
+|---|---|---|---|---|
+| Serialization complexity | Trivial (one `dump_json`) | Per-field manual | Per-field manual | Trivial |
+| Atomic full-state update | ✅ (one SET) | ❌ (need MULTI) | ❌ (need MULTI) | ✅ |
+| Partial-field update without re-serializing | ❌ | ✅ (HSET one field) | ✅ | ✅ |
+| Schema evolution (add field) | Easy (Pydantic optional) | Manual migration | Manual | Manual |
+| Read cost | One GET (~1KB) | One HGETALL | Multiple GETs | One JSON.GET |
+| Operational deps | Built-in Redis | Built-in | Built-in | **RedisJSON module** (extra setup) |
+| WATCH/MULTI/EXEC compatibility | Natural fit | Works | Works (more complex) | Module-specific |
+
+**Reasoning chain:**
+1. **State is small** — a `GameState` serializes to ~500 bytes. Reading
+   the whole blob on every operation is cheap (sub-ms in Redis).
+2. **Pydantic gives us free serialization.** `state.model_dump_json()`
+   and `GameState.model_validate_json(s)` are one-liners with full
+   type safety, validation on load, and graceful handling of new
+   fields (Optional with defaults).
+3. **Atomic update story is cleanest with single blob.** WATCH/MULTI/
+   EXEC on one key, do the in-memory mutation, SET → done. No
+   field-by-field coordination.
+4. **Hash fields would require explicit serialization for every nested
+   object** (RoundState, TurnResult lists). More code, more bugs.
+5. **RedisJSON module is optional infra.** Standard Redis (which we
+   already have) is enough. Don't introduce module dep when JSON blob
+   suffices.
+6. **Schema evolution** — if we add fields later (e.g., `created_at`),
+   Pydantic's `Optional` + default makes loading old blobs forward-
+   compatible. Hash fields would require migration scripts.
+
+**Sub-decision: TTL on the key.**
+- Set TTL to 1 hour from last update. Abandoned games (no activity)
+  auto-cleaned without explicit cleanup logic. Cheap insurance against
+  Redis memory growth.
+
+**Meta-pattern: "Match storage shape to access pattern"**
+- Always-read-whole + always-write-whole → single blob
+- Frequent partial-read or partial-write → hash fields
+- Need ad-hoc query → relational DB, not Redis
+- **Generalizable principle: storage representation should mirror the
+  app's actual access pattern, not the data's logical structure.**
+
+**Interview framing:**
+> "Game state is serialized as a single JSON blob per game keyed by
+> game_id. The state is ~500 bytes so reading the whole thing on every
+> operation is sub-ms. Pydantic gives us free serialization with
+> schema evolution via Optional fields. The alternative was Redis
+> hash fields, but that would require manual per-field serialization
+> for nested objects (RoundState, TurnResult lists) and complicates
+> the atomic update story — a single SET inside WATCH/MULTI/EXEC is
+> cleaner than coordinating multiple HSETs."
+
+---
+
+## DR-13: Pub/sub channel topology
+
+**Decision:** Per-player channel — `ki_clash:player:{player_id}`. Each
+worker subscribes to channels for its connected players.
+
+**Options considered:**
+- A) **Per-player channel** ← chosen
+- B) Per-game channel (`ki_clash:game:{game_id}`)
+- C) Single global channel + client-side filtering
+- D) WebSocket-to-WebSocket direct routing (skip Redis pub/sub entirely)
+
+**Trade-off table:**
+
+| Dimension | Per-player | Per-game | Global | Direct |
+|---|---|---|---|---|
+| Routing efficiency | **Direct** (no filtering) | Filter by player_id inside game | Filter all messages by player_id | Direct |
+| Subscription overhead | One sub per connected player | One sub per game (2 players) | One sub per worker | None |
+| Channel count at scale (5k games) | 10,000 | 5,000 | 1 | 0 |
+| Memory per worker | O(connected players) | O(connected games) | O(1) | O(connected sockets) |
+| Cross-worker message latency | Sub-ms | Sub-ms | Sub-ms | N/A |
+| Reconnect handling | Re-subscribe to player channel | Re-subscribe to game channel | No-op | Reopen socket only |
+| Implementation complexity | Medium | Medium | Low | **High** (worker discovery) |
+
+**Reasoning chain:**
+1. **Per-player gives the cleanest semantics.** When the game session
+   layer wants to send to player X, it publishes to player X's
+   channel. The worker that has player X's WebSocket subscribes to
+   that channel and forwards. No filtering, no game-id routing logic.
+2. **Per-game would force filtering.** "I have player A in this game,
+   message is for player B — drop it." Extra code path per message.
+3. **Global channel doesn't scale.** Every worker receives every
+   message and filters out 99% of them. At 5k concurrent games and
+   60 turns each = 60×5000 = 300k messages/sec to filter per worker.
+   Wasted bandwidth.
+4. **Direct WebSocket routing requires worker discovery** (e.g.,
+   "which worker has player X?"). Building a discovery layer (Redis
+   set of player_id → worker_id, with TTL, with reconnect handling)
+   reinvents pub/sub poorly.
+5. **Channel count of 10k at our target scale is fine.** Redis
+   handles millions of channels in benchmark. The "subscription
+   overhead" concern is theoretical at our scale.
+
+**Sub-decision: subscribe on connect, unsubscribe on disconnect.**
+- Each worker maintains `Subscriber` task per connected player.
+- On `_ws_manager.connect(player_id)` → spawn subscriber task.
+- On `_ws_manager.disconnect(player_id)` → cancel subscriber task.
+- Reconnect handled naturally by the new connection re-subscribing.
+
+**Meta-pattern: "Fan-out at the topology level the consumer cares about"**
+- Per-user notifications → per-user channel
+- Per-room chat → per-room channel
+- Broadcast announcements → global channel
+- **Generalizable principle: the channel granularity should match the
+  natural unit of message recipient. Coarser = wasted bandwidth.
+  Finer = wasted subscriptions. The "right" granularity equals the
+  smallest unit your app actually addresses messages to.**
+
+**Interview framing:**
+> "Per-player pub/sub channels. When the game session layer wants to
+> send to player X, it publishes to `ki_clash:player:{X}`. The
+> worker holding player X's WebSocket subscribes to that channel and
+> forwards. This gives direct routing — no filtering, no game-id
+> dispatch logic. Per-game channels would have forced 'message for
+> player A but I have player B' filtering. Global channels would have
+> sent every message to every worker. At 5k concurrent games we
+> have ~10k subscriptions; Redis handles millions, so this scales
+> well within margins."
+
+---
+
+## DR-14: Concurrency control for turn submission
+
+**Decision:** Redis WATCH/MULTI/EXEC optimistic concurrency. Retry with
+backoff on WatchError up to 3 times, then surface error to client.
+
+**Options considered:**
+- A) **WATCH/MULTI/EXEC (optimistic)** ← chosen
+- B) Distributed lock via Redis (RedLock or SET NX EX)
+- C) Lua scripts (server-side atomic logic)
+- D) Single-writer queue per game
+
+**Trade-off table:**
+
+| Dimension | Optimistic (WATCH) | Lock | Lua | Queue |
+|---|---|---|---|---|
+| Lock-free under contention | **✅** | ❌ (blocks) | ✅ (server atomic) | ❌ (queues) |
+| Latency under no-contention | **Lowest** (one round-trip) | Lower (no transaction overhead) | Lowest (one round-trip) | Lowest |
+| Code complexity | Medium | Low | High (Lua maintenance) | High |
+| Behavior under contention | Retry on conflict | Wait | No-op (atomic) | FIFO order |
+| Risk of deadlock | None | Possible (must TTL) | None | None |
+| Two-player-submit-same-time correctness | ✅ | ✅ | ✅ | ✅ |
+
+**Reasoning chain:**
+1. **Contention is rare.** Two players submit at the same time only
+   when both happen to act in the same Redis round-trip window
+   (sub-ms). At 5k concurrent games × 5-second turn windows, true
+   contention is < 0.1% of operations.
+2. **WATCH gives "first writer wins" semantics naturally.** P1 reads
+   state, P1 writes back. If P2 wrote in between, WATCH detects it,
+   EXEC fails, P1 retries with the updated state. P1's logic sees
+   P2's action already applied — natural ordering.
+3. **Locks introduce blocking + deadlock risk.** Under load, hot
+   locks become bottlenecks. Lock TTLs are guesswork (too short ⇒
+   double-acquire, too long ⇒ stuck on crashed worker).
+4. **Lua is maintenance pain.** Game logic in Lua means duplicating
+   game-engine code in a second language, untestable from pytest,
+   debugged via Redis logs. Not worth it for our concurrency profile.
+5. **Per-game queue serializes everything** — needlessly slow when
+   most operations are independent.
+6. **Retry budget of 3.** First retry catches transient races (other
+   player submitted). Second retry catches genuine bursts. Third
+   retry suggests something is wrong → log + return error. Better
+   than infinite retry which can mask runaway bugs.
+
+**Sub-decision: state-load retries on WatchError must re-fetch state.**
+The whole point of optimistic concurrency is "see the latest state."
+Reusing a stale `state` variable defeats the purpose. Wrap the
+fetch-mutate-write triple in the WATCH block.
+
+**Meta-pattern: "Optimistic concurrency when conflicts are rare,
+pessimistic when they're common"**
+- Rare conflicts → optimistic (WATCH, OCC) — low overhead per
+  operation, retry on the rare miss
+- Common conflicts → pessimistic (locks, transactions) — accept
+  overhead to avoid wasted work
+- **Generalizable principle: pick concurrency control based on the
+  contention rate, not the worst case.**
+
+**Interview framing:**
+> "Turn-submission concurrency uses Redis WATCH/MULTI/EXEC optimistic
+> control with up to 3 retries. Two players submitting in the same
+> sub-ms window is < 0.1% of operations at our scale, so optimistic
+> wins — no lock overhead in the common case, and the retry handles
+> the rare conflict by re-reading the latest state. Locks would have
+> introduced blocking and deadlock-via-TTL-tuning risk. Lua scripts
+> would have duplicated the game engine in a second untestable
+> language."
+
+---
+
+## DR-15: Session statefulness — stateless workers + Redis-as-truth
+
+**Decision:** Workers are stateless w.r.t. game state. Every operation
+loads from Redis, mutates in memory, writes back. Only WebSocket
+connections live in worker memory.
+
+**Options considered:**
+- A) **Stateless workers, Redis is truth** ← chosen
+- B) Cached sessions in worker memory with pub/sub invalidation
+- C) Sticky session routing (game_id → always same worker)
+- D) Workers own their games; cross-worker requests proxied
+
+**Trade-off table:**
+
+| Dimension | Stateless | Cached | Sticky | Owned |
+|---|---|---|---|---|
+| Horizontal scaling | **Trivial** (workers identical) | Easy | Limited by routing layer | Hard |
+| Failover on worker crash | **No state lost** | State lost (rebuilt from Redis) | State lost (game stops) | State lost |
+| Latency per operation | One Redis round-trip | Cache hit fast, miss slow | Cache always hot | Local fast, remote slow |
+| Cache-coherence complexity | None | High (invalidation) | None | High (RPC) |
+| Memory footprint per worker | O(WS connections) | O(WS conns + active games) | O(WS conns + assigned games) | O(WS conns + owned games) |
+| Reasoning load | Lowest | Highest | Medium | High |
+
+**Reasoning chain:**
+1. **Stateless workers are the simplest mental model.** "Every
+   operation reads from Redis, writes to Redis." No cache coherence,
+   no invalidation, no consistency questions.
+2. **Worker crashes don't lose state.** A killed worker takes its
+   WebSocket connections with it, but the game state lives in Redis.
+   Players reconnect, get routed to any worker, resume. Reconnect
+   logic from Phase 3 still works — it just talks to Redis instead
+   of in-memory dict.
+3. **One extra Redis round-trip per operation is sub-ms.** Not a
+   bottleneck given the 5000ms turn budget.
+4. **Cached sessions create the worst kind of bug.** Stale cache +
+   real state → players see inconsistent views, hard to reproduce.
+   Avoid.
+5. **Sticky routing creates single-points-of-failure.** If worker N
+   crashes, every game it owned is stuck until reroute. Stateless +
+   Redis avoids this.
+
+**Sub-decision: PvPGameSession becomes a method bundle, not a stateful
+object.** Today PvPGameSession holds `_p1_action`, `_p2_action`,
+`_connected_players`, `_started`, etc. All of these move into the
+Redis-stored state. The class becomes a *façade* of methods that take
+(game_id, ...) and load/mutate/save.
+
+**Meta-pattern: "Stateless service layer, stateful storage layer"**
+- Web app → stateless (12-factor app)
+- Microservices → stateless
+- Game backend → stateless (this DR)
+- DB / Redis / message queue → stateful, replicated, durable
+- **Generalizable principle: when in doubt, push state to a layer
+  designed to manage state (DB, Redis), not to a layer designed to
+  serve requests (app server). The app layer's job is to translate
+  protocols, not to remember.**
+
+**Interview framing:**
+> "Workers are fully stateless — every operation loads from Redis,
+> mutates in memory, writes back. Only the WebSocket connection
+> objects live in worker memory. This eliminates cache coherence
+> problems, makes horizontal scaling trivial, and makes worker
+> crashes recoverable (game state survives in Redis; players just
+> reconnect to any worker). The trade-off is one extra Redis
+> round-trip per operation, which is sub-ms and fits easily in our
+> 5000ms turn budget."
+
+---
 
 ---
 
