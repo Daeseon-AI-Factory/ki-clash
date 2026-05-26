@@ -317,3 +317,81 @@ so the bugs are continuously caught.
 ## 2026-05-26 — Phase 2 begins: Tests + observability
 
 (In progress — updates below as work proceeds.)
+
+### Phase 2.1 — PvP integration test (pytest)
+
+**Goal:** Convert yesterday's CLI simulator into a permanent pytest harness
+that captures the 4 discovered bugs as `xfail` markers and the working flow
+as positive regression tests.
+
+**What we did:**
+
+1. Created `tests/integration/` directory with:
+   - `__init__.py`
+   - `conftest.py` — module-scoped fixture that drives one full Bo3 match
+     against the live docker stack, capturing every WebSocket event into a
+     `MatchRecording` dataclass. Auto-skips if API unreachable.
+   - `test_pvp_flow.py` — assertions on the recording.
+
+2. Structured the test file into two classes:
+   - `TestMatchFlowBasics` (5 tests, all currently passing) — validates the
+     architecture works: registration, matchmaking pairs into single
+     game_id, both players receive match_result, perspective inversion
+     correct, Bo3 termination rule.
+   - `TestKnownBugs` (4 tests, all `xfail`) — one test per discovered bug.
+     Each `xfail` reason cites the code location (`ws.py:158-162` etc.) and
+     names Phase 3 as the owner. `strict=False` allows occasional
+     concurrency-timing passes without breaking CI.
+
+3. Reused the WebSocket client logic from the simulator but stripped the
+   colorized printing — the test focus is event capture, not human reading.
+
+4. Bug 4 reassessed during test writing: closer reading of `app/schemas/ws.py`
+   showed `turn_result` *does* carry `turn_number`. So the original bug
+   description was inaccurate — `turn_result` is fine. The real Bug 4 is
+   that `action_confirmed` lacks `turn_number`, which is a separate (smaller)
+   concern. Split into two tests:
+   - `test_turn_result_carries_turn_sequence_number` → PASSES today (positive
+     regression test).
+   - `test_action_confirmed_carries_turn_number` → xfail today (Bug 4 fix in
+     Phase 3).
+
+**Test run output:**
+```
+tests/integration/test_pvp_flow.py::TestMatchFlowBasics::test_both_players_registered                    PASSED
+tests/integration/test_pvp_flow.py::TestMatchFlowBasics::test_matchmaking_paired_into_single_game        PASSED
+tests/integration/test_pvp_flow.py::TestMatchFlowBasics::test_both_players_received_match_result         PASSED
+tests/integration/test_pvp_flow.py::TestMatchFlowBasics::test_perspective_inversion_on_match_result      PASSED
+tests/integration/test_pvp_flow.py::TestMatchFlowBasics::test_match_terminated_under_bo3_rules           PASSED
+tests/integration/test_pvp_flow.py::TestKnownBugs::test_no_spurious_opponent_reconnected_on_first_connect XFAIL
+tests/integration/test_pvp_flow.py::TestKnownBugs::test_waiting_for_action_exactly_once_per_turn_per_player XFAIL
+tests/integration/test_pvp_flow.py::TestKnownBugs::test_action_confirmed_arrives_before_subsequent_turn_result XFAIL
+tests/integration/test_pvp_flow.py::TestKnownBugs::test_turn_result_carries_turn_sequence_number          PASSED
+tests/integration/test_pvp_flow.py::TestKnownBugs::test_action_confirmed_carries_turn_number              XFAIL
+
+======================== 6 passed, 4 xfailed in 15.06s =========================
+```
+
+**Decisions:**
+- xfail with `strict=False`, not `skip`: the bug is real and tracked, but
+  WS timing means occasional accidental passes shouldn't break CI.
+- Module-scoped fixture: one match drives every assertion (15s match,
+  many cheap assertions afterward) → fast suite.
+- Integration tests in `tests/integration/`, separate from `tests/core/`
+  unit tests: clearer separation of "needs docker stack" vs "pure logic."
+- No fixture for starting docker compose itself — too slow per test run.
+  Developer ergonomics: assume `docker compose up -d` is run once.
+
+**Discoveries:**
+- Bug 4 was partially wrong on first reading. Always read `app/schemas/ws.py`
+  before claiming "this field is missing."
+- `xfail strict=False` is the right tool for "documented bugs not yet
+  fixed" — better than commented-out tests or skipped tests.
+
+**Next sub-phase:** 2.2 — Sentry + structured logging.
+   Or possibly skip to 2.3 — turn-based metrics (active_matches, queue_size).
+   Decide after this commit.
+
+**Commits:**
+- `441d65f chore: add PvP simulator + engineering log` (pre-phase setup)
+- (next commit will land the integration test)
