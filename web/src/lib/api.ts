@@ -161,6 +161,14 @@ async function apiFetch<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
+  return apiFetchInternal<T>(path, options, /* allowAuthRetry */ true);
+}
+
+async function apiFetchInternal<T>(
+  path: string,
+  options: RequestInit,
+  allowAuthRetry: boolean,
+): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -175,6 +183,18 @@ async function apiFetch<T>(
     ...options,
     headers,
   });
+
+  // Auto-heal expired/stale tokens. The guest endpoint never returns 401,
+  // so this can't loop. Skip for the guest endpoint itself.
+  if (
+    res.status === 401
+    && allowAuthRetry
+    && path !== "/api/v1/auth/guest"
+  ) {
+    logout();
+    await createGuestSession();
+    return apiFetchInternal<T>(path, options, /* allowAuthRetry */ false);
+  }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
