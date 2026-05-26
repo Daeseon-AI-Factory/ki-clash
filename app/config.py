@@ -40,5 +40,10 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str = ""
     stripe_ad_free_price_id: str = ""
 
+    # Observability — Sentry (optional — error tracking disabled if no DSN)
+    sentry_dsn: str = ""
+    environment: str = "development"  # development | staging | production
+    sentry_traces_sample_rate: float = 0.1  # 10% of requests sampled for perf
+
 
 settings = Settings()

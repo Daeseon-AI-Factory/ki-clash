@@ -16,6 +16,8 @@ dependencies = [
     "passlib[bcrypt]>=1.7",
     "email-validator>=2.0",
     "stripe>=8.0",
+    "sentry-sdk[fastapi]>=2.0",
+    "prometheus-client>=0.20",
 ]
 
 [project.optional-dependencies]

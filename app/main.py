@@ -10,12 +10,13 @@ from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
 
 import redis.asyncio as aioredis
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.core.logging import configure_logging
+from app.core.observability import init_sentry, metrics_payload
 from app.exceptions import AppError
 from app.api.v1.router import router as v1_router
 from app.api.v1.endpoints.ws import router as ws_router, init_ws_endpoints
@@ -27,6 +28,14 @@ from app.services.matchmaking_service import MatchmakingService
 configure_logging(
     json_mode=not settings.debug,
     level="DEBUG" if settings.debug else "INFO",
+)
+
+# Initialize Sentry before app construction so even startup errors are reported.
+# No-op if SENTRY_DSN is empty or sentry-sdk isn't installed.
+init_sentry(
+    dsn=settings.sentry_dsn,
+    environment=settings.environment,
+    traces_sample_rate=settings.sentry_traces_sample_rate,
 )
 
 
@@ -98,3 +107,10 @@ app.include_router(ws_router, prefix="/api/v1")
 async def health_check() -> dict[str, str]:
     """Health check endpoint."""
     return {"status": "ok"}
+
+
+@app.get("/metrics")
+async def metrics() -> Response:
+    """Prometheus scrape endpoint. Returns text in exposition format."""
+    body, content_type = metrics_payload()
+    return Response(content=body, media_type=content_type)
