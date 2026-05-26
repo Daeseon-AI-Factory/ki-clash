@@ -642,3 +642,116 @@ that will flip to PASS as Phase 3 lands fixes.
 by one. Each fix lands with: (a) flip xfail → expected pass in the
 integration test, (b) add metrics instrumentation for the affected code
 path, (c) engineering log entry.
+
+---
+
+## 2026-05-26 — Phase 3: PvP hardening ✅ (bug-fix scope)
+
+**Commit:** `7dc3dde fix(pvp): fix 4 PvP concurrency bugs (Phase 3)`
+
+**Context:** The 4 bugs documented as xfail tests during Phase 2.1 were
+the highest-value PvP correctness fixes. All four cluster around two
+root causes: session lifecycle confusion (Bugs 1+2) and turn-correlation
+ambiguity (Bugs 3+4). One PR addresses all four.
+
+### Bug 1 — spurious `opponent_reconnected` on first connect
+
+**Root cause:** `ws.py` had `if session is None / else` branching where
+the `else` branch (any existing session) was treated as a reconnect.
+The second player to connect always hit the reconnect path because
+session was created by the first player's connection.
+
+**Fix (`app/modules/ki_clash/game_session.py`):**
+- Added `self._connected_players: set[UUID]` — tracks which players have
+  connected to the game WS at least once.
+- New `handle_connect(player_id)` method — single entrypoint that
+  distinguishes first-connect (silent, just record) from real reconnect
+  (notify opponent, cancel forfeit timer, re-send state).
+- `handle_reconnect()` retained as a thin deprecation alias for any
+  external callers.
+
+**Fix (`app/api/v1/endpoints/ws.py`):**
+- Removed the if/else branch. `game_ws()` now always calls
+  `session.handle_connect()` and lets the session decide internally.
+
+### Bug 2 — duplicate `waiting_for_action` per turn
+
+**Root cause:** `session.start()` was called from two paths in
+`ws.py` (after session creation + after the room_size check). Both
+fired when both players had connected, so `_send_waiting_for_action`
+ran twice per turn at the start of the match.
+
+**Fix (`app/modules/ki_clash/game_session.py`):**
+- Added `self._started: bool`. `start()` early-returns if already
+  started — fully idempotent.
+
+**Fix (`app/api/v1/endpoints/ws.py`):**
+- Collapsed two `start()` call sites into one. Idempotency makes the
+  remaining single call safe.
+
+### Bug 3 — `action_confirmed` / `turn_result` out-of-order
+
+**Root cause (revised):** The simulator's xfail test was triggered by
+the duplicate start() (Bug 2) creating extra await points where events
+could interleave. With Bug 2 fixed, the message order is naturally
+correct because `submit_action()` is a single coroutine that sends
+`action_confirmed` immediately, and `_resolve_turn()` runs only after
+both submissions land.
+
+**Fix:** No additional code — fell out of the Bug 2 cleanup.
+
+**Verification:** xfail flipped to XPASS automatically after Bug 2 fix.
+
+### Bug 4 — `action_confirmed` lacks `turn_number`
+
+**Root cause:** The `action_confirmed` message was constructed as an
+inline dict literal in `game_session.py:139-142` rather than going
+through a schema function in `app/schemas/ws.py`. Easy to forget
+fields.
+
+**Fix (`app/schemas/ws.py`):**
+- Added `action_confirmed(turn_number, action)` schema function with
+  docstring explaining the turn-correlation rationale.
+
+**Fix (`app/modules/ki_clash/game_session.py`):**
+- `submit_action()` now calls `ws_msg.action_confirmed(turn_number=...)`
+  passing `current_round.turn_number + 1` (matches the convention
+  used by `waiting_for_action`).
+
+### Verification
+
+```
+$ pytest tests/integration/
+10 passed in 19.04s    (was: 6 passed, 4 xfailed)
+
+$ pytest
+126 passed in 21.69s   (full suite, zero failures, zero xfail)
+```
+
+xfail markers fully removed; tests renamed `TestKnownBugs` →
+`TestPhase3Regressions` to reflect their new role as regression
+guards. Each assertion error message references the fix location so
+future regressions are diagnosable.
+
+### Phase 3 — scope notes
+
+**In scope (done):** the 4 simulator-discovered bugs.
+
+**Originally listed but deferred:**
+- WebSocket heartbeat/ping every 10s — current `ping` handler exists but
+  isn't periodic. Defer to Phase 5 (Go server will implement from scratch).
+- Idempotent action re-submission — currently a duplicate `submit_action`
+  for the same turn silently overwrites. Low impact (client UI prevents
+  it), defer to Phase 5.
+- 30s reconnect window — already implemented in `_forfeit_after_timeout`.
+- Match timeout (20-turn round) — already enforced by GameEngine.
+- Server-side input validation — already done via `validate_action`.
+
+Most of the "originally listed" items were already in place when I read
+the code more carefully. The actual gap was the 4 simulator bugs.
+
+**Next phase:** Phase 4 — distributed game state. Move
+`active_games` dict + `game_players` mapping from in-memory into Redis
+so multiple uvicorn workers can serve the same game. Adds Redis pub/sub
+for cross-worker message routing. Required for horizontal scale to
+5000+ concurrent.
