@@ -7,7 +7,7 @@ import {
   getAdFreeStatus,
   createAdFreeCheckout,
 } from "@/lib/api";
-import { PixelPortrait } from "@/components/pixel-art";
+import { PixelPortrait } from "@/components/deprecated/pixel-art";
 
 export default function ShopPage() {
   const [adFree, setAdFree] = useState(false);

@@ -8,7 +8,7 @@
 import { View, Text, ScrollView, StyleSheet } from "react-native";
 import KiMeter from "./KiMeter";
 import AIThinking from "./AIThinking";
-import { PixelPortrait } from "@/components/pixel-art";
+import { PixelPortrait } from "@/components/deprecated/pixel-art";
 import { colors, fontSize, spacing } from "@/lib/theme";
 import type { GameState, TurnOutcome } from "@/lib/api";
 import type { Character } from "@/lib/characters";

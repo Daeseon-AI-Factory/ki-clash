@@ -4,11 +4,11 @@ import { usePvP } from "@/hooks/usePvP";
 import ActionCard from "@/components/ActionCard";
 import KiMeter from "@/components/KiMeter";
 import type { Action } from "@/lib/api";
-import type { PixelAction } from "@/lib/pixel-art-types";
+import type { PixelAction } from "@/lib/deprecated/pixel-art-types";
 import Link from "next/link";
-import { BattleArena, PixelPortrait } from "@/components/pixel-art";
+import { BattleArena, PixelPortrait } from "@/components/deprecated/pixel-art";
 import { AdBanner, InterstitialAd } from "@/components/ads";
-import { usePixelAnimation } from "@/hooks/usePixelAnimation";
+import { usePixelAnimation } from "@/hooks/deprecated/usePixelAnimation";
 import { useAdTiming } from "@/hooks/useAdTiming";
 import { useEffect, useRef } from "react";
 

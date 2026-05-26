@@ -10,7 +10,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { View, Text, StyleSheet, Animated } from "react-native";
 import { colors, fontSize, spacing } from "@/lib/theme";
 import type { Character } from "@/lib/characters";
-import { PixelPortrait } from "@/components/pixel-art";
+import { PixelPortrait } from "@/components/deprecated/pixel-art";
 
 interface AITrashTalkProps {
   character: Character;

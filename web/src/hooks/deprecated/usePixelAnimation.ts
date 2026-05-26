@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import type { PixelAction, PixelPhase } from "@/lib/pixel-art-types";
+import type { PixelAction, PixelPhase } from "@/lib/deprecated/pixel-art-types";
 
 interface UsePixelAnimationOptions {
   /** Duration of windup phase in ms (default: 600) */

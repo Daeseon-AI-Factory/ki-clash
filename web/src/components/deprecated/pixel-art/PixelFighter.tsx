@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo } from "react";
-import type { PixelAction, PixelPhase } from "@/lib/pixel-art-types";
-import { frameToBoxShadow, frameDimensions, DEFAULT_PX } from "@/lib/pixel-art-utils";
-import { getFrame } from "@/lib/pixel-frames";
+import type { PixelAction, PixelPhase } from "@/lib/deprecated/pixel-art-types";
+import { frameToBoxShadow, frameDimensions, DEFAULT_PX } from "@/lib/deprecated/pixel-art-utils";
+import { getFrame } from "@/lib/deprecated/pixel-frames";
 
 interface PixelFighterProps {
   /** Character ID */

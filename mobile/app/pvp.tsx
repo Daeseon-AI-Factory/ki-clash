@@ -19,7 +19,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { usePvP } from "@/hooks/usePvP";
 import ActionCard from "@/components/ActionCard";
 import KiMeter from "@/components/KiMeter";
-import { BattleArena, PixelPortrait } from "@/components/pixel-art";
+import { BattleArena, PixelPortrait } from "@/components/deprecated/pixel-art";
 import { colors, fontSize, spacing } from "@/lib/theme";
 import type { Action } from "@/lib/api";
 

@@ -18,7 +18,7 @@ import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { CHARACTERS } from "@/lib/characters";
-import { PixelPortrait } from "@/components/pixel-art";
+import { PixelPortrait } from "@/components/deprecated/pixel-art";
 import { colors, fontSize, spacing } from "@/lib/theme";
 
 const API_BASE = process.env.EXPO_PUBLIC_API_URL || "http://localhost:8000";

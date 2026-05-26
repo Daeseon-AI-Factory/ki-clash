@@ -28,7 +28,7 @@ import TurnReveal, { getShakeIntensity } from "@/components/TurnReveal";
 import CharacterSelect from "@/components/CharacterSelect";
 import AITrashTalk from "@/components/AITrashTalk";
 import MuteButton from "@/components/MuteButton";
-import { BattleArena, PixelPortrait } from "@/components/pixel-art";
+import { BattleArena, PixelPortrait } from "@/components/deprecated/pixel-art";
 import { colors, fontSize, spacing } from "@/lib/theme";
 import type { Difficulty, TurnOutcome } from "@/lib/api";
 

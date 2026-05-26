@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import Link from "next/link";
-import { PixelPortrait } from "@/components/pixel-art";
+import { PixelPortrait } from "@/components/deprecated/pixel-art";
 import { CHARACTERS } from "@/lib/characters";
 
 /**

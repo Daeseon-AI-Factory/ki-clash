@@ -8,7 +8,7 @@
 
 import { useMemo } from "react";
 import { View, StyleSheet } from "react-native";
-import { getFrame } from "@/lib/pixel-frames";
+import { getFrame } from "@/lib/deprecated/pixel-frames";
 
 interface PixelPortraitProps {
   characterId: string;

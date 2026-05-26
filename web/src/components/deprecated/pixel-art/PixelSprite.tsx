@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
-import type { PixelFrame } from "@/lib/pixel-art-types";
-import { frameToBoxShadow, frameDimensions, DEFAULT_PX } from "@/lib/pixel-art-utils";
+import type { PixelFrame } from "@/lib/deprecated/pixel-art-types";
+import { frameToBoxShadow, frameDimensions, DEFAULT_PX } from "@/lib/deprecated/pixel-art-utils";
 
 interface PixelSpriteProps {
   /** 2D pixel grid to render */

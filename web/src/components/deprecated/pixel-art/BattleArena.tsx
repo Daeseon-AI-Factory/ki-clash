@@ -1,6 +1,6 @@
 "use client";
 
-import type { PixelAction, PixelPhase } from "@/lib/pixel-art-types";
+import type { PixelAction, PixelPhase } from "@/lib/deprecated/pixel-art-types";
 import { getCharacter } from "@/lib/characters";
 import PixelFighter from "./PixelFighter";
 import {

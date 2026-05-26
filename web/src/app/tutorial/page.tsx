@@ -4,10 +4,10 @@ import Link from "next/link";
 import type { Action } from "@/lib/api";
 import ActionCard from "@/components/ActionCard";
 import KiMeter from "@/components/KiMeter";
-import { BattleArena } from "@/components/pixel-art";
-import { usePixelAnimation } from "@/hooks/usePixelAnimation";
+import { BattleArena } from "@/components/deprecated/pixel-art";
+import { usePixelAnimation } from "@/hooks/deprecated/usePixelAnimation";
 import { useTutorial } from "@/hooks/useTutorial";
-import type { PixelAction } from "@/lib/pixel-art-types";
+import type { PixelAction } from "@/lib/deprecated/pixel-art-types";
 
 const ACTIONS: Action[] = ["charge", "block", "attack", "energy_wave", "teleport"];
 

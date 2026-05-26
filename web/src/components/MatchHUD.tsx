@@ -4,7 +4,7 @@ import type { GameState } from "@/lib/api";
 import type { Character } from "@/lib/characters";
 import KiMeter from "./KiMeter";
 import AIThinking from "./AIThinking";
-import { PixelPortrait } from "./pixel-art";
+import { PixelPortrait } from "./deprecated/pixel-art";
 
 interface MatchHUDProps {
   gameState: GameState;

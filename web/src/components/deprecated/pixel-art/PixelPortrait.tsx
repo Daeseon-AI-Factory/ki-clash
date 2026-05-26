@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { getFrame } from "@/lib/pixel-frames";
+import { getFrame } from "@/lib/deprecated/pixel-frames";
 import PixelSprite from "./PixelSprite";
 
 interface PixelPortraitProps {

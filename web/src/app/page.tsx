@@ -12,11 +12,11 @@ import TurnReveal, { getShakeClass } from "@/components/TurnReveal";
 import CharacterSelect from "@/components/CharacterSelect";
 import AITrashTalk from "@/components/AITrashTalk";
 import MuteButton from "@/components/MuteButton";
-import { BattleArena, PixelPortrait } from "@/components/pixel-art";
+import { BattleArena, PixelPortrait } from "@/components/deprecated/pixel-art";
 import { AdBanner, InterstitialAd } from "@/components/ads";
-import { usePixelAnimation } from "@/hooks/usePixelAnimation";
+import { usePixelAnimation } from "@/hooks/deprecated/usePixelAnimation";
 import { useAdTiming } from "@/hooks/useAdTiming";
-import type { PixelAction } from "@/lib/pixel-art-types";
+import type { PixelAction } from "@/lib/deprecated/pixel-art-types";
 
 /** Map turn outcomes to sound names */
 const OUTCOME_SOUND: Record<TurnOutcome, "hit" | "clash" | "block" | "dodge" | "charge"> = {

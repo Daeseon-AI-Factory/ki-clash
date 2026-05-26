@@ -19,7 +19,7 @@ import * as Haptics from "expo-haptics";
 import { useTutorial } from "@/hooks/useTutorial";
 import ActionCard from "@/components/ActionCard";
 import KiMeter from "@/components/KiMeter";
-import { BattleArena } from "@/components/pixel-art";
+import { BattleArena } from "@/components/deprecated/pixel-art";
 import { colors, fontSize, spacing } from "@/lib/theme";
 import type { Action } from "@/lib/api";
 

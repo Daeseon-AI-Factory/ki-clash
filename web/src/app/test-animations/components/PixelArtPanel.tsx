@@ -1,8 +1,8 @@
 "use client";
 
 import { AnimationPanel } from "./AnimationPanel";
-import { BattleArena } from "@/components/pixel-art";
-import type { PixelAction, PixelPhase } from "@/lib/pixel-art-types";
+import { BattleArena } from "@/components/deprecated/pixel-art";
+import type { PixelAction, PixelPhase } from "@/lib/deprecated/pixel-art-types";
 import type { AnimationAction, AnimationPhase } from "./types";
 
 /**

@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import type { Character } from "@/lib/characters";
-import { PixelPortrait } from "@/components/pixel-art";
+import { PixelPortrait } from "@/components/deprecated/pixel-art";
 
 interface AITrashTalkProps {
   character: Character;

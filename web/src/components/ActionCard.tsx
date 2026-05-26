@@ -1,10 +1,15 @@
 "use client";
 
+import { useState } from "react";
+import { cardIconAsset } from "@/lib/assets";
 import type { Action } from "@/lib/api";
 
 /**
  * Visual config for each action card.
  * Maps game actions to display properties (label, Korean name, color, emoji, ki cost).
+ *
+ * Icon resolution: if a file exists at `cardIconAsset(action)` it renders;
+ * otherwise the emoji defined here is used as the fallback.
  */
 const ACTION_CONFIG: Record<
   Action,
@@ -112,8 +117,8 @@ export default function ActionCard({
         </span>
       )}
 
-      {/* Emoji icon */}
-      <span className="text-2xl sm:text-3xl mb-1">{config.emoji}</span>
+      {/* Icon (SVG asset if available, emoji fallback otherwise) */}
+      <ActionIcon action={action} emoji={config.emoji} />
 
       {/* Action name */}
       <span className="text-sm sm:text-base font-bold text-white">
@@ -126,5 +131,24 @@ export default function ActionCard({
       {/* Description */}
       <span className="text-xs text-gray-500 mt-1">{config.description}</span>
     </button>
+  );
+}
+
+/** Renders the action's SVG icon if present, falling back to the emoji. */
+function ActionIcon({ action, emoji }: { action: Action; emoji: string }) {
+  const [broken, setBroken] = useState(false);
+
+  if (broken) {
+    return <span className="text-2xl sm:text-3xl mb-1">{emoji}</span>;
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- needs onError fallback
+    <img
+      src={cardIconAsset(action)}
+      alt=""
+      className="w-8 h-8 sm:w-10 sm:h-10 mb-1 object-contain"
+      onError={() => setBroken(true)}
+    />
   );
 }

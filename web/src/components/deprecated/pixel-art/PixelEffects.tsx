@@ -1,7 +1,7 @@
 "use client";
 
-import type { PixelAction, PixelPhase } from "@/lib/pixel-art-types";
-import { DEFAULT_PX } from "@/lib/pixel-art-utils";
+import type { PixelAction, PixelPhase } from "@/lib/deprecated/pixel-art-types";
+import { DEFAULT_PX } from "@/lib/deprecated/pixel-art-utils";
 
 const W = "#ffffff";
 

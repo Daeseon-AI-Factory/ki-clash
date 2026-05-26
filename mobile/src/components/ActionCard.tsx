@@ -6,7 +6,8 @@
  * Tap to select, tap again to confirm (double-tap pattern).
  */
 
-import { TouchableOpacity, View, Text, StyleSheet } from "react-native";
+import { useState } from "react";
+import { TouchableOpacity, View, Text, Image, StyleSheet } from "react-native";
 import * as Haptics from "expo-haptics";
 import { colors, fontSize, spacing } from "@/lib/theme";
 import type { Action } from "@/lib/api";
@@ -17,6 +18,11 @@ interface ActionCardProps {
   isSelected: boolean;
   disabled: boolean;
   onSelect: (action: Action) => void;
+  /**
+   * Optional bundled image asset (require result) to render instead of emoji.
+   * Pass `null`/`undefined` to use the emoji fallback.
+   */
+  iconAsset?: number | null;
 }
 
 interface ActionConfig {
@@ -77,10 +83,13 @@ export default function ActionCard({
   isSelected,
   disabled,
   onSelect,
+  iconAsset,
 }: ActionCardProps) {
   const config = ACTION_CONFIG[action];
   const canAfford = playerKi >= config.cost;
   const isDisabled = disabled || !canAfford;
+  const [imageBroken, setImageBroken] = useState(false);
+  const showImage = iconAsset != null && !imageBroken;
 
   const handlePress = () => {
     if (isDisabled) return;
@@ -100,7 +109,15 @@ export default function ActionCard({
       activeOpacity={0.7}
       disabled={isDisabled}
     >
-      <Text style={styles.emoji}>{config.emoji}</Text>
+      {showImage ? (
+        <Image
+          source={iconAsset as number}
+          style={styles.icon}
+          onError={() => setImageBroken(true)}
+        />
+      ) : (
+        <Text style={styles.emoji}>{config.emoji}</Text>
+      )}
       <Text style={[styles.label, { color: config.color }]}>
         {config.label}
       </Text>
@@ -143,6 +160,11 @@ const styles = StyleSheet.create({
   },
   emoji: {
     fontSize: 24,
+  },
+  icon: {
+    width: 28,
+    height: 28,
+    resizeMode: "contain",
   },
   label: {
     fontSize: fontSize.xs,
