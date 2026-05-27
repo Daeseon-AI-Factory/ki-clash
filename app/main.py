@@ -50,7 +50,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """
     # --- Startup ---
     redis_client = aioredis.from_url(settings.redis_url, decode_responses=False)
-    ws_manager = WSManager()
+    # WSManager wired with the Redis client so cross-worker pub/sub (DR-13)
+    # is active. Without Redis it falls back to single-worker in-memory mode.
+    ws_manager = WSManager(redis_client=redis_client)
     game_store = GameStore(redis_client)
     pvp_session = PvPGameSession(store=game_store, ws_manager=ws_manager)
     matchmaking = MatchmakingService(

@@ -8,34 +8,67 @@ multiplayer product (games, chat, auctions, collaboration).
 Pattern: Observer — rooms are subjects, connected players are observers.
 All observers in a room receive broadcast messages simultaneously.
 
-For MVP (single server), connections are tracked in-memory.
-For scale, swap to Redis pub/sub for cross-server messaging.
+For single-worker deployments, all routing is in-memory. When constructed
+with a Redis client, the manager also implements DR-13 (per-player
+pub/sub channels) so messages can cross worker boundaries — any worker
+can call `send_to_player(X)` and the message reaches X regardless of
+which worker holds X's WebSocket.
+
+Pub/sub semantics:
+  - send_to_player(X, msg) — local-first. If X is connected on THIS
+    worker, send directly. Otherwise publish to the channel.
+  - On `connect(X)`, a subscriber task starts listening on X's channel
+    and forwarding to the local WebSocket.
+  - On `disconnect(X)`, the subscriber task is cancelled.
 """
 
+from __future__ import annotations
+
+import asyncio
+import json
 import logging
 from typing import Any
 from uuid import UUID
 
+import redis.asyncio as redis
 from fastapi import WebSocket
 from starlette.websockets import WebSocketState
 
 logger = logging.getLogger(__name__)
 
 
+def _player_channel(player_id: UUID) -> str:
+    """Per-player pub/sub channel name (DR-13)."""
+    return f"ki_clash:player:{player_id}"
+
+
 class WSManager:
     """Manages WebSocket connections, rooms, and message broadcasting.
 
-    Thread-safe for asyncio (single event loop). Not thread-safe
-    for multi-threaded servers — use Redis pub/sub for that.
+    Single-worker mode (no Redis): tracks connections in-memory; sends
+    are direct.
+
+    Multi-worker mode (Redis client provided): tracks local connections
+    AND subscribes each connected player to a per-player Redis channel
+    so messages from other workers can reach them. Senders publish to
+    the channel only when the target isn't locally connected — local
+    sends bypass Redis to save a round-trip.
+
+    Thread-safe for asyncio (single event loop per process). Not
+    thread-safe for multi-threaded servers.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, redis_client: redis.Redis | None = None) -> None:
         # player_id → active WebSocket connection
         self._connections: dict[UUID, WebSocket] = {}
         # room_id → set of player_ids in that room
         self._rooms: dict[str, set[UUID]] = {}
         # player_id → room_id (reverse lookup for fast disconnect cleanup)
         self._player_rooms: dict[UUID, str] = {}
+        # Optional Redis client for cross-worker pub/sub (DR-13)
+        self._redis = redis_client
+        # player_id → background subscriber task (cancels on disconnect)
+        self._subscribers: dict[UUID, asyncio.Task] = {}
 
     async def connect(
         self,
@@ -68,6 +101,13 @@ class WSManager:
         self._rooms[room_id].add(player_id)
         self._player_rooms[player_id] = room_id
 
+        # Subscribe this worker to the player's cross-worker channel so
+        # messages from other workers reach them (DR-13).
+        if self._redis is not None and player_id not in self._subscribers:
+            self._subscribers[player_id] = asyncio.create_task(
+                self._listen_for_player(player_id)
+            )
+
         logger.info(
             "Player %s connected to room %s (%d in room)",
             player_id,
@@ -93,6 +133,11 @@ class WSManager:
             if not self._rooms[room_id]:
                 del self._rooms[room_id]
 
+        # Cancel pub/sub subscriber if present
+        sub = self._subscribers.pop(player_id, None)
+        if sub:
+            sub.cancel()
+
         logger.info("Player %s disconnected from room %s", player_id, room_id)
         return room_id
 
@@ -103,24 +148,46 @@ class WSManager:
     ) -> bool:
         """Send a JSON message to a specific player.
 
+        Local-first routing (DR-13):
+          - If the player has a live WebSocket on THIS worker, send
+            directly (no Redis round-trip).
+          - Otherwise, if a Redis client is configured, publish to the
+            player's channel so the worker that owns their WebSocket
+            picks it up via subscriber and forwards.
+          - Without Redis and no local connection → returns False.
+
         Args:
             player_id: Target player's UUID.
             message: JSON-serializable message dict.
 
         Returns:
-            True if sent successfully, False if player not connected.
+            True if delivered locally or published; False if there's no
+            local connection and no Redis to fall back on.
         """
         ws = self._connections.get(player_id)
-        if ws is None or ws.client_state != WebSocketState.CONNECTED:
-            return False
+        if ws is not None and ws.client_state == WebSocketState.CONNECTED:
+            try:
+                await ws.send_json(message)
+                return True
+            except Exception:
+                logger.warning("Failed to send to player %s", player_id)
+                await self.disconnect(player_id)
+                # Fall through — maybe pub/sub can deliver to another worker
+                # that has the player connected (after reconnect)
 
-        try:
-            await ws.send_json(message)
-            return True
-        except Exception:
-            logger.warning("Failed to send to player %s", player_id)
-            await self.disconnect(player_id)
-            return False
+        if self._redis is not None:
+            try:
+                await self._redis.publish(
+                    _player_channel(player_id), json.dumps(message)
+                )
+                return True
+            except Exception:
+                logger.exception(
+                    "publish_failed", extra={"player_id": str(player_id)}
+                )
+                return False
+
+        return False
 
     async def broadcast_to_room(
         self,
@@ -183,3 +250,58 @@ class WSManager:
                 await ws.close()
         except Exception:
             pass
+
+    async def _listen_for_player(self, player_id: UUID) -> None:
+        """Background task: receive messages from Redis for this player
+        and forward to their local WebSocket.
+
+        Started in `connect()` when Redis is configured, cancelled in
+        `disconnect()`. If the local WebSocket dies mid-listen, messages
+        are silently dropped — the next reconnect (likely on another
+        worker) will start a fresh subscriber.
+        """
+        if self._redis is None:
+            return
+        channel = _player_channel(player_id)
+        try:
+            pubsub = self._redis.pubsub()
+            try:
+                await pubsub.subscribe(channel)
+                async for raw in pubsub.listen():
+                    if raw.get("type") != "message":
+                        continue
+                    try:
+                        payload = json.loads(raw["data"])
+                    except (ValueError, TypeError):
+                        logger.warning(
+                            "pubsub_bad_payload",
+                            extra={"player_id": str(player_id)},
+                        )
+                        continue
+
+                    ws = self._connections.get(player_id)
+                    if ws is None or ws.client_state != WebSocketState.CONNECTED:
+                        # Player disconnected between publish and receive;
+                        # drop silently (next subscriber on whichever worker
+                        # they reconnect to will catch future messages).
+                        continue
+                    try:
+                        await ws.send_json(payload)
+                    except Exception:
+                        logger.warning(
+                            "pubsub_forward_failed",
+                            extra={"player_id": str(player_id)},
+                        )
+            finally:
+                try:
+                    await pubsub.unsubscribe(channel)
+                    await pubsub.aclose()
+                except Exception:
+                    pass
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception(
+                "pubsub_listener_crashed",
+                extra={"player_id": str(player_id)},
+            )
