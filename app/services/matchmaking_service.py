@@ -21,6 +21,7 @@ import redis.asyncio as redis
 from app.config import settings
 from app.core.game_engine.engine import GameEngine
 from app.core.game_engine.types import GameState, MatchStatus, MatchType
+from app.core.game_store import GameStore, PvPSessionState
 from app.core.ws_manager.manager import WSManager
 from app.schemas import ws as ws_msg
 
@@ -49,14 +50,20 @@ class MatchmakingService:
     4. If player waits > 30s → offer AI fallback
     """
 
-    def __init__(self, redis_client: redis.Redis, ws_manager: WSManager) -> None:
+    def __init__(
+        self,
+        redis_client: redis.Redis,
+        ws_manager: WSManager,
+        game_store: GameStore,
+    ) -> None:
         self._redis = redis_client
         self._ws = ws_manager
-        # In-memory tracking of active PvP game states (game_id → GameState)
-        self.active_games: dict[UUID, GameState] = {}
-        # game_id → (player1_id, player2_id) mapping
-        self.game_players: dict[UUID, tuple[UUID, UUID]] = {}
-        # player_id → display_name for notifications
+        # All PvP session state lives in Redis via the store (DR-15 — workers
+        # are stateless). active_games / game_players in-memory dicts removed.
+        self._store = game_store
+        # player_id → display_name for notifications (transient, in-memory is OK
+        # since this is only used during the matchmaking-pair window and dropped
+        # on pairing or timeout).
         self._player_names: dict[UUID, str] = {}
         # Background matchmaking task
         self._task: asyncio.Task | None = None
@@ -109,11 +116,18 @@ class MatchmakingService:
         # Remove both from queue
         await self._redis.zrem(_QUEUE_KEY, str(p1_id), str(p2_id))
 
-        # Create a PvP game
+        # Create a PvP game and persist the runtime session in Redis.
+        # Workers are stateless w.r.t. game state (DR-15) — anyone who later
+        # serves a WebSocket connection for this game loads the session from
+        # the store, never from a local cache.
         state = _engine.start_match(MatchType.PVP)
         game_id = state.game_id
-        self.active_games[game_id] = state
-        self.game_players[game_id] = (p1_id, p2_id)
+        session = PvPSessionState(
+            game_state=state,
+            player1_id=p1_id,
+            player2_id=p2_id,
+        )
+        await self._store.save(session)
 
         room_id = str(game_id)
 
@@ -121,8 +135,14 @@ class MatchmakingService:
         p2_name = self._player_names.pop(p2_id, "Player 2")
 
         logger.info(
-            "Match found: %s vs %s → game %s",
-            p1_name, p2_name, game_id,
+            "match_paired",
+            extra={
+                "game_id": str(game_id),
+                "p1_id": str(p1_id),
+                "p2_id": str(p2_id),
+                "p1_name": p1_name,
+                "p2_name": p2_name,
+            },
         )
 
         # Notify both players

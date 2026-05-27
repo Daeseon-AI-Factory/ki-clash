@@ -19,6 +19,7 @@ import pytest
 import pytest_asyncio
 import redis.asyncio as aioredis
 
+from app.core.game_store import GameStore, _key as game_key
 from app.services.matchmaking_service import (
     MATCHMAKING_TIMEOUT_S,
     MatchmakingService,
@@ -81,11 +82,16 @@ class FakeWSManager:
 
 @pytest_asyncio.fixture
 async def redis_client() -> aioredis.Redis:
-    """Fresh Redis client, with the matchmaking queue flushed."""
+    """Fresh Redis client. Flushes the matchmaking queue + any game keys
+    created during the test (using SCAN since we don't know game_ids
+    upfront)."""
     client = aioredis.from_url("redis://localhost:6379/0", decode_responses=False)
     await client.delete(_QUEUE_KEY)
     yield client
     await client.delete(_QUEUE_KEY)
+    # Best-effort cleanup of any game keys this test created
+    async for key in client.scan_iter(match="ki_clash:game:*", count=100):
+        await client.delete(key)
     await client.aclose()
 
 
@@ -95,11 +101,21 @@ async def ws_manager() -> FakeWSManager:
 
 
 @pytest_asyncio.fixture
+async def game_store(redis_client: aioredis.Redis) -> GameStore:
+    return GameStore(redis_client)
+
+
+@pytest_asyncio.fixture
 async def service(
     redis_client: aioredis.Redis,
     ws_manager: FakeWSManager,
+    game_store: GameStore,
 ) -> MatchmakingService:
-    return MatchmakingService(redis_client, ws_manager)  # type: ignore[arg-type]
+    return MatchmakingService(
+        redis_client=redis_client,
+        ws_manager=ws_manager,  # type: ignore[arg-type]
+        game_store=game_store,
+    )
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -160,31 +176,50 @@ class TestJoinAndLeaveQueue:
 
 
 class TestMatchPlayers:
+    """Phase 4 note: match_players now persists pairs via the GameStore in
+    Redis (not in-memory dicts). Tests verify by querying Redis state via
+    ws_manager notifications + key existence rather than the old
+    `service.active_games` / `service.game_players` dicts (removed in DR-15)."""
+
     async def test_no_players_in_queue_does_nothing(
-        self, service: MatchmakingService
+        self,
+        service: MatchmakingService,
+        ws_manager: FakeWSManager,
     ) -> None:
         await service.match_players()  # should not raise
-        assert service.active_games == {}
+        assert ws_manager.messages_of_type("match_found") == []
 
     async def test_one_player_in_queue_does_not_pair(
-        self, service: MatchmakingService
+        self,
+        service: MatchmakingService,
+        ws_manager: FakeWSManager,
     ) -> None:
         await service.join_queue(uuid4(), "Solo")
         await service.match_players()
-        assert service.active_games == {}
+        assert ws_manager.messages_of_type("match_found") == []
 
     async def test_two_players_create_game_and_clear_queue(
         self,
         service: MatchmakingService,
         redis_client: aioredis.Redis,
+        ws_manager: FakeWSManager,
+        game_store: GameStore,
     ) -> None:
         p1, p2 = uuid4(), uuid4()
         await service.join_queue(p1, "Player1")
         await service.join_queue(p2, "Player2")
         await service.match_players()
 
-        assert len(service.active_games) == 1
+        # Queue drained
         assert await redis_client.zcard(_QUEUE_KEY) == 0
+        # Game state persisted in Redis (verify via the match_found event)
+        match_founds = ws_manager.messages_of_type("match_found")
+        assert len(match_founds) == 2
+        game_id_str = match_founds[0][1]["data"]["game_id"]
+        game_id = UUID(game_id_str)
+        loaded = await game_store.load(game_id)
+        assert loaded is not None
+        assert {loaded.player1_id, loaded.player2_id} == {p1, p2}
 
     async def test_match_pairs_players_in_fifo_order(
         self,
@@ -240,22 +275,29 @@ class TestMatchPlayers:
         p2_game_id = ws_manager.messages_for(p2)[0]["data"]["game_id"]
         assert p1_game_id == p2_game_id
 
-    async def test_match_records_pair_in_game_players_mapping(
+    async def test_match_persists_player_pair_in_store(
         self,
         service: MatchmakingService,
+        ws_manager: FakeWSManager,
+        game_store: GameStore,
     ) -> None:
+        """Replaces the old in-memory-dict assertion (active_games / game_players
+        removed in DR-15). Now verifies the pair is recorded in PvPSessionState
+        persisted to Redis."""
         p1, p2 = uuid4(), uuid4()
         await service.join_queue(p1, "P1")
         await service.join_queue(p2, "P2")
         await service.match_players()
 
-        game_id = next(iter(service.active_games.keys()))
-        recorded_pair = service.game_players[game_id]
-        assert set(recorded_pair) == {p1, p2}
+        game_id_str = ws_manager.messages_of_type("match_found")[0][1]["data"]["game_id"]
+        loaded = await game_store.load(UUID(game_id_str))
+        assert loaded is not None
+        assert {loaded.player1_id, loaded.player2_id} == {p1, p2}
 
     async def test_four_players_create_two_games_over_two_cycles(
         self,
         service: MatchmakingService,
+        ws_manager: FakeWSManager,
     ) -> None:
         """Two consecutive match_players() calls should each pair one game."""
         players = [uuid4() for _ in range(4)]
@@ -264,10 +306,15 @@ class TestMatchPlayers:
             await asyncio.sleep(0.005)  # timestamp ordering
 
         await service.match_players()
-        assert len(service.active_games) == 1
+        first_pair_count = len(ws_manager.messages_of_type("match_found"))
+        assert first_pair_count == 2  # two players notified
 
         await service.match_players()
-        assert len(service.active_games) == 2
+        all_match_found = ws_manager.messages_of_type("match_found")
+        assert len(all_match_found) == 4  # four total players notified across two pairings
+        # Distinct game_ids
+        game_ids = {m[1]["data"]["game_id"] for m in all_match_found}
+        assert len(game_ids) == 2
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -341,7 +388,6 @@ class TestBackgroundLoop:
             # Loop polls every 500ms — wait long enough for one cycle + slack
             await asyncio.sleep(0.8)
 
-            assert len(service.active_games) == 1
             assert len(ws_manager.messages_of_type("match_found")) == 2
         finally:
             await service.stop_background_matching()

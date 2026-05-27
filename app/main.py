@@ -15,12 +15,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
+from app.core.game_store import GameStore
 from app.core.logging import configure_logging
 from app.core.observability import init_sentry, metrics_payload
 from app.exceptions import AppError
 from app.api.v1.router import router as v1_router
 from app.api.v1.endpoints.ws import router as ws_router, init_ws_endpoints
 from app.core.ws_manager.manager import WSManager
+from app.modules.ki_clash.game_session import PvPGameSession
 from app.services.matchmaking_service import MatchmakingService
 
 # Install structured logging at import time so even pre-lifespan messages
@@ -49,10 +51,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # --- Startup ---
     redis_client = aioredis.from_url(settings.redis_url, decode_responses=False)
     ws_manager = WSManager()
-    matchmaking = MatchmakingService(redis_client, ws_manager)
+    game_store = GameStore(redis_client)
+    pvp_session = PvPGameSession(store=game_store, ws_manager=ws_manager)
+    matchmaking = MatchmakingService(
+        redis_client=redis_client,
+        ws_manager=ws_manager,
+        game_store=game_store,
+    )
 
     # Wire up WebSocket endpoints with shared services
-    init_ws_endpoints(ws_manager, matchmaking)
+    init_ws_endpoints(ws_manager, matchmaking, pvp_session, game_store)
 
     # Start background matchmaking loop
     await matchmaking.start_background_matching()
@@ -61,6 +69,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.redis = redis_client
     app.state.ws_manager = ws_manager
     app.state.matchmaking = matchmaking
+    app.state.game_store = game_store
+    app.state.pvp_session = pvp_session
 
     yield
 
