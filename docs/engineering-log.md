@@ -14,10 +14,140 @@
 > and a Toronto staff-engineer interviewer probing why you chose X.
 
 **Structure:**
-- Part 1 (below): chronological story
+- Part 0 (immediately below): **RESUME HERE** — current state + next steps
+- Part 1: chronological story
 - Part 2 (`## Engineering Decision Reference`): topic-organized deep dives
   on every major decision, with trade-off tables, alternatives
   rejected, and meta-patterns
+
+---
+
+# Part 0 — RESUME HERE (last updated 2026-05-28)
+
+> Read this first when picking the project back up. It's the single
+> "where are we / what's next" snapshot. Everything below in Parts 1-2
+> is the detailed history.
+
+## Current state at a glance
+
+```
+Phase 1: Asset pipeline + frontend prep      ✅ DONE
+Phase 2: Tests + observability               ✅ DONE  (149 tests passing)
+Phase 3: PvP hardening (4 bugs fixed)         ✅ DONE
+Phase 4: Distributed game state (Redis)       ✅ DONE
+Phase 5: Go game server                       ⏸️  PENDING (not started, optional)
+Phase 6: Deploy to AWS EC2 + Vercel           🔄 IN PROGRESS (scaffolding done,
+                                                  waiting on Jason actions)
+```
+
+**Test suite:** `pytest` → 149 passing in ~23s (requires `docker compose up -d`
+for the Redis/Postgres-backed tests; pure-logic tests run without it).
+
+**Git:** all work committed. Latest commit `7266d18` (Phase 6 deploy
+scaffolding). Branch `main`.
+
+## What's deployed / running
+
+- **Nothing is live yet.** No production deployment exists.
+- Local dev: `docker compose up -d` brings up Postgres + Redis + API
+  on localhost:8000. The web dev server (`cd web && npm run dev`) runs
+  on localhost:3000 but is NOT persistent — restart it each session.
+
+## How to restart the local environment
+
+```bash
+# 1. Backend stack (Postgres + Redis + API)
+cd /Users/daeseonyoo/Documents/GitHub/ai-product/ki-clash
+docker compose up -d
+docker compose exec api alembic upgrade head    # if DB was reset
+
+# 2. Web dev server
+cd web && npm run dev    # → http://localhost:3000
+
+# 3. Verify
+curl http://localhost:8000/health    # → {"status":"ok"}
+# Open http://localhost:3000 in browser, play an AI match
+
+# 4. Run the test suite
+cd /Users/daeseonyoo/Documents/GitHub/ai-product/ki-clash
+python3 -m pytest    # → 149 passed
+
+# 5. Drive a PvP match end-to-end (visual)
+python3 scripts/pvp_simulator.py --seed 42
+```
+
+## Phase 6 — exact next steps (this is where we paused)
+
+Deployment plan is **Hybrid: Vercel (frontend) + AWS EC2 free tier
+(backend)**. All config is scaffolded and committed. What remains is
+Jason-driven account/infra setup:
+
+```
+[BLOCKED ON JASON — decisions/actions needed]
+1. Vercel login:  npx vercel login   (browser GitHub auth)
+2. AWS account:   create new account if Free Tier exhausted on old one
+3. Domain name:   pick one (kiclash.com? alternatives?) — or use free
+                  *.vercel.app + raw EC2 IP for now
+
+[THEN — guided setup, ~30-45 min]
+4. Deploy frontend to Vercel:
+     cd web && npx vercel        # first deploy → preview URL
+     npx vercel --prod           # production deploy
+   Set env var in Vercel dashboard:
+     NEXT_PUBLIC_API_URL = https://api.<domain>   (or temp EC2 IP)
+
+5. Launch AWS EC2 (full guide: deploy/aws-ec2/README.md):
+     - Ubuntu 24.04, t3.micro, security group 22/80/443
+     - Elastic IP
+     - SSH in, install Docker + Compose
+     - git clone, cp deploy/aws-ec2/.env.prod.example .env, fill secrets
+     - docker compose -f docker-compose.prod.yml up -d --build
+     - docker compose -f docker-compose.prod.yml exec api alembic upgrade head
+
+6. DNS (Cloudflare or registrar):
+     A record  api.<domain>  → EC2 Elastic IP
+     A record  <domain>      → Vercel (or CNAME to vercel)
+
+7. Caddy auto-issues SSL on first start (Caddyfile already configured).
+     Verify: curl https://api.<domain>/health
+
+8. Update Vercel NEXT_PUBLIC_API_URL → https://api.<domain>, redeploy.
+
+9. E2E test: open the live URL in two browsers, play a PvP match.
+```
+
+**Key files for Phase 6 (already committed):**
+- `docker-compose.prod.yml` — production stack (restart policies,
+  healthchecks, caddy, 2 uvicorn workers)
+- `Caddyfile` — auto-HTTPS reverse proxy, `API_DOMAIN` env-driven
+- `deploy/aws-ec2/README.md` — full step-by-step setup guide
+- `deploy/aws-ec2/.env.prod.example` — secrets template
+- `web/vercel.json` — Vercel build config (region icn1)
+- `web/.env.production.example` — frontend env template
+
+## Open decisions (waiting on Jason)
+
+1. **Domain:** which name? (drives DNS + CORS + Caddy config)
+2. **Phase 5 (Go):** still want it? It's optional — only matters at
+   5000+ concurrent or as a Toronto-interview systems-design artifact.
+   Reference DR-11 for the reasoning. If yes, it's ~8-12 hours of my
+   focused work or a 2-3 week pair-programming exercise.
+3. **Visual design:** the game still renders emoji fallbacks. The asset
+   pipeline (Phase 1) is ready to receive real art. Jason's 1-week
+   design trial (Figma + Firefly) was proposed but not started — see
+   memory `[[user-creator-ambitions]]`.
+
+## Mental model reminders (don't re-derive these)
+
+- Backend is **production-ready** — 149 tests, 4 PvP bugs fixed,
+  distributed state, JWT auto-recovery, Stripe/Sentry/metrics wired
+  (need keys to activate). The gap to "shippable product" is **visual
+  polish + deployment + domain**, NOT backend correctness.
+- Go (Phase 5) is **not needed** for the current goal ("interviewers
+  play the game"). It's a separate, optional track.
+- The whole Python distributed implementation (Phase 4) doubles as the
+  **reference spec** for a future Go port — every design choice is
+  language-agnostic.
 
 ---
 
