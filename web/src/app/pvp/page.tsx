@@ -5,6 +5,7 @@ import ActionCard from "@/components/ActionCard";
 import KiMeter from "@/components/KiMeter";
 import type { Action } from "@/lib/api";
 import { API_TO_ACTION, type ActionKind } from "@/lib/actions";
+import type { TurnOutcome } from "@/lib/api";
 import Link from "next/link";
 import KiAuraArena from "@/components/arena/KiAuraArena";
 import MatchFinale from "@/components/finale/MatchFinale";
@@ -63,6 +64,19 @@ export default function PvPPage() {
     arenaAction && turnResult
       ? API_TO_ACTION[turnResult.opponent_action as Action]
       : null;
+
+  // PvP backend uses "you_win"/"you_lose" but KiAuraArena expects the canonical
+  // TurnOutcome shape ("p1_wins_round" / "p2_wins_round" / …) where p1=player.
+  const arenaOutcome: TurnOutcome | null = (() => {
+    if (!turnResult) return null;
+    const o = turnResult.outcome;
+    if (o === "you_win") return "p1_wins_round";
+    if (o === "you_lose") return "p2_wins_round";
+    if (o === "clash" || o === "blocked" || o === "dodged" || o === "neutral") {
+      return o;
+    }
+    return null;
+  })();
 
   // Resolve characters (currently fixed assignment; character-select PvP is future work)
   const playerCharacter = getCharacter(PLAYER_CHAR_ID);
@@ -235,6 +249,7 @@ export default function PvPPage() {
             playerAction={arenaAction}
             aiAction={opponentArenaAction}
             phase={arenaPhase}
+            outcome={arenaOutcome}
           />
 
           <div className="flex items-center justify-center gap-8 py-6">
@@ -287,6 +302,7 @@ export default function PvPPage() {
             playerAction={arenaAction}
             aiAction={opponentArenaAction}
             phase={arenaPhase}
+            outcome={arenaOutcome}
           />
           <div className="py-6 bg-gray-800 rounded-xl">
             <p className="text-sm text-gray-400 uppercase tracking-wider">

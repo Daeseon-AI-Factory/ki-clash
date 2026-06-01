@@ -96,23 +96,36 @@ export default function Countdown({
         ? "text-yellow-400"
         : "text-red-400";
 
+  // Pulse the number on each second tick to draw the eye.
+  const pulse = fraction <= 0.4;
+
   return (
-    <div className="w-full space-y-1">
-      {/* Timer number */}
-      <div className="flex justify-between items-center">
-        <span className="text-xs text-gray-500 uppercase tracking-wider">
-          Choose your action!
+    <div className="w-full space-y-2">
+      {/* Timer number — large and prominent so it's never missed */}
+      <div className="flex justify-between items-baseline">
+        <span className="text-xs text-gray-400 uppercase tracking-widest font-bold">
+          ⏱ Choose your action
         </span>
-        <span className={`text-lg font-black tabular-nums ${textColor}`}>
+        <span
+          className={`text-4xl font-black tabular-nums ${textColor} ${pulse ? "animate-pulse" : ""}`}
+          style={{
+            textShadow: `0 0 12px currentColor, 0 2px 4px rgba(0,0,0,0.6)`,
+            lineHeight: 1,
+          }}
+        >
           {displayNumber}
+          <span className="text-base font-bold opacity-70 ml-0.5">s</span>
         </span>
       </div>
 
       {/* Shrinking bar */}
-      <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+      <div className="w-full h-3 bg-gray-700/80 rounded-full overflow-hidden border border-gray-600/50">
         <div
           className={`h-full ${barColor} rounded-full transition-none`}
-          style={{ width: `${fraction * 100}%` }}
+          style={{
+            width: `${fraction * 100}%`,
+            boxShadow: `0 0 12px currentColor`,
+          }}
         />
       </div>
     </div>

@@ -57,11 +57,11 @@ export default function GameBoard({
 
   return (
     <div className="w-full max-w-2xl mx-auto">
-      {/* Selection countdown timer */}
+      {/* Selection countdown timer — 5s per spec */}
       {!disabled && (
         <div className="mb-4">
           <Countdown
-            seconds={3}
+            seconds={5}
             onTimeout={handleTimeout}
             onBeat={onCountdownBeat}
           />

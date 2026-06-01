@@ -3,22 +3,23 @@
 import { useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { ActionKind, ActionPhase } from "@/lib/actions";
+import type { TurnOutcome } from "@/lib/api";
 import { getCharacter, type Character } from "@/lib/characters";
+import FighterSprite, { type FighterPose } from "./FighterSprite";
 
 /**
  * Anime ki-aura battle arena — the visual centerpiece during play/reveal.
  *
- * Replaces the deprecated pixel-art BattleArena. No external sprite assets:
- * characters render as their roster emoji wrapped in a layered animated
- * aura (radial blur + rotating conic gradient + idle pulse). The action
- * FX layer paints the move-specific effect on top during the windup →
- * impact → recover lifecycle driven by `useActionAnimation`.
+ * Replaces the deprecated pixel-art BattleArena. Renders two SVG humanoid
+ * fighters (FighterSprite) wrapped in animated ki auras over a parallax
+ * gradient sky background, with per-action FX overlays driven by the
+ * windup → impact → recover lifecycle.
  *
- * Aesthetic target: commercial-grade anime / Dragon Ball ki-blast vibe,
- * achievable without artwork.
+ * Hit reactions: when `outcome` is set and `phase === "impact"`, the
+ * fighter who LOST that turn recoils (hit pose) — visible feedback for
+ * "공격하고 뒤지는게 제대로 나와야지".
  *
- * # CORE_CANDIDATE — generic "two-fighter arena" template. Swap the
- *   character props + action set and it works for any 1v1 game.
+ * # CORE_CANDIDATE — generic "two-fighter arena" template.
  */
 
 interface KiAuraArenaProps {
@@ -27,6 +28,8 @@ interface KiAuraArenaProps {
   playerAction?: ActionKind | null;
   aiAction?: ActionKind | null;
   phase?: ActionPhase;
+  /** When set during impact, the losing fighter recoils (hit pose). */
+  outcome?: TurnOutcome | null;
 }
 
 export default function KiAuraArena({
@@ -35,6 +38,7 @@ export default function KiAuraArena({
   playerAction = null,
   aiAction = null,
   phase = "idle",
+  outcome = null,
 }: KiAuraArenaProps) {
   const player = useMemo(() => getCharacter(playerCharacterId), [playerCharacterId]);
   const ai = useMemo(() => getCharacter(aiCharacterId), [aiCharacterId]);
@@ -42,28 +46,29 @@ export default function KiAuraArena({
   if (!player || !ai) return null;
 
   return (
-    <div className="relative w-full max-w-2xl mx-auto h-56 sm:h-64 rounded-2xl overflow-hidden border border-gray-700/60 shadow-2xl">
-      {/* Background — animated gradient sky + parallax stars + ground glow */}
+    <div className="relative w-full max-w-2xl mx-auto h-64 sm:h-72 rounded-2xl overflow-hidden border border-gray-700/60 shadow-2xl">
       <ArenaBackground />
 
-      {/* Fighters — silhouettes with auras */}
-      <div className="absolute inset-0 flex items-end justify-between px-6 sm:px-10 pb-8">
-        <FighterSilhouette
+      {/* Fighters — humanoid silhouettes with auras */}
+      <div className="absolute inset-0 flex items-end justify-between px-6 sm:px-12 pb-4">
+        <FighterWithAura
           character={player}
           action={playerAction}
           phase={phase}
+          outcome={outcome}
           side="left"
         />
-        <FighterSilhouette
+        <FighterWithAura
           character={ai}
           action={aiAction}
           phase={phase}
+          outcome={outcome}
           side="right"
           flip
         />
       </div>
 
-      {/* Cross-screen FX layer (energy wave beam) */}
+      {/* Cross-screen FX — energy beams, attack punch projectiles */}
       <CrossScreenFX
         playerAction={playerAction}
         aiAction={aiAction}
@@ -72,7 +77,7 @@ export default function KiAuraArena({
         aiColor={ai.color}
       />
 
-      {/* Top + bottom vignette for depth */}
+      {/* Vignette for depth */}
       <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/40 via-transparent to-black/30" />
     </div>
   );
@@ -84,10 +89,8 @@ export default function KiAuraArena({
 function ArenaBackground() {
   return (
     <>
-      {/* Gradient sky — slowly shifts hue using CSS background animation */}
       <div className="absolute inset-0 animate-sky-shift" />
 
-      {/* Star/dust particles — fixed positions, varying twinkle */}
       <div className="absolute inset-0 pointer-events-none">
         {STAR_POSITIONS.map((pos, i) => (
           <div
@@ -106,20 +109,18 @@ function ArenaBackground() {
         ))}
       </div>
 
-      {/* Ground glow strip */}
-      <div className="absolute left-0 right-0 bottom-0 h-16 pointer-events-none"
+      <div
+        className="absolute left-0 right-0 bottom-0 h-20 pointer-events-none"
         style={{
-          background: "linear-gradient(to top, rgba(251,146,60,0.25), transparent)",
+          background:
+            "linear-gradient(to top, rgba(251,146,60,0.28), transparent)",
         }}
       />
-
-      {/* Horizon line */}
-      <div className="absolute left-0 right-0 bottom-16 h-px bg-orange-400/40 pointer-events-none" />
+      <div className="absolute left-0 right-0 bottom-20 h-px bg-orange-400/40 pointer-events-none" />
     </>
   );
 }
 
-// Pre-computed star field — fixed array so SSR + CSR match without random seeds.
 const STAR_POSITIONS = [
   { x: 8, y: 15, size: 2, opacity: 0.7, delay: 0, duration: 3 },
   { x: 22, y: 8, size: 1, opacity: 0.5, delay: 0.5, duration: 4 },
@@ -136,98 +137,92 @@ const STAR_POSITIONS = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Fighter silhouette — character emoji + layered ki aura + per-action FX.
+// Fighter with surrounding aura + per-action FX layer.
 
-interface FighterSilhouetteProps {
+interface FighterWithAuraProps {
   character: Character;
   action: ActionKind | null;
   phase: ActionPhase;
+  outcome: TurnOutcome | null;
   side: "left" | "right";
   flip?: boolean;
 }
 
-function FighterSilhouette({
+function FighterWithAura({
   character,
   action,
   phase,
+  outcome,
   side,
   flip = false,
-}: FighterSilhouetteProps) {
+}: FighterWithAuraProps) {
   const isAnimating = phase !== "idle";
 
-  // Translate the fighter forward on attack impact / back on teleport windup.
-  const offsetX = (() => {
-    if (action === "attack" && phase === "impact") {
-      return side === "left" ? 40 : -40;
+  // Decide which pose the fighter should be in this frame.
+  // Hit reactions take priority during impact; otherwise follow the action phase.
+  const pose: FighterPose = (() => {
+    if (phase === "impact") {
+      if (side === "left" && outcome === "p2_wins_round") return "hit";
+      if (side === "right" && outcome === "p1_wins_round") return "hit";
+      // Teleport during impact briefly vanishes — pose stays "impact" but
+      // visibility is dimmed by the FighterSprite's filter? Skip — too subtle.
     }
-    if (action === "teleport" && phase === "impact") {
-      return side === "left" ? -20 : 20;
-    }
-    return 0;
+    if (phase === "windup") return "windup";
+    if (phase === "impact") return "impact";
+    if (phase === "recover") return "recover";
+    return "idle";
   })();
 
-  const scale = (() => {
-    if (phase === "windup") return 0.96;
-    if (phase === "impact") return 1.08;
-    if (phase === "recover") return 1.02;
-    return 1;
-  })();
-
-  // Teleport hides the fighter briefly on impact.
-  const opacity = action === "teleport" && phase === "impact" ? 0.15 : 1;
+  // Hide the fighter momentarily on teleport impact (the FX flash covers it).
+  const teleportHiding = action === "teleport" && phase === "impact";
 
   return (
     <div className="relative flex flex-col items-center gap-1">
-      <motion.div
-        className="relative flex items-center justify-center"
-        animate={{ x: offsetX, scale, opacity }}
-        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-      >
-        {/* Outer aura halo — character-colored */}
+      <div className="relative" style={{ width: 110, height: 176 }}>
+        {/* Outer aura halo */}
         <div
-          className={`absolute rounded-full ${isAnimating ? "animate-aura-pulse-fast" : "animate-aura-pulse"}`}
+          className={`absolute inset-0 rounded-full ${isAnimating ? "animate-aura-pulse-fast" : "animate-aura-pulse"}`}
           style={{
-            width: 140,
-            height: 140,
             background: `radial-gradient(circle, ${character.color}cc 0%, ${character.color}55 40%, transparent 70%)`,
-            filter: "blur(14px)",
+            filter: "blur(16px)",
           }}
         />
         {/* Rotating inner aura ring */}
         <div
-          className="absolute rounded-full animate-aura-rotate"
+          className="absolute inset-2 rounded-full animate-aura-rotate"
           style={{
-            width: 110,
-            height: 110,
             background: `conic-gradient(from 0deg, transparent, ${character.color}aa, transparent, ${character.color}88, transparent)`,
-            filter: "blur(4px)",
+            filter: "blur(5px)",
           }}
         />
-        {/* Character emoji — mirrored on right side */}
-        <span
-          className="relative select-none idle-bob"
+        {/* The fighter itself */}
+        <div
+          className="absolute inset-0 flex items-end justify-center"
           style={{
-            fontSize: 80,
-            transform: flip ? "scaleX(-1)" : undefined,
-            filter: `drop-shadow(0 0 12px ${character.color}) drop-shadow(0 6px 8px rgba(0,0,0,0.5))`,
-            lineHeight: 1,
+            opacity: teleportHiding ? 0.15 : 1,
+            transition: "opacity 0.15s",
           }}
         >
-          {character.emoji}
-        </span>
-      </motion.div>
+          <FighterSprite
+            character={character}
+            pose={pose}
+            flip={flip}
+            width={92}
+          />
+        </div>
 
-      {/* Per-action FX overlay */}
-      <ActionFXOverlay
-        action={action}
-        phase={phase}
-        color={character.color}
-        side={side}
-      />
+        {/* Per-action local FX */}
+        <ActionFXOverlay
+          action={action}
+          phase={phase}
+          color={character.color}
+          side={side}
+        />
+      </div>
 
       <span
-        className="relative text-xs font-medium text-white/80 mt-1 select-none"
-        style={{ textShadow: "0 1px 2px rgba(0,0,0,0.8)" }}
+        className="relative text-xs font-medium text-white/85 select-none"
+        style={{ textShadow: "0 1px 2px rgba(0,0,0,0.9)" }}
       >
         {character.name}
       </span>
@@ -236,8 +231,7 @@ function FighterSilhouette({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Per-action local FX (charge sparks, attack lines, teleport flash, block shield).
-// The energy-wave beam crosses the screen — handled by <CrossScreenFX> instead.
+// Per-action local FX (charge motes, block shield, attack lines, teleport flash, energy ball)
 
 interface ActionFXProps {
   action: ActionKind | null;
@@ -261,7 +255,6 @@ function ActionFXOverlay({ action, phase, color, side }: ActionFXProps) {
 }
 
 function ChargeFX({ phase, color }: { phase: ActionPhase; color: string }) {
-  // 6 motes converging from a circle around the fighter toward center.
   const motes = [0, 60, 120, 180, 240, 300];
   return (
     <AnimatePresence>
@@ -282,8 +275,8 @@ function ChargeFX({ phase, color }: { phase: ActionPhase; color: string }) {
                 filter: `drop-shadow(0 0 8px ${color})`,
               }}
               initial={{
-                x: Math.cos((deg * Math.PI) / 180) * 90,
-                y: Math.sin((deg * Math.PI) / 180) * 90,
+                x: Math.cos((deg * Math.PI) / 180) * 80,
+                y: Math.sin((deg * Math.PI) / 180) * 80,
                 opacity: 0,
                 scale: 0.5,
               }}
@@ -298,7 +291,6 @@ function ChargeFX({ phase, color }: { phase: ActionPhase; color: string }) {
 }
 
 function BlockFX({ phase }: { phase: ActionPhase }) {
-  // Hexagonal shield that scales in and pulses.
   return (
     <AnimatePresence>
       {(phase === "impact" || phase === "recover") && (
@@ -310,7 +302,7 @@ function BlockFX({ phase }: { phase: ActionPhase }) {
           exit={{ opacity: 0, scale: 1.3 }}
           transition={{ duration: 0.3 }}
         >
-          <svg width="120" height="120" viewBox="0 0 120 120">
+          <svg width="120" height="140" viewBox="0 0 120 140">
             <defs>
               <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" stopColor="#60A5FA" stopOpacity="0.9" />
@@ -319,14 +311,14 @@ function BlockFX({ phase }: { phase: ActionPhase }) {
               </linearGradient>
             </defs>
             <polygon
-              points="60,5 110,32 110,88 60,115 10,88 10,32"
+              points="60,15 110,42 110,98 60,125 10,98 10,42"
               fill="url(#shieldGrad)"
               stroke="#93C5FD"
               strokeWidth="2"
               style={{ filter: "drop-shadow(0 0 12px #60A5FA)" }}
             />
             <polygon
-              points="60,5 110,32 110,88 60,115 10,88 10,32"
+              points="60,15 110,42 110,98 60,125 10,98 10,42"
               fill="none"
               stroke="white"
               strokeWidth="1"
@@ -340,7 +332,6 @@ function BlockFX({ phase }: { phase: ActionPhase }) {
 }
 
 function AttackFX({ phase, side }: { phase: ActionPhase; side: "left" | "right" }) {
-  // Red speed lines + impact slash.
   return (
     <AnimatePresence>
       {phase === "impact" && (
@@ -358,12 +349,13 @@ function AttackFX({ phase, side }: { phase: ActionPhase; side: "left" | "right" 
             style={{
               width: 160,
               height: 8,
-              background: "linear-gradient(90deg, transparent, #FCA5A5, #DC2626, #FCA5A5, transparent)",
+              background:
+                "linear-gradient(90deg, transparent, #FCA5A5, #DC2626, #FCA5A5, transparent)",
               transform: `rotate(${side === "left" ? -15 : 15}deg)`,
               filter: "drop-shadow(0 0 8px #EF4444) blur(0.5px)",
             }}
           />
-          {/* Speed lines radiating */}
+          {/* Radiating speed lines */}
           {[-30, -15, 0, 15, 30].map((deg) => (
             <div
               key={deg}
@@ -371,7 +363,8 @@ function AttackFX({ phase, side }: { phase: ActionPhase; side: "left" | "right" 
               style={{
                 width: 80,
                 height: 2,
-                background: "linear-gradient(90deg, transparent, white, transparent)",
+                background:
+                  "linear-gradient(90deg, transparent, white, transparent)",
                 transform: `rotate(${deg}deg) translateX(${side === "left" ? 30 : -30}px)`,
                 opacity: 0.7,
               }}
@@ -398,9 +391,10 @@ function TeleportFX({ phase }: { phase: ActionPhase }) {
           <div
             className="rounded-full"
             style={{
-              width: 100,
-              height: 100,
-              background: "radial-gradient(circle, white 0%, #A78BFA 30%, transparent 70%)",
+              width: 110,
+              height: 110,
+              background:
+                "radial-gradient(circle, white 0%, #A78BFA 30%, transparent 70%)",
               filter: "blur(8px)",
             }}
           />
@@ -411,7 +405,6 @@ function TeleportFX({ phase }: { phase: ActionPhase }) {
 }
 
 function EnergyChargeFX({ phase, color }: { phase: ActionPhase; color: string }) {
-  // Energy ball forming during windup — the beam itself is rendered by CrossScreenFX.
   return (
     <AnimatePresence>
       {phase === "windup" && (
@@ -439,7 +432,8 @@ function EnergyChargeFX({ phase, color }: { phase: ActionPhase; color: string })
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Cross-screen energy beam — fires from one fighter to the other on impact.
+// Cross-screen FX — energy beams crossing the full arena width,
+// plus a flying-fist projectile during a basic attack.
 
 function CrossScreenFX({
   playerAction,
@@ -456,6 +450,8 @@ function CrossScreenFX({
 }) {
   const playerBeam = playerAction === "energyWave" && phase === "impact";
   const aiBeam = aiAction === "energyWave" && phase === "impact";
+  const playerPunch = playerAction === "attack" && phase === "impact";
+  const aiPunch = aiAction === "attack" && phase === "impact";
 
   return (
     <AnimatePresence>
@@ -469,7 +465,8 @@ function CrossScreenFX({
           transition={{ duration: 0.4, ease: "easeOut" }}
           style={{
             background: `linear-gradient(90deg, ${playerColor}, #F97316, white, #F97316, ${playerColor})`,
-            filter: "drop-shadow(0 0 16px #F97316) drop-shadow(0 0 32px #FACC15) blur(0.5px)",
+            filter:
+              "drop-shadow(0 0 16px #F97316) drop-shadow(0 0 32px #FACC15) blur(0.5px)",
             borderRadius: 24,
           }}
         />
@@ -484,10 +481,43 @@ function CrossScreenFX({
           transition={{ duration: 0.4, ease: "easeOut" }}
           style={{
             background: `linear-gradient(270deg, ${aiColor}, #F97316, white, #F97316, ${aiColor})`,
-            filter: "drop-shadow(0 0 16px #F97316) drop-shadow(0 0 32px #FACC15) blur(0.5px)",
+            filter:
+              "drop-shadow(0 0 16px #F97316) drop-shadow(0 0 32px #FACC15) blur(0.5px)",
             borderRadius: 24,
           }}
         />
+      )}
+      {/* Flying fist for basic Attack — projectile crossing from attacker toward target */}
+      {playerPunch && (
+        <motion.div
+          key="player-punch"
+          className="absolute top-1/2 -translate-y-4 pointer-events-none text-5xl select-none"
+          initial={{ left: "18%", opacity: 0, scale: 0.8, rotate: -10 }}
+          animate={{ left: "70%", opacity: 1, scale: 1.5, rotate: 0 }}
+          exit={{ opacity: 0, scale: 2 }}
+          transition={{ duration: 0.32, ease: "easeOut" }}
+          style={{
+            filter: "drop-shadow(0 0 12px #FCA5A5) drop-shadow(0 0 24px #EF4444)",
+          }}
+        >
+          👊
+        </motion.div>
+      )}
+      {aiPunch && (
+        <motion.div
+          key="ai-punch"
+          className="absolute top-1/2 -translate-y-4 pointer-events-none text-5xl select-none"
+          initial={{ right: "18%", opacity: 0, scale: 0.8, rotate: 10 }}
+          animate={{ right: "70%", opacity: 1, scale: 1.5, rotate: 0 }}
+          exit={{ opacity: 0, scale: 2 }}
+          transition={{ duration: 0.32, ease: "easeOut" }}
+          style={{
+            filter: "drop-shadow(0 0 12px #FCA5A5) drop-shadow(0 0 24px #EF4444)",
+            transform: "scaleX(-1)",
+          }}
+        >
+          👊
+        </motion.div>
       )}
     </AnimatePresence>
   );

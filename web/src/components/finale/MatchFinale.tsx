@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 import type { Character } from "@/lib/characters";
+import FighterSprite from "@/components/arena/FighterSprite";
 
 /**
  * Cinematic match-end overlay. Plays a staged sequence on mount:
@@ -58,7 +59,6 @@ export default function MatchFinale({
 
   const playerWon = result === "win";
   const isDraw = result === "draw";
-  const winnerChar = playerWon ? playerCharacter : isDraw ? null : opponentCharacter;
 
   // Color / copy per result
   const palette = playerWon
@@ -200,55 +200,72 @@ export default function MatchFinale({
         )}
       </AnimatePresence>
 
-      {/* Layer 4: winner silhouette + aura (zoom stage) */}
+      {/* Layer 4: both fighters — winner standing tall with aura, loser KO'd
+          to the side. (Earlier iteration showed only the winner as a giant
+          emoji; user feedback was that the loser needs to visibly fall.) */}
       <AnimatePresence>
-        {showWinner && (
+        {(showWinner || stage === "shake" || stage === "stats") && (
           <motion.div
-            key="winner"
-            className="absolute pointer-events-none flex items-center justify-center"
-            initial={{ scale: 0.5, opacity: 0 }}
-            animate={{ scale: 1.05, opacity: 1 }}
-            exit={{ scale: 2.2, opacity: 0 }}
+            key="fighters"
+            className="absolute inset-0 pointer-events-none flex items-end justify-center gap-6 sm:gap-16 pb-40 sm:pb-48"
+            initial={{ opacity: 0, scale: 0.6 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0 }}
             transition={{
               duration: DURATIONS.zoom / 1000,
               ease: [0.22, 1, 0.36, 1],
             }}
           >
-            {/* Outer aura halo */}
-            <div
-              className="absolute rounded-full animate-aura-pulse"
-              style={{
-                width: 520,
-                height: 520,
-                background: `radial-gradient(circle, ${palette.accent}cc 0%, ${palette.glow}66 35%, transparent 70%)`,
-                filter: "blur(28px)",
-              }}
-            />
-            {/* Inner aura ring */}
-            <div
-              className="absolute rounded-full animate-aura-rotate"
-              style={{
-                width: 380,
-                height: 380,
-                background: `conic-gradient(from 0deg, transparent, ${palette.accent}88, transparent, ${palette.accent}88, transparent)`,
-                filter: "blur(8px)",
-              }}
-            />
-            {/* Character "silhouette" — emoji at large scale (placeholder until real art) */}
-            <div
-              className="relative flex items-center justify-center"
-              style={{ width: 320, height: 320 }}
-            >
-              <span
-                className="select-none"
-                style={{
-                  fontSize: 240,
-                  filter: `drop-shadow(0 0 30px ${palette.accent}) drop-shadow(0 8px 16px rgba(0,0,0,0.6))`,
-                  lineHeight: 1,
-                }}
-              >
-                {winnerChar?.emoji ?? (playerWon ? "⚡" : "💀")}
-              </span>
+            {/* Player side */}
+            <div className="relative flex flex-col items-center">
+              {/* Aura halo behind the player */}
+              {playerCharacter && (
+                <>
+                  {playerWon && (
+                    <div
+                      className="absolute -inset-12 rounded-full animate-aura-pulse pointer-events-none"
+                      style={{
+                        background: `radial-gradient(circle, ${palette.accent}cc 0%, ${palette.glow}55 40%, transparent 70%)`,
+                        filter: "blur(24px)",
+                      }}
+                    />
+                  )}
+                  <FighterSprite
+                    character={playerCharacter}
+                    pose={playerWon ? "victory" : isDraw ? "idle" : "ko"}
+                    width={playerWon ? 180 : 130}
+                  />
+                </>
+              )}
+            </div>
+
+            {/* Opponent side */}
+            <div className="relative flex flex-col items-center">
+              {opponentCharacter && (
+                <>
+                  {!playerWon && !isDraw && (
+                    <div
+                      className="absolute -inset-12 rounded-full animate-aura-pulse pointer-events-none"
+                      style={{
+                        background: `radial-gradient(circle, ${palette.accent}cc 0%, ${palette.glow}55 40%, transparent 70%)`,
+                        filter: "blur(24px)",
+                      }}
+                    />
+                  )}
+                  <FighterSprite
+                    character={opponentCharacter}
+                    pose={
+                      !playerWon && !isDraw
+                        ? "victory"
+                        : isDraw
+                          ? "idle"
+                          : "ko"
+                    }
+                    flip
+                    width={!playerWon && !isDraw ? 180 : 130}
+                  />
+                </>
+              )}
             </div>
           </motion.div>
         )}

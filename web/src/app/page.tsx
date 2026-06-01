@@ -219,6 +219,7 @@ export default function Home() {
               playerAction={arenaAction}
               aiAction={aiArenaAction}
               phase={arenaPhase}
+              outcome={lastTurn?.outcome ?? null}
             />
           )}
           <TurnReveal
@@ -256,6 +257,7 @@ export default function Home() {
               playerAction={arenaAction}
               aiAction={aiArenaAction}
               phase={arenaPhase}
+              outcome={lastTurn?.outcome ?? null}
             />
           )}
           <TurnReveal
