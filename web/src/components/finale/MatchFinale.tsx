@@ -9,35 +9,33 @@ import FighterSprite from "@/components/arena/FighterSprite";
 /**
  * Cinematic match-end overlay. Plays a staged sequence on mount:
  *
- *   vignette (500ms) → zoom-in on winner (600ms) → impact flash (200ms)
- *   → screen shake + title slam + confetti (700ms) → stats panel slide-up
+ *   finalBlow (2.3s — winner charges, fires energy beam, loser is blown
+ *              across the screen with rotation+fade) → vignette → zoom-in
+ *              on winner → impact flash → screen shake + title slam +
+ *              confetti → stats panel slide-up
  *
- * Replaces the bare "VICTORY!" text the original match_end screen used.
- * Owns the full match-end UI — no separate stats panel in page.tsx.
+ * The finalBlow stage is skipped on draws (nobody loses).
  *
  * # CORE_CANDIDATE — generic "dramatic finale" pattern. The component is
  *   game-agnostic; pass `result` + score and it handles the rest.
  */
 
-type Stage = "vignette" | "zoom" | "flash" | "shake" | "stats";
+type Stage = "finalBlow" | "vignette" | "zoom" | "flash" | "shake" | "stats";
 export type FinaleResult = "win" | "loss" | "draw";
 
 interface MatchFinaleProps {
-  /** Outcome from the local player's perspective */
   result: FinaleResult;
-  /** Final score, e.g. {player: 2, opponent: 1} */
   finalScore: { player: number; opponent: number };
   totalTurns: number;
   playerCharacter?: Character;
   opponentCharacter?: Character;
-  /** Optional label for the opponent (e.g. "vs Bora" line in stats) */
   opponentName?: string;
   onPlayAgain: () => void;
-  /** Primary button label (default: "Play Again") */
   playAgainLabel?: string;
 }
 
 const DURATIONS = {
+  finalBlow: 2300,
   vignette: 500,
   zoom: 600,
   flash: 200,
@@ -54,20 +52,20 @@ export default function MatchFinale({
   onPlayAgain,
   playAgainLabel = "Play Again",
 }: MatchFinaleProps) {
-  const [stage, setStage] = useState<Stage>("vignette");
-  const confettiFiredRef = useRef(false);
-
   const playerWon = result === "win";
   const isDraw = result === "draw";
 
-  // Color / copy per result
+  // Skip the finalBlow stage when nobody loses — go straight to vignette.
+  const [stage, setStage] = useState<Stage>(isDraw ? "vignette" : "finalBlow");
+  const confettiFiredRef = useRef(false);
+
   const palette = playerWon
     ? {
         title: "VICTORY",
         subtitle: "기싸움 승리",
         text: "text-yellow-200",
-        accent: "#FCD34D", // amber-300
-        glow: "#F59E0B",   // amber-500
+        accent: "#FCD34D",
+        glow: "#F59E0B",
       }
     : isDraw
       ? {
@@ -85,38 +83,44 @@ export default function MatchFinale({
           glow: "#B91C1C",
         };
 
-  // Stage progression — fires once on mount.
+  // Stage progression — schedule the chain on mount.
   useEffect(() => {
     const t: ReturnType<typeof setTimeout>[] = [];
-    t.push(setTimeout(() => setStage("zoom"), DURATIONS.vignette));
+    const offset = isDraw ? 0 : DURATIONS.finalBlow;
+
+    t.push(setTimeout(() => setStage("vignette"), offset));
+    t.push(setTimeout(() => setStage("zoom"), offset + DURATIONS.vignette));
     t.push(
-      setTimeout(() => setStage("flash"), DURATIONS.vignette + DURATIONS.zoom),
+      setTimeout(
+        () => setStage("flash"),
+        offset + DURATIONS.vignette + DURATIONS.zoom,
+      ),
     );
     t.push(
       setTimeout(
         () => setStage("shake"),
-        DURATIONS.vignette + DURATIONS.zoom + DURATIONS.flash,
+        offset + DURATIONS.vignette + DURATIONS.zoom + DURATIONS.flash,
       ),
     );
     t.push(
       setTimeout(
         () => setStage("stats"),
-        DURATIONS.vignette +
+        offset +
+          DURATIONS.vignette +
           DURATIONS.zoom +
           DURATIONS.flash +
           DURATIONS.shake,
       ),
     );
     return () => t.forEach(clearTimeout);
-  }, []);
+  }, [isDraw]);
 
-  // Confetti burst — fires once when shake stage begins.
+  // Confetti burst when the title slams in.
   useEffect(() => {
     if (stage !== "shake" || confettiFiredRef.current) return;
     confettiFiredRef.current = true;
 
     if (playerWon) {
-      // Gold celebration burst — fired in 5 layered shots for fullness.
       const fire = (ratio: number, opts: confetti.Options) =>
         confetti({
           particleCount: Math.floor(220 * ratio),
@@ -130,7 +134,6 @@ export default function MatchFinale({
       fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
       fire(0.1, { spread: 120, startVelocity: 45 });
     } else if (!isDraw) {
-      // Defeat — ash/smoke particles drifting down from the top.
       confetti({
         particleCount: 90,
         startVelocity: 12,
@@ -150,26 +153,43 @@ export default function MatchFinale({
   const showTitle = stage === "shake" || stage === "stats";
   const showStats = stage === "stats";
 
+  const winnerCharacter = playerWon ? playerCharacter : opponentCharacter;
+  const loserCharacter = playerWon ? opponentCharacter : playerCharacter;
+
   return (
     <motion.div
       className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.25 }}
+      transition={{ duration: 0.2 }}
     >
-      {/* Layer 1: closing vignette */}
-      <motion.div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background:
-            "radial-gradient(ellipse at center, transparent 20%, rgba(0,0,0,0.85) 65%, #000 100%)",
-        }}
-        initial={{ scale: 3, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: DURATIONS.vignette / 1000, ease: "easeOut" }}
-      />
+      {/* Final-Blow stage — winner demolishes loser before the cinematic. */}
+      <AnimatePresence>
+        {stage === "finalBlow" && winnerCharacter && loserCharacter && (
+          <FinalBlowStage
+            key="final-blow"
+            winnerCharacter={winnerCharacter}
+            loserCharacter={loserCharacter}
+            winnerOnLeft={playerWon}
+            palette={palette}
+          />
+        )}
+      </AnimatePresence>
 
-      {/* Layer 2: rotating speed lines (only while zoom→flash visible) */}
+      {/* Layer 1: closing vignette */}
+      {stage !== "finalBlow" && (
+        <motion.div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              "radial-gradient(ellipse at center, transparent 20%, rgba(0,0,0,0.85) 65%, #000 100%)",
+          }}
+          initial={{ scale: 3, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: DURATIONS.vignette / 1000, ease: "easeOut" }}
+        />
+      )}
+
       <AnimatePresence>
         {showWinner && (
           <motion.div
@@ -183,7 +203,6 @@ export default function MatchFinale({
         )}
       </AnimatePresence>
 
-      {/* Layer 3: radial color wash (winner aura tint) */}
       <AnimatePresence>
         {(stage === "flash" || stage === "shake" || stage === "stats") && (
           <motion.div
@@ -200,9 +219,8 @@ export default function MatchFinale({
         )}
       </AnimatePresence>
 
-      {/* Layer 4: both fighters — winner standing tall with aura, loser KO'd
-          to the side. (Earlier iteration showed only the winner as a giant
-          emoji; user feedback was that the loser needs to visibly fall.) */}
+      {/* Both fighters with poses — winner standing, loser KO'd. Only after
+          the finalBlow finishes (we don't double-render fighters). */}
       <AnimatePresence>
         {(showWinner || stage === "shake" || stage === "stats") && (
           <motion.div
@@ -216,9 +234,7 @@ export default function MatchFinale({
               ease: [0.22, 1, 0.36, 1],
             }}
           >
-            {/* Player side */}
             <div className="relative flex flex-col items-center">
-              {/* Aura halo behind the player */}
               {playerCharacter && (
                 <>
                   {playerWon && (
@@ -239,7 +255,6 @@ export default function MatchFinale({
               )}
             </div>
 
-            {/* Opponent side */}
             <div className="relative flex flex-col items-center">
               {opponentCharacter && (
                 <>
@@ -271,7 +286,6 @@ export default function MatchFinale({
         )}
       </AnimatePresence>
 
-      {/* Layer 5: white impact flash */}
       <AnimatePresence>
         {stage === "flash" && (
           <motion.div
@@ -284,7 +298,6 @@ export default function MatchFinale({
         )}
       </AnimatePresence>
 
-      {/* Layer 6: title slam (shake → stats) — wrapped in shake class */}
       <AnimatePresence>
         {showTitle && (
           <motion.div
@@ -301,7 +314,6 @@ export default function MatchFinale({
               mass: 0.9,
             }}
           >
-            {/* Title glow halo */}
             <div
               className="absolute inset-0 blur-3xl pointer-events-none"
               style={{ background: palette.glow, opacity: 0.55 }}
@@ -323,7 +335,6 @@ export default function MatchFinale({
         )}
       </AnimatePresence>
 
-      {/* Layer 7: stats panel slide-up */}
       <AnimatePresence>
         {showStats && (
           <motion.div
@@ -344,11 +355,7 @@ export default function MatchFinale({
                   Final Score
                 </span>
                 <span className="text-2xl font-black text-white">
-                  <span
-                    className={
-                      playerWon ? "text-green-400" : "text-gray-300"
-                    }
-                  >
+                  <span className={playerWon ? "text-green-400" : "text-gray-300"}>
                     {finalScore.player}
                   </span>
                   <span className="text-gray-600 mx-3">—</span>
@@ -391,6 +398,254 @@ export default function MatchFinale({
               </button>
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Final-Blow Stage — winner powers up, fires beam, loser is blasted away.
+
+type BlowSub = "ready" | "charge" | "fire" | "hit" | "fly" | "land";
+
+interface FinalBlowStageProps {
+  winnerCharacter: Character;
+  loserCharacter: Character;
+  /** True if the winner is rendered on the LEFT side */
+  winnerOnLeft: boolean;
+  palette: { accent: string; glow: string };
+}
+
+function FinalBlowStage({
+  winnerCharacter,
+  loserCharacter,
+  winnerOnLeft,
+  palette,
+}: FinalBlowStageProps) {
+  const [sub, setSub] = useState<BlowSub>("ready");
+
+  useEffect(() => {
+    const t: ReturnType<typeof setTimeout>[] = [];
+    t.push(setTimeout(() => setSub("charge"), 200));
+    t.push(setTimeout(() => setSub("fire"), 800));
+    t.push(setTimeout(() => setSub("hit"), 1050));
+    t.push(setTimeout(() => setSub("fly"), 1250));
+    t.push(setTimeout(() => setSub("land"), 1900));
+    return () => t.forEach(clearTimeout);
+  }, []);
+
+  // Loser flies AWAY from the winner — direction depends on which side they're on.
+  const loserFlyX = winnerOnLeft ? 900 : -900;
+
+  // Winner pose tracks the charge → fire arc.
+  const winnerPose =
+    sub === "charge" ? "windup" : sub === "fire" ? "impact" : "idle";
+
+  // Loser pose: hit recoil, then KO'd.
+  const loserPose =
+    sub === "hit" ? "hit" : sub === "fly" || sub === "land" ? "ko" : "idle";
+
+  return (
+    <motion.div
+      className="absolute inset-0 overflow-hidden"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+    >
+      {/* Arena background — gradient sky + horizon glow */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(180deg, #1e1b4b 0%, #4c1d95 40%, #c2410c 100%)",
+        }}
+      />
+      <div
+        className="absolute left-0 right-0 bottom-0 h-1/3 pointer-events-none"
+        style={{
+          background:
+            "linear-gradient(to top, rgba(251,146,60,0.5), transparent)",
+        }}
+      />
+      <div className="absolute left-0 right-0 bottom-1/3 h-px bg-orange-300/60 pointer-events-none" />
+
+      {/* Power-up shockwave from winner during charge */}
+      <AnimatePresence>
+        {sub === "charge" && (
+          <motion.div
+            key="shockwave"
+            className="absolute rounded-full pointer-events-none"
+            style={{
+              left: winnerOnLeft ? "20%" : "80%",
+              top: "50%",
+              width: 200,
+              height: 200,
+              x: "-50%",
+              y: "-50%",
+              background: `radial-gradient(circle, ${palette.accent}00 30%, ${palette.glow}aa 60%, transparent 80%)`,
+              filter: "blur(2px)",
+            }}
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: [0, 2.5], opacity: [0, 1, 0] }}
+            transition={{ duration: 0.55 }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Energy beam — fires from winner toward loser during the "fire" sub-stage */}
+      <AnimatePresence>
+        {(sub === "fire" || sub === "hit") && (
+          <motion.div
+            key="beam"
+            className="absolute top-1/2 -translate-y-1/2 h-20 pointer-events-none"
+            style={{
+              left: winnerOnLeft ? "22%" : "22%",
+              right: winnerOnLeft ? "22%" : "22%",
+              background: `linear-gradient(${winnerOnLeft ? 90 : 270}deg,
+                ${palette.accent}, #F97316, white, #F97316, ${palette.glow})`,
+              filter:
+                "drop-shadow(0 0 24px #F97316) drop-shadow(0 0 64px #FACC15) blur(0.5px)",
+              borderRadius: 36,
+            }}
+            initial={{
+              clipPath: winnerOnLeft
+                ? "inset(0 100% 0 0)"
+                : "inset(0 0 0 100%)",
+              opacity: 0,
+            }}
+            animate={{ clipPath: "inset(0 0 0 0)", opacity: 1 }}
+            exit={{ opacity: 0, scale: 1.3 }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Impact explosion at loser position when beam connects */}
+      <AnimatePresence>
+        {(sub === "hit" || sub === "fly") && (
+          <motion.div
+            key="impact-burst"
+            className="absolute rounded-full pointer-events-none"
+            style={{
+              left: winnerOnLeft ? "80%" : "20%",
+              top: "50%",
+              width: 280,
+              height: 280,
+              x: "-50%",
+              y: "-50%",
+              background:
+                "radial-gradient(circle, white 0%, #FCD34D 25%, #F97316 50%, transparent 75%)",
+              filter: "blur(2px)",
+            }}
+            initial={{ scale: 0.2, opacity: 0 }}
+            animate={{ scale: [0.2, 1.6, 2.4], opacity: [0, 1, 0] }}
+            transition={{ duration: 0.6 }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Brief white screen flash on impact */}
+      <AnimatePresence>
+        {sub === "hit" && (
+          <motion.div
+            key="hit-flash"
+            className="absolute inset-0 bg-white pointer-events-none"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0, 0.85, 0] }}
+            transition={{ duration: 0.22 }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Winner sprite — left or right of arena */}
+      <div
+        className="absolute bottom-12 sm:bottom-20"
+        style={{
+          left: winnerOnLeft ? "8%" : undefined,
+          right: !winnerOnLeft ? "8%" : undefined,
+        }}
+      >
+        <div className="relative">
+          {/* Winner aura — grows during charge */}
+          <motion.div
+            className="absolute -inset-10 rounded-full pointer-events-none"
+            style={{
+              background: `radial-gradient(circle, ${palette.accent}cc 0%, ${palette.glow}66 40%, transparent 70%)`,
+              filter: "blur(20px)",
+            }}
+            initial={{ scale: 1, opacity: 0.6 }}
+            animate={{
+              scale: sub === "charge" ? 1.8 : sub === "fire" ? 2.2 : 1.2,
+              opacity: sub === "charge" || sub === "fire" ? 1 : 0.6,
+            }}
+            transition={{ duration: 0.3 }}
+          />
+          <FighterSprite
+            character={winnerCharacter}
+            pose={winnerPose}
+            flip={!winnerOnLeft}
+            width={140}
+          />
+        </div>
+      </div>
+
+      {/* Loser sprite — flies away after impact */}
+      <motion.div
+        className="absolute bottom-12 sm:bottom-20"
+        style={{
+          left: !winnerOnLeft ? "8%" : undefined,
+          right: winnerOnLeft ? "8%" : undefined,
+        }}
+        animate={{
+          x: sub === "fly" || sub === "land" ? loserFlyX : 0,
+          y: sub === "fly" ? -180 : sub === "land" ? 60 : 0,
+          rotate:
+            sub === "fly"
+              ? winnerOnLeft
+                ? 540
+                : -540
+              : sub === "land"
+                ? winnerOnLeft
+                  ? 720
+                  : -720
+                : 0,
+          opacity: sub === "land" ? 0 : 1,
+        }}
+        transition={{
+          duration: sub === "fly" ? 0.65 : sub === "land" ? 0.35 : 0.2,
+          ease: sub === "fly" ? "easeOut" : "easeIn",
+        }}
+      >
+        <FighterSprite
+          character={loserCharacter}
+          pose={loserPose}
+          flip={winnerOnLeft}
+          width={140}
+        />
+      </motion.div>
+
+      {/* Dust cloud where loser lands */}
+      <AnimatePresence>
+        {sub === "land" && (
+          <motion.div
+            key="dust"
+            className="absolute pointer-events-none rounded-full"
+            style={{
+              left: winnerOnLeft ? "85%" : "15%",
+              bottom: "10%",
+              width: 200,
+              height: 60,
+              x: "-50%",
+              background:
+                "radial-gradient(ellipse, rgba(180,170,150,0.7) 0%, transparent 70%)",
+              filter: "blur(4px)",
+            }}
+            initial={{ scale: 0.4, opacity: 0 }}
+            animate={{ scale: [0.4, 1.6, 2], opacity: [0, 0.9, 0] }}
+            transition={{ duration: 0.5 }}
+          />
         )}
       </AnimatePresence>
     </motion.div>

@@ -1,19 +1,22 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "framer-motion";
 import type { Character } from "@/lib/characters";
+import { fighterAsset, type CharacterId } from "@/lib/assets";
 
 /**
- * Stylized chibi anime fighter sprite — each roster character is built
- * as a "knockoff" of an iconic shōnen archetype (Naruto / Dragon Ball /
- * Bleach lineage). Pure SVG primitives, no external art.
+ * Anime fighter sprite — image-first with an SVG fallback.
  *
- * Per-character design lives in CHARACTER_DESIGN below — hair, outfit
- * palette, accessories, eye/mouth defaults. The body, arms, and legs
- * are shared across all fighters and recolored to match the outfit.
+ * Render order:
+ *   1. Try `/fighters/<id>/idle.png` (or pose-specific if available).
+ *      Recommended: 512px+ wide, transparent BG, full-body kung-fu stance.
+ *   2. On <img> error, fall back to the procedural SVG chibi defined below
+ *      (shōnen-archetype design — Goku/Naruto/Bleach knockoffs).
  *
- * Keep silhouettes/details at the "anime trope" level — recognizable
- * shōnen vibes without copying a specific licensed character.
+ * Pose lifecycle (idle/windup/impact/recover/hit/ko/victory) is driven by
+ * CSS transforms applied to the OUTER motion.div, so a single idle.png
+ * works for all poses out of the gate; pose-specific PNGs override.
  *
  * # CORE_CANDIDATE — drop in any roster with {id, color, emoji}.
  */
@@ -136,6 +139,12 @@ export default function FighterSprite({
   const height = width * 1.85;
   const design = designFor(character);
 
+  // Image-first: when an asset PNG exists at the conventional path we use it
+  // and skip the procedural SVG. The `imgBroken` state flips on <img onError>
+  // (404 / missing) so future renders go straight to SVG without re-fetching.
+  const [imgBroken, setImgBroken] = useState(false);
+  const imageSrc = fighterAsset(character.id as CharacterId, "idle");
+
   const poseTransform = (() => {
     switch (pose) {
       case "windup":
@@ -167,6 +176,9 @@ export default function FighterSprite({
 
   const isKO = pose === "ko";
   const isHit = pose === "hit";
+  const filterStyle = isKO
+    ? "brightness(0.6) saturate(0.6)"
+    : `drop-shadow(0 0 4px ${character.color}aa) drop-shadow(0 4px 6px rgba(0,0,0,0.5))`;
 
   return (
     <motion.div
@@ -180,18 +192,32 @@ export default function FighterSprite({
       transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
     >
       <div className={pose === "idle" ? "idle-bob w-full h-full" : "w-full h-full"}>
-        <svg
-          viewBox="-10 -20 120 190"
-          width="100%"
-          height="100%"
-          xmlns="http://www.w3.org/2000/svg"
-          style={{
-            overflow: "visible",
-            filter: isKO
-              ? "brightness(0.6) saturate(0.6)"
-              : `drop-shadow(0 0 4px ${character.color}aa) drop-shadow(0 4px 6px rgba(0,0,0,0.5))`,
-          }}
-        >
+        {!imgBroken ? (
+          // eslint-disable-next-line @next/next/no-img-element -- needs onError to swap to SVG fallback
+          <img
+            src={imageSrc}
+            alt={character.name}
+            width={width}
+            height={height}
+            onError={() => setImgBroken(true)}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "contain",
+              filter: filterStyle,
+            }}
+          />
+        ) : (
+          <svg
+            viewBox="-10 -20 120 190"
+            width="100%"
+            height="100%"
+            xmlns="http://www.w3.org/2000/svg"
+            style={{
+              overflow: "visible",
+              filter: filterStyle,
+            }}
+          >
           <defs>
             <linearGradient id={`outfit-${character.id}`} x1="0%" y1="0%" x2="0%" y2="100%">
               <stop offset="0%" stopColor={design.outfitMain} />
@@ -207,17 +233,18 @@ export default function FighterSprite({
             </linearGradient>
           </defs>
 
-          {/* Order matters: back-layer → middle → front */}
-          <FighterLegs design={design} characterId={character.id} />
-          <FighterBody design={design} characterId={character.id} />
-          <FighterArmBack design={design} characterId={character.id} />
-          <HairBack design={design} characterId={character.id} />
-          <Head />
-          <Face character={character} design={design} pose={pose} />
-          <HairFront design={design} characterId={character.id} />
-          <Accessory design={design} />
-          <FighterArmFront design={design} characterId={character.id} />
-        </svg>
+            {/* Order matters: back-layer → middle → front */}
+            <FighterLegs design={design} characterId={character.id} />
+            <FighterBody design={design} characterId={character.id} />
+            <FighterArmBack design={design} characterId={character.id} />
+            <HairBack design={design} characterId={character.id} />
+            <Head />
+            <Face character={character} design={design} pose={pose} />
+            <HairFront design={design} characterId={character.id} />
+            <Accessory design={design} />
+            <FighterArmFront design={design} characterId={character.id} />
+          </svg>
+        )}
       </div>
 
       {isHit && (

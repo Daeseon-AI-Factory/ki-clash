@@ -48,6 +48,33 @@ export const characterAsset = (
 ): string => `/characters/${id}/${expression}.png`;
 
 // ────────────────────────────────────────────────────────────────────────────
+// Fighter assets — in-arena combatant sprites (separate from menu portraits).
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Path to a fighter's pose-specific sprite PNG.
+ *
+ * Convention: drop a transparent PNG at this path and FighterSprite renders
+ * it instead of the SVG fallback. Recommended size: ≥512px wide, transparent
+ * background, full-body kung-fu stance facing right.
+ *
+ *   web/public/fighters/<id>/idle.png    (required to enable images)
+ *   web/public/fighters/<id>/windup.png  (optional)
+ *   web/public/fighters/<id>/impact.png  (optional)
+ *   web/public/fighters/<id>/hit.png     (optional)
+ *   web/public/fighters/<id>/ko.png      (optional)
+ *   web/public/fighters/<id>/victory.png (optional)
+ *
+ * The component currently uses idle.png for ALL poses and applies CSS
+ * transforms for pose variation. Pose-specific files take precedence once
+ * provided.
+ */
+export const fighterAsset = (
+  id: CharacterId,
+  pose: "idle" | "windup" | "impact" | "hit" | "ko" | "victory" = "idle",
+): string => `/fighters/${id}/${pose}.png`;
+
+// ────────────────────────────────────────────────────────────────────────────
 // Card assets
 // ────────────────────────────────────────────────────────────────────────────
 
