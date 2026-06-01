@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import type { Character } from "@/lib/characters";
-import { PixelPortrait } from "@/components/deprecated/pixel-art";
+import CharacterAvatar from "@/components/arena/CharacterAvatar";
 
 interface AITrashTalkProps {
   character: Character;
@@ -31,7 +31,7 @@ export default function AITrashTalk({ character, turnNumber }: AITrashTalkProps)
                     flex items-start gap-3"
       >
         <div className="flex-shrink-0">
-          <PixelPortrait characterId={character.id} size="sm" />
+          <CharacterAvatar characterId={character.id} size="sm" />
         </div>
         <p className="text-sm text-gray-300 italic leading-relaxed">
           &ldquo;{line}&rdquo;

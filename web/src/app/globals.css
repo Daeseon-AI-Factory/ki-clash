@@ -237,3 +237,110 @@ body {
 .animate-match-result-slam {
   animation: match-result-slam 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
+
+/* ============================================================ */
+/* ---- Phase 7: Cinematic finale + Anime Ki-Aura arena ---- */
+/* ============================================================ */
+
+/* Violent screen shake — used during the MatchFinale title slam */
+@keyframes cinematic-shake {
+  0%, 100% { transform: translate(0, 0); }
+  10%      { transform: translate(-14px, -8px); }
+  20%      { transform: translate(14px, -6px); }
+  30%      { transform: translate(-12px, 8px); }
+  40%      { transform: translate(10px, 10px); }
+  50%      { transform: translate(-8px, -12px); }
+  60%      { transform: translate(8px, 4px); }
+  70%      { transform: translate(-6px, -4px); }
+  80%      { transform: translate(6px, -2px); }
+  90%      { transform: translate(-2px, 2px); }
+}
+
+.animate-cinematic-shake {
+  animation: cinematic-shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+/* Aura pulse — radial glow breathing in/out (idle fighters, MatchFinale outer halo) */
+@keyframes aura-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50%      { transform: scale(1.08); opacity: 1; }
+}
+
+.animate-aura-pulse {
+  animation: aura-pulse 2.4s ease-in-out infinite;
+}
+
+/* Faster pulse used during action animation phases */
+.animate-aura-pulse-fast {
+  animation: aura-pulse 0.8s ease-in-out infinite;
+}
+
+/* Conic-gradient aura ring rotation */
+@keyframes aura-rotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.animate-aura-rotate {
+  animation: aura-rotate 6s linear infinite;
+}
+
+/* Background sky — shifts between deep purple, magenta, and orange */
+@keyframes sky-shift {
+  0%   { background: linear-gradient(180deg, #1e1b4b 0%, #4c1d95 40%, #c2410c 100%); }
+  50%  { background: linear-gradient(180deg, #312e81 0%, #6d28d9 40%, #ea580c 100%); }
+  100% { background: linear-gradient(180deg, #1e1b4b 0%, #4c1d95 40%, #c2410c 100%); }
+}
+
+.animate-sky-shift {
+  animation: sky-shift 14s ease-in-out infinite;
+  background: linear-gradient(180deg, #1e1b4b 0%, #4c1d95 40%, #c2410c 100%);
+}
+
+/* Twinkling background stars */
+@keyframes twinkle {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50%      { opacity: 1; transform: scale(1.4); }
+}
+
+.animate-twinkle {
+  animation: twinkle 3s ease-in-out infinite;
+}
+
+/* Energy ball — pulsing white-hot orb during energy-wave windup */
+@keyframes energy-ball {
+  0%, 100% { transform: scale(0.85); }
+  50%      { transform: scale(1.2); }
+}
+
+.animate-energy-ball {
+  animation: energy-ball 0.4s ease-in-out infinite;
+}
+
+/* Idle fighter breathing — subtle vertical bob */
+@keyframes idle-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+
+.idle-bob {
+  animation: idle-bob 2.6s ease-in-out infinite;
+}
+
+/* Speed lines for MatchFinale zoom stage — rotating radial pattern */
+@keyframes speed-lines-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.speed-lines {
+  background: repeating-conic-gradient(
+    from 0deg at 50% 50%,
+    transparent 0deg,
+    transparent 7deg,
+    rgba(255, 255, 255, 0.08) 8deg,
+    rgba(255, 255, 255, 0.04) 9deg,
+    transparent 10deg
+  );
+  animation: speed-lines-spin 10s linear infinite;
+}

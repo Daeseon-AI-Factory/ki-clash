@@ -7,7 +7,7 @@ import {
   getAdFreeStatus,
   createAdFreeCheckout,
 } from "@/lib/api";
-import { PixelPortrait } from "@/components/deprecated/pixel-art";
+import CharacterAvatar from "@/components/arena/CharacterAvatar";
 
 export default function ShopPage() {
   const [adFree, setAdFree] = useState(false);
@@ -65,8 +65,8 @@ export default function ShopPage() {
         {/* Ad-Free Pass Card */}
         <div className="bg-gradient-to-br from-purple-900/40 to-blue-900/40 border border-purple-500/30 rounded-2xl p-6 space-y-4">
           <div className="flex justify-center gap-2">
-            <PixelPortrait characterId="haneul" size="md" />
-            <PixelPortrait characterId="bora" size="md" />
+            <CharacterAvatar characterId="haneul" size="md" />
+            <CharacterAvatar characterId="bora" size="md" />
           </div>
 
           <div>

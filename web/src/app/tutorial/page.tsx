@@ -4,10 +4,10 @@ import Link from "next/link";
 import type { Action } from "@/lib/api";
 import ActionCard from "@/components/ActionCard";
 import KiMeter from "@/components/KiMeter";
-import { BattleArena } from "@/components/deprecated/pixel-art";
-import { usePixelAnimation } from "@/hooks/deprecated/usePixelAnimation";
+import KiAuraArena from "@/components/arena/KiAuraArena";
+import { useActionAnimation } from "@/hooks/useActionAnimation";
 import { useTutorial } from "@/hooks/useTutorial";
-import type { PixelAction } from "@/lib/deprecated/pixel-art-types";
+import { API_TO_ACTION, type ActionKind } from "@/lib/actions";
 
 const ACTIONS: Action[] = ["charge", "block", "attack", "energy_wave", "teleport"];
 
@@ -17,14 +17,6 @@ const ACTION_EMOJI: Record<string, string> = {
   attack: "\uD83D\uDC4A",
   energy_wave: "\uD83D\uDD25",
   teleport: "\uD83D\uDCA8",
-};
-
-const ACTION_TO_PIXEL: Record<Action, PixelAction> = {
-  charge: "charge",
-  block: "block",
-  attack: "attack",
-  energy_wave: "energyWave",
-  teleport: "teleport",
 };
 
 export default function TutorialPage() {
@@ -44,18 +36,18 @@ export default function TutorialPage() {
   } = useTutorial();
 
   const {
-    action: pixelAct,
-    phase: pixelPhase,
-    triggerAction: triggerPixel,
-  } = usePixelAnimation();
+    action: arenaAct,
+    phase: arenaPhase,
+    triggerAction: triggerArena,
+  } = useActionAnimation();
 
-  // Derive AI pixel action — synced to same phase as player
-  const aiPixelAction: PixelAction | null =
-    pixelAct && aiAction ? ACTION_TO_PIXEL[aiAction as Action] : null;
+  // Derive AI action for the arena — synced to the same phase as the player.
+  const aiArenaAction: ActionKind | null =
+    arenaAct && aiAction ? API_TO_ACTION[aiAction as Action] : null;
 
   const handleSubmit = (action: Action) => {
     submitAction(action);
-    triggerPixel(ACTION_TO_PIXEL[action]);
+    triggerArena(API_TO_ACTION[action]);
   };
 
   return (
@@ -70,7 +62,7 @@ export default function TutorialPage() {
             </p>
           </div>
 
-          <BattleArena
+          <KiAuraArena
             playerCharacterId="haneul"
             aiCharacterId="bora"
           />
@@ -121,7 +113,7 @@ export default function TutorialPage() {
             <h2 className="text-xl font-bold">{currentStep.title}</h2>
           </div>
 
-          <BattleArena
+          <KiAuraArena
             playerCharacterId="haneul"
             aiCharacterId="bora"
           />
@@ -162,12 +154,12 @@ export default function TutorialPage() {
       {/* REVEALING — show what happened */}
       {phase === "revealing" && currentStep && playerAction && aiAction && (
         <div className="w-full max-w-2xl space-y-6">
-          <BattleArena
+          <KiAuraArena
             playerCharacterId="haneul"
             aiCharacterId="bora"
-            playerAction={pixelAct}
-            aiAction={aiPixelAction}
-            phase={pixelPhase}
+            playerAction={arenaAct}
+            aiAction={aiArenaAction}
+            phase={arenaPhase}
           />
 
           <div className="flex items-center justify-center gap-8 py-4">
@@ -224,7 +216,7 @@ export default function TutorialPage() {
       {/* COMPLETE */}
       {phase === "complete" && (
         <div className="w-full max-w-md text-center space-y-6">
-          <BattleArena
+          <KiAuraArena
             playerCharacterId="haneul"
             aiCharacterId="bora"
           />

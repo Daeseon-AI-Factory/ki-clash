@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import Link from "next/link";
-import { PixelPortrait } from "@/components/deprecated/pixel-art";
+import CharacterAvatar from "@/components/arena/CharacterAvatar";
 import { CHARACTERS } from "@/lib/characters";
 
 /**
@@ -84,7 +84,7 @@ export default function InvitePage() {
                 borderColor: selectedChar === char.id ? char.color : undefined,
               }}
             >
-              <PixelPortrait characterId={char.id} size="md" />
+              <CharacterAvatar characterId={char.id} size="md" />
               <span className="text-xs font-bold">{char.name}</span>
             </button>
           ))}

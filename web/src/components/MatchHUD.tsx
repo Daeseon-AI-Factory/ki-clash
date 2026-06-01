@@ -1,10 +1,9 @@
 "use client";
 
 import type { GameState } from "@/lib/api";
-import type { Character } from "@/lib/characters";
+import { getCharacter, type Character } from "@/lib/characters";
 import KiMeter from "./KiMeter";
 import AIThinking from "./AIThinking";
-import { PixelPortrait } from "./deprecated/pixel-art";
 
 interface MatchHUDProps {
   gameState: GameState;
@@ -115,9 +114,27 @@ function ScoreDots({
   characterId?: string;
 }) {
   const filled = color === "green" ? "bg-green-500" : "bg-red-500";
+  const character = characterId ? getCharacter(characterId) : undefined;
+
   return (
     <div className="flex flex-col items-center gap-1">
-      {characterId && <PixelPortrait characterId={characterId} size="sm" />}
+      {character && (
+        <div className="relative flex items-center justify-center w-12 h-12">
+          {/* Aura halo behind the emoji — uses the character's themed color */}
+          <div
+            className="absolute inset-0 rounded-full blur-md animate-aura-pulse"
+            style={{
+              background: `radial-gradient(circle, ${character.color}cc, transparent 70%)`,
+            }}
+          />
+          <span
+            className="relative text-3xl select-none"
+            style={{ filter: `drop-shadow(0 0 4px ${character.color})` }}
+          >
+            {character.emoji}
+          </span>
+        </div>
+      )}
       <span className="text-xs text-gray-400">{label}</span>
       <div className="flex gap-1">
         {[0, 1].map((i) => (

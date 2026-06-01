@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useGame } from "@/hooks/useGame";
 import { useSoundEffects } from "@/hooks/useSoundEffects";
 import { getCharacter } from "@/lib/characters";
-import type { Action, Difficulty, TurnOutcome } from "@/lib/api";
+import type { Difficulty, TurnOutcome } from "@/lib/api";
 import Link from "next/link";
 import GameBoard from "@/components/GameBoard";
 import MatchHUD from "@/components/MatchHUD";
@@ -12,11 +12,12 @@ import TurnReveal, { getShakeClass } from "@/components/TurnReveal";
 import CharacterSelect from "@/components/CharacterSelect";
 import AITrashTalk from "@/components/AITrashTalk";
 import MuteButton from "@/components/MuteButton";
-import { BattleArena, PixelPortrait } from "@/components/deprecated/pixel-art";
+import KiAuraArena from "@/components/arena/KiAuraArena";
+import MatchFinale from "@/components/finale/MatchFinale";
 import { AdBanner, InterstitialAd } from "@/components/ads";
-import { usePixelAnimation } from "@/hooks/deprecated/usePixelAnimation";
+import { useActionAnimation } from "@/hooks/useActionAnimation";
 import { useAdTiming } from "@/hooks/useAdTiming";
-import type { PixelAction } from "@/lib/deprecated/pixel-art-types";
+import { API_TO_ACTION, type ActionKind } from "@/lib/actions";
 
 /** Map turn outcomes to sound names */
 const OUTCOME_SOUND: Record<TurnOutcome, "hit" | "clash" | "block" | "dodge" | "charge"> = {
@@ -26,15 +27,6 @@ const OUTCOME_SOUND: Record<TurnOutcome, "hit" | "clash" | "block" | "dodge" | "
   blocked: "block",
   dodged: "dodge",
   neutral: "charge",
-};
-
-/** Map backend Action to PixelAction for battle arena animation */
-const ACTION_TO_PIXEL: Record<Action, PixelAction> = {
-  charge: "charge",
-  block: "block",
-  attack: "attack",
-  energy_wave: "energyWave",
-  teleport: "teleport",
 };
 
 export default function Home() {
@@ -58,27 +50,13 @@ export default function Home() {
 
   const { play, muted, toggleMute } = useSoundEffects();
   const [shakeClass, setShakeClass] = useState("");
-  const { action: pixelAction, phase: pixelPhase, triggerAction: triggerPixelAction } = usePixelAnimation();
-  const {
-    action: finishAction,
-    phase: finishPhase,
-    triggerAction: triggerFinish,
-  } = usePixelAnimation({ windupMs: 600, impactMs: 1000, recoverMs: 1200 });
+  const { action: arenaAction, phase: arenaPhase, triggerAction: triggerArenaAction } =
+    useActionAnimation();
   const { showInterstitial, showAds, onMatchEnd, dismissInterstitial } = useAdTiming();
 
-  // Derive AI pixel action from lastTurn — synced to same phase as player
-  const aiPixelAction: PixelAction | null =
-    pixelAction && lastTurn ? ACTION_TO_PIXEL[lastTurn.p2_action] : null;
-
-  // Derive finish actions — winner gets "victory", loser gets "defeat"
-  const playerFinishAction: PixelAction | null =
-    finishAction && matchResult
-      ? matchResult.winner === "p1" ? "victory" : matchResult.winner === "p2" ? "defeat" : "victory"
-      : null;
-  const aiFinishAction: PixelAction | null =
-    finishAction && matchResult
-      ? matchResult.winner === "p2" ? "victory" : matchResult.winner === "p1" ? "defeat" : "victory"
-      : null;
+  // Derive AI's animated action from lastTurn — synced to the same phase as the player.
+  const aiArenaAction: ActionKind | null =
+    arenaAction && lastTurn ? API_TO_ACTION[lastTurn.p2_action] : null;
 
   // Derive character objects from IDs (memoized to avoid re-lookups)
   const playerCharacter = useMemo(
@@ -90,13 +68,9 @@ export default function Home() {
     [aiCharacterId]
   );
 
-  // Display names: name only (pixel portraits handle visual identity)
-  const playerDisplayName = playerCharacter
-    ? playerCharacter.name
-    : playerName;
-  const aiDisplayName = aiCharacter
-    ? aiCharacter.name
-    : "AI";
+  // Display names — use character name if chosen, else fall back to player/AI label.
+  const playerDisplayName = playerCharacter ? playerCharacter.name : playerName;
+  const aiDisplayName = aiCharacter ? aiCharacter.name : "AI";
 
   // Track previous phase to detect transitions
   const prevPhaseRef = useRef(phase);
@@ -106,15 +80,21 @@ export default function Home() {
     const prevPhase = prevPhaseRef.current;
     prevPhaseRef.current = phase;
 
-    // Reveal sound + pixel animation when entering revealing/round_end/match_end from loading
-    if (prevPhase === "loading" && phase !== "loading" && phase !== "playing" && phase !== "lobby" && phase !== "character_select") {
+    // Reveal sound + arena animation when entering revealing/round_end/match_end from loading
+    if (
+      prevPhase === "loading" &&
+      phase !== "loading" &&
+      phase !== "playing" &&
+      phase !== "lobby" &&
+      phase !== "character_select"
+    ) {
       play("reveal");
 
       // Outcome sound after a short delay (let reveal sweep finish)
       if (lastTurn) {
         setTimeout(() => play(OUTCOME_SOUND[lastTurn.outcome]), 300);
-        // Trigger pixel arena animation matching the player's action
-        triggerPixelAction(ACTION_TO_PIXEL[lastTurn.p1_action]);
+        // Drive the arena's action animation lifecycle.
+        triggerArenaAction(API_TO_ACTION[lastTurn.p1_action]);
       }
     }
 
@@ -125,15 +105,14 @@ export default function Home() {
       }, 600);
     }
 
-    // Match result sounds + victory/defeat animation + ad trigger
+    // Match result — sound + ad trigger. (MatchFinale handles its own visual cinematics.)
     if (phase === "match_end" && matchResult) {
-      triggerFinish(matchResult.winner === "p1" ? "victory" : "defeat");
       setTimeout(() => {
         play(matchResult.winner === "p1" ? "round_win" : "round_lose");
-      }, 600);
+      }, 1500); // delay until after vignette + zoom — lands with the title slam
       onMatchEnd();
     }
-  }, [phase, lastTurn, lastRound, matchResult, play, onMatchEnd, triggerFinish]);
+  }, [phase, lastTurn, lastRound, matchResult, play, onMatchEnd, triggerArenaAction]);
 
   /** Countdown beat handler — plays click sound on each tick */
   const handleCountdownBeat = useCallback(() => {
@@ -151,7 +130,9 @@ export default function Home() {
   }, []);
 
   return (
-    <div className={`min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4 ${shakeClass}`}>
+    <div
+      className={`min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4 ${shakeClass}`}
+    >
       {/* Mute toggle */}
       <MuteButton muted={muted} onToggle={toggleMute} />
 
@@ -169,14 +150,17 @@ export default function Home() {
       {phase === "lobby" && (
         <>
           <LobbyScreen onStart={selectDifficulty} />
-          {showAds && <AdBanner adSlot={process.env.NEXT_PUBLIC_ADSENSE_BANNER_SLOT || ""} className="mt-6 w-full max-w-md" />}
+          {showAds && (
+            <AdBanner
+              adSlot={process.env.NEXT_PUBLIC_ADSENSE_BANNER_SLOT || ""}
+              className="mt-6 w-full max-w-md"
+            />
+          )}
         </>
       )}
 
       {/* CHARACTER SELECT — Pick your fighter */}
-      {phase === "character_select" && (
-        <CharacterSelect onSelect={startGame} />
-      )}
+      {phase === "character_select" && <CharacterSelect onSelect={startGame} />}
 
       {/* LOADING */}
       {phase === "loading" && (
@@ -189,9 +173,15 @@ export default function Home() {
       {/* PLAYING — Main game with inline selection timer */}
       {phase === "playing" && gameState && (
         <div className="w-full max-w-2xl space-y-6">
-          <MatchHUD gameState={gameState} playerName={playerName} showAIThinking playerCharacter={playerCharacter} aiCharacter={aiCharacter} />
+          <MatchHUD
+            gameState={gameState}
+            playerName={playerName}
+            showAIThinking
+            playerCharacter={playerCharacter}
+            aiCharacter={aiCharacter}
+          />
           {playerCharacterId && aiCharacterId && (
-            <BattleArena
+            <KiAuraArena
               playerCharacterId={playerCharacterId}
               aiCharacterId={aiCharacterId}
             />
@@ -214,17 +204,30 @@ export default function Home() {
       {/* REVEALING — Turn result */}
       {phase === "revealing" && (
         <div className="w-full max-w-2xl space-y-6">
-          {gameState && <MatchHUD gameState={gameState} playerName={playerName} playerCharacter={playerCharacter} aiCharacter={aiCharacter} />}
-          {playerCharacterId && aiCharacterId && (
-            <BattleArena
-              playerCharacterId={playerCharacterId}
-              aiCharacterId={aiCharacterId}
-              playerAction={pixelAction}
-              aiAction={aiPixelAction}
-              phase={pixelPhase}
+          {gameState && (
+            <MatchHUD
+              gameState={gameState}
+              playerName={playerName}
+              playerCharacter={playerCharacter}
+              aiCharacter={aiCharacter}
             />
           )}
-          <TurnReveal turnResult={lastTurn} visible={true} onOutcomeRevealed={handleOutcomeRevealed} playerName={playerDisplayName} aiName={aiDisplayName} />
+          {playerCharacterId && aiCharacterId && (
+            <KiAuraArena
+              playerCharacterId={playerCharacterId}
+              aiCharacterId={aiCharacterId}
+              playerAction={arenaAction}
+              aiAction={aiArenaAction}
+              phase={arenaPhase}
+            />
+          )}
+          <TurnReveal
+            turnResult={lastTurn}
+            visible={true}
+            onOutcomeRevealed={handleOutcomeRevealed}
+            playerName={playerDisplayName}
+            aiName={aiDisplayName}
+          />
           <button
             onClick={continueFromReveal}
             className="w-full max-w-2xl py-3 bg-gray-700 hover:bg-gray-600 rounded-xl
@@ -238,17 +241,30 @@ export default function Home() {
       {/* ROUND END */}
       {phase === "round_end" && lastRound && (
         <div className="w-full max-w-2xl space-y-6">
-          {gameState && <MatchHUD gameState={gameState} playerName={playerName} playerCharacter={playerCharacter} aiCharacter={aiCharacter} />}
-          {playerCharacterId && aiCharacterId && (
-            <BattleArena
-              playerCharacterId={playerCharacterId}
-              aiCharacterId={aiCharacterId}
-              playerAction={pixelAction}
-              aiAction={aiPixelAction}
-              phase={pixelPhase}
+          {gameState && (
+            <MatchHUD
+              gameState={gameState}
+              playerName={playerName}
+              playerCharacter={playerCharacter}
+              aiCharacter={aiCharacter}
             />
           )}
-          <TurnReveal turnResult={lastTurn} visible={true} onOutcomeRevealed={handleOutcomeRevealed} playerName={playerDisplayName} aiName={aiDisplayName} />
+          {playerCharacterId && aiCharacterId && (
+            <KiAuraArena
+              playerCharacterId={playerCharacterId}
+              aiCharacterId={aiCharacterId}
+              playerAction={arenaAction}
+              aiAction={aiArenaAction}
+              phase={arenaPhase}
+            />
+          )}
+          <TurnReveal
+            turnResult={lastTurn}
+            visible={true}
+            onOutcomeRevealed={handleOutcomeRevealed}
+            playerName={playerDisplayName}
+            aiName={aiDisplayName}
+          />
           <div className="text-center py-6 bg-gray-800 rounded-xl">
             <p className="text-sm text-gray-400 uppercase tracking-wider">
               Round {lastRound.round_number} Complete
@@ -282,59 +298,25 @@ export default function Home() {
         </div>
       )}
 
-      {/* MATCH END */}
+      {/* MATCH END — cinematic finale owns the entire screen */}
       {phase === "match_end" && matchResult && (
-        <div className="w-full max-w-2xl text-center space-y-6">
-          {/* Battle arena with victory/defeat animation */}
-          {playerCharacterId && aiCharacterId && (
-            <BattleArena
-              playerCharacterId={playerCharacterId}
-              aiCharacterId={aiCharacterId}
-              playerAction={playerFinishAction}
-              aiAction={aiFinishAction}
-              phase={finishPhase}
-            />
-          )}
-
-          <div className="py-4">
-            <p
-              className={`text-5xl font-black animate-match-result-slam ${
-                matchResult.winner === "p1"
-                  ? "text-green-400"
-                  : matchResult.winner === "p2"
-                    ? "text-red-400"
-                    : "text-yellow-400"
-              }`}
-            >
-              {matchResult.winner === "p1"
-                ? "VICTORY!"
-                : matchResult.winner === "p2"
-                  ? "DEFEAT!"
-                  : "DRAW!"}
-            </p>
-          </div>
-
-          <div className="bg-gray-800 rounded-xl p-6 space-y-3">
-            <div className="flex justify-between text-lg">
-              <span className="text-gray-400">Final Score</span>
-              <span className="font-bold">
-                {matchResult.rounds_won_p1} — {matchResult.rounds_won_p2}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">Total Turns</span>
-              <span className="font-medium">{matchResult.total_turns}</span>
-            </div>
-          </div>
-
-          <button
-            onClick={backToLobby}
-            className="w-full py-4 bg-green-600 hover:bg-green-500 rounded-xl
-                       text-xl font-bold transition-colors"
-          >
-            Play Again
-          </button>
-        </div>
+        <MatchFinale
+          result={
+            matchResult.winner === "p1"
+              ? "win"
+              : matchResult.winner === "p2"
+                ? "loss"
+                : "draw"
+          }
+          finalScore={{
+            player: matchResult.rounds_won_p1,
+            opponent: matchResult.rounds_won_p2,
+          }}
+          totalTurns={matchResult.total_turns}
+          playerCharacter={playerCharacter}
+          opponentCharacter={aiCharacter}
+          onPlayAgain={backToLobby}
+        />
       )}
 
       {/* Navigation links on lobby */}
