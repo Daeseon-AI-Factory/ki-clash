@@ -75,6 +75,21 @@ export default function Home() {
   // Track previous phase to detect transitions
   const prevPhaseRef = useRef(phase);
 
+  // Auto-advance — user explicitly wanted faster pacing ("3초후에 다음턴으로").
+  // TurnReveal's outcome lands ~2.1s after entering the revealing phase;
+  // a further 3s holds the result, then we advance automatically. The
+  // "Next Turn" / "Next Round" buttons stay around as a skip-ahead option.
+  useEffect(() => {
+    if (phase === "revealing") {
+      const t = setTimeout(continueFromReveal, 5100);
+      return () => clearTimeout(t);
+    }
+    if (phase === "round_end") {
+      const t = setTimeout(continueFromRound, 4500);
+      return () => clearTimeout(t);
+    }
+  }, [phase, continueFromReveal, continueFromRound]);
+
   // Play sounds on phase transitions
   useEffect(() => {
     const prevPhase = prevPhaseRef.current;
@@ -231,10 +246,10 @@ export default function Home() {
           />
           <button
             onClick={continueFromReveal}
-            className="w-full max-w-2xl py-3 bg-gray-700 hover:bg-gray-600 rounded-xl
-                       text-lg font-medium transition-colors"
+            className="w-full max-w-2xl py-2 bg-gray-700/60 hover:bg-gray-600 rounded-xl
+                       text-sm font-medium text-gray-300 transition-colors"
           >
-            Next Turn →
+            Skip →
           </button>
         </div>
       )}
@@ -292,10 +307,10 @@ export default function Home() {
           </div>
           <button
             onClick={continueFromRound}
-            className="w-full py-3 bg-blue-600 hover:bg-blue-500 rounded-xl
-                       text-lg font-bold transition-colors"
+            className="w-full py-2 bg-gray-700/60 hover:bg-gray-600 rounded-xl
+                       text-sm font-medium text-gray-300 transition-colors"
           >
-            Next Round →
+            Skip →
           </button>
         </div>
       )}
