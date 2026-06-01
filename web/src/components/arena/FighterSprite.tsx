@@ -1,9 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import type { Character } from "@/lib/characters";
 import { fighterAsset, type CharacterId } from "@/lib/assets";
+
+/** Fallback chain step — pose-specific PNG → idle PNG → procedural SVG. */
+type ImageAttempt = "pose" | "idle" | "svg";
+
+/** Map FighterPose → asset path pose. `recover` collapses to `impact`. */
+function poseToAssetPose(
+  pose: "idle" | "windup" | "impact" | "recover" | "hit" | "ko" | "victory",
+): "idle" | "windup" | "impact" | "hit" | "ko" | "victory" {
+  return pose === "recover" ? "impact" : pose;
+}
 
 /**
  * Anime fighter sprite — image-first with an SVG fallback.
@@ -139,11 +149,32 @@ export default function FighterSprite({
   const height = width * 1.85;
   const design = designFor(character);
 
-  // Image-first: when an asset PNG exists at the conventional path we use it
-  // and skip the procedural SVG. The `imgBroken` state flips on <img onError>
-  // (404 / missing) so future renders go straight to SVG without re-fetching.
-  const [imgBroken, setImgBroken] = useState(false);
-  const imageSrc = fighterAsset(character.id as CharacterId, "idle");
+  // 3-step fallback chain per render:
+  //   1. pose-specific PNG (e.g. /fighters/haneul/windup.png)
+  //   2. idle.png for this character
+  //   3. procedural SVG
+  // When the pose or character changes, restart the chain — the asset may
+  // exist for one pose but not another.
+  const assetPose = poseToAssetPose(pose);
+  const [attempt, setAttempt] = useState<ImageAttempt>(
+    assetPose === "idle" ? "idle" : "pose",
+  );
+  useEffect(() => {
+    setAttempt(assetPose === "idle" ? "idle" : "pose");
+  }, [assetPose, character.id]);
+
+  const imageSrc =
+    attempt === "pose"
+      ? fighterAsset(character.id as CharacterId, assetPose)
+      : attempt === "idle"
+        ? fighterAsset(character.id as CharacterId, "idle")
+        : null;
+
+  const onImageError = () => {
+    setAttempt((prev) =>
+      prev === "pose" ? "idle" : prev === "idle" ? "svg" : "svg",
+    );
+  };
 
   const poseTransform = (() => {
     switch (pose) {
@@ -192,14 +223,16 @@ export default function FighterSprite({
       transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
     >
       <div className={pose === "idle" ? "idle-bob w-full h-full" : "w-full h-full"}>
-        {!imgBroken ? (
-          // eslint-disable-next-line @next/next/no-img-element -- needs onError to swap to SVG fallback
+        {attempt !== "svg" && imageSrc ? (
+          // eslint-disable-next-line @next/next/no-img-element -- needs onError to walk the fallback chain
           <img
+            // key forces a fresh <img> when src changes so onError fires again
+            key={imageSrc}
             src={imageSrc}
             alt={character.name}
             width={width}
             height={height}
-            onError={() => setImgBroken(true)}
+            onError={onImageError}
             style={{
               width: "100%",
               height: "100%",
