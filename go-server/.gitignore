@@ -1,0 +1,6 @@
+# Compiled binaries
+go-server
+ki-clash-go
+*.exe
+*.test
+*.out
