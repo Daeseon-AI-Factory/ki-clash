@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 import type { Character } from "@/lib/characters";
 import FighterSprite from "@/components/arena/FighterSprite";
+import { CharacterFinisher } from "./CharacterFinishers";
 
 /**
  * Cinematic match-end overlay. Plays a staged sequence on mount:
@@ -609,76 +610,14 @@ function FinalBlowStage({
         )}
       </AnimatePresence>
 
-      {/* MASSIVE energy beam — fills the central 35% of viewport height */}
-      <AnimatePresence>
-        {(sub === "fire" || sub === "hit") && (
-          <>
-            {/* Outer halo — soft yellow plasma glow */}
-            <motion.div
-              key="beam-halo"
-              className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
-              style={{
-                left: 0,
-                right: 0,
-                height: "60vh",
-                maxHeight: 500,
-                background:
-                  "radial-gradient(ellipse at center, #FACC1577 0%, #F9731644 40%, transparent 70%)",
-                filter: "blur(40px)",
-                mixBlendMode: "screen",
-              }}
-              initial={{
-                clipPath: winnerOnLeft ? "inset(0 100% 0 0)" : "inset(0 0 0 100%)",
-                opacity: 0,
-              }}
-              animate={{ clipPath: "inset(0 0 0 0)", opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.25 }}
-            />
-            {/* Main beam */}
-            <motion.div
-              key="beam-main"
-              className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
-              style={{
-                left: 0,
-                right: 0,
-                height: 180,
-                background: `linear-gradient(${winnerOnLeft ? 90 : 270}deg,
-                  ${palette.accent}, #F97316, #FACC15, white, #FACC15, #F97316, ${palette.glow})`,
-                filter:
-                  "drop-shadow(0 0 40px #F97316) drop-shadow(0 0 80px #FACC15) blur(1px)",
-                borderRadius: 60,
-              }}
-              initial={{
-                clipPath: winnerOnLeft ? "inset(0 100% 0 0)" : "inset(0 0 0 100%)",
-                opacity: 0,
-                scaleY: 0.3,
-              }}
-              animate={{ clipPath: "inset(0 0 0 0)", opacity: 1, scaleY: 1 }}
-              exit={{ opacity: 0, scaleY: 1.4 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
-            />
-            {/* White-hot core */}
-            <motion.div
-              key="beam-core"
-              className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
-              style={{
-                left: 0,
-                right: 0,
-                height: 50,
-                background:
-                  "linear-gradient(90deg, transparent, white 20%, #FEF3C7 50%, white 80%, transparent)",
-                filter: "drop-shadow(0 0 24px white) blur(1px)",
-                borderRadius: 40,
-              }}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.25 }}
-            />
-          </>
-        )}
-      </AnimatePresence>
+      {/* Character-specific finisher — each fighter gets their own signature
+          ultimate (wind vortex / moon slash / solar flare / ice shatter /
+          meteor bombardment / pink crystal storm) instead of a generic beam. */}
+      <CharacterFinisher
+        characterId={winnerCharacter.id}
+        winnerOnLeft={winnerOnLeft}
+        phase={sub}
+      />
 
       {/* Chromatic RGB split on HIT — world-breaking effect */}
       <AnimatePresence>
