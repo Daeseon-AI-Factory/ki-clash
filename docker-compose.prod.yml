@@ -85,6 +85,9 @@ services:
       PORT: "8001"
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      ENVIRONMENT: production
+      RELEASE: ${RELEASE:-prod}
     expose:
       - "8001"
     healthcheck:

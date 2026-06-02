@@ -14,6 +14,8 @@ import (
 	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 type Session struct {
@@ -98,9 +100,20 @@ func (s *Session) start(ctx context.Context, gameID string) {
 	s.sendWaitingForAction(ctx, sess)
 }
 
-// submitAction stores the player's action, resolves the turn if both
-// have submitted. Atomic via watchAndUpdate (DR-14).
+// submitAction stores the player's action and triggers turn resolution
+// when both players have submitted. Atomic via watchAndUpdate (DR-14).
+//
+// We initially attempted a Lua single-round-trip implementation (see
+// submit_action.lua + Store.submitActionAtomic) but Redis's cjson
+// library doesn't preserve empty-array vs empty-object distinction
+// (round_results: [] → {}), which breaks Python's Pydantic on read.
+// Deferred until the cjson empty-array workaround is solved or until
+// we hit contention high enough to justify the workaround complexity.
+// At our scale WATCH/MULTI/EXEC retries are rare (single-digit per day).
 func (s *Session) submitAction(ctx context.Context, gameID, playerID string, action Action) {
+	timer := prometheus.NewTimer(submitActionLatency)
+	defer timer.ObserveDuration()
+
 	var (
 		validationErr string
 		shouldResolve bool
@@ -163,28 +176,45 @@ func (s *Session) submitAction(ctx context.Context, gameID, playerID string, act
 	}
 
 	_ = s.pubsub.sendToPlayer(ctx, playerID, actionConfirmedMsg(confirmedTurn, action))
+	actionsSubmittedTotal.WithLabelValues(string(action)).Inc()
 
 	if shouldResolve {
 		s.resolveTurn(ctx, gameID, p1ToResolve, p2ToResolve)
 	}
 }
 
-// handleDisconnect kicks off the 30-second forfeit timer + notifies opponent.
+// handleDisconnect removes the player from connected_players (so other
+// instances can see they've left), notifies the opponent, and starts a
+// 30-second forfeit timer.
+//
+// The Redis `connected_players` set is the single source of truth across
+// instances — if the player reconnects to ANY instance within 30s, that
+// instance puts them back in the set and the forfeit timer on this
+// instance sees the reconnect when it re-reads on fire.
 func (s *Session) handleDisconnect(ctx context.Context, gameID, playerID string) {
-	sess, err := s.store.loadSession(ctx, gameID)
-	if err != nil || sess == nil {
+	var opponent string
+	_, err := s.store.watchAndUpdate(ctx, gameID, func(sess *PvPSession) error {
+		// Remove from connected set.
+		filtered := sess.ConnectedPlayers[:0]
+		for _, c := range sess.ConnectedPlayers {
+			if c != playerID {
+				filtered = append(filtered, c)
+			}
+		}
+		sess.ConnectedPlayers = filtered
+		if playerID == sess.Player1ID {
+			opponent = sess.Player2ID
+		} else {
+			opponent = sess.Player1ID
+		}
+		return nil
+	})
+	if err != nil {
 		return
 	}
-	opponent := sess.Player2ID
-	if playerID == sess.Player2ID {
-		opponent = sess.Player1ID
-	}
+
 	_ = s.pubsub.sendToPlayer(ctx, opponent, opponentDisconnectedMsg(DisconnectTimeoutSec))
 
-	// Schedule the forfeit timer. Cross-instance reconnect is detected on fire
-	// by checking pubsub.isLocallyConnected — if the player reconnects to a
-	// different instance, the new instance updates connected_players and the
-	// timer becomes a no-op when it re-reads state.
 	tctx, cancel := context.WithCancel(context.Background())
 	s.mu.Lock()
 	if prev, ok := s.disconnectTasks[disconnectKey(gameID, playerID)]; ok {
@@ -217,6 +247,7 @@ func (s *Session) resolveTurn(ctx context.Context, gameID string, p1, p2 Action)
 		slog.Warn("resolve_turn_failed", "err", err, "game_id", gameID)
 		return
 	}
+	turnsResolvedTotal.Inc()
 
 	// Cancel any pending turn timeout — turn is resolved.
 	s.cancelTurnTimeout(gameID)
@@ -235,6 +266,7 @@ func (s *Session) resolveTurn(ctx context.Context, gameID string, p1, p2 Action)
 	))
 
 	if roundResult != nil {
+		roundsCompletedTotal.WithLabelValues(string(roundResult.Winner)).Inc()
 		for _, pid := range []string{p1id, p2id} {
 			_ = s.pubsub.sendToPlayer(ctx, pid, roundResultMsg(
 				roundResult.RoundNumber,
@@ -245,6 +277,7 @@ func (s *Session) resolveTurn(ctx context.Context, gameID string, p1, p2 Action)
 	}
 
 	if matchResult != nil {
+		matchesCompletedTotal.WithLabelValues(string(matchResult.Winner)).Inc()
 		for _, pid := range []string{p1id, p2id} {
 			_ = s.pubsub.sendToPlayer(ctx, pid, matchResultMsg(
 				winnerLabelFor(matchResult.Winner, pid, p1id),
@@ -347,14 +380,17 @@ func (s *Session) forfeitAfterTimeout(ctx context.Context, gameID, disconnected,
 		return
 	case <-time.After(DisconnectTimeoutSec * time.Second):
 	}
-	// Local presence wins — if they reconnected here, abort.
-	if s.pubsub.isLocallyConnected(disconnected) {
-		return
-	}
 	loadCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	sess, err := s.store.loadSession(loadCtx, gameID)
 	if err != nil || sess == nil || sess.GameState.Status != MatchInProgress {
+		return
+	}
+	// Cross-instance reconnect check: if the player has re-appeared in
+	// connected_players (re-connected to ANY instance — Go or Python),
+	// abort the forfeit. This is the cross-instance correctness fix —
+	// local presence alone isn't enough at >1 worker.
+	if sess.HasConnected(disconnected) {
 		return
 	}
 	// Forfeit — opponent wins.
@@ -376,5 +412,6 @@ func (s *Session) forfeitAfterTimeout(ctx context.Context, gameID, disconnected,
 		winnerLabelFor(forfeitWinner, opponent, sess.Player1ID),
 		sess.GameState.RoundsWonP1, sess.GameState.RoundsWonP2, totalTurns,
 	))
+	forfeitsTotal.Inc()
 	slog.Info("player_forfeited", "game_id", gameID, "player_id", disconnected)
 }

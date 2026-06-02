@@ -57,10 +57,13 @@ func main() {
 	session := newSession(store, ps)
 	handler := newWSHandler(store, ps, session, jwtSecret)
 
+	initSentry(envOrDefault("RELEASE", "dev"), envOrDefault("ENVIRONMENT", "dev"))
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"status":"ok","server":"go"}`))
 	})
+	mux.Handle("GET /metrics", metricsHandler())
 	mux.HandleFunc("/ws/game/", handler.gameWebsocket)
 	mux.HandleFunc("/api/v1/ws/game/", handler.gameWebsocket)
 

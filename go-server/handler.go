@@ -102,6 +102,7 @@ func (h *wsHandler) gameWebsocket(w http.ResponseWriter, r *http.Request) {
 		"game_id", gameID,
 		"player_id", playerID,
 	)
+	wsConnectionsTotal.Inc()
 
 	// Distinguish first-connect from reconnect + (idempotent) start the game.
 	h.session.handleConnect(sessionCtx, gameID, playerID)

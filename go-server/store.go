@@ -9,6 +9,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,12 @@ import (
 
 	"github.com/redis/go-redis/v9"
 )
+
+//go:embed submit_action.lua
+var submitActionLua string
+
+// Precompiled script — registers once, EVALSHA from then on.
+var submitActionScript = redis.NewScript(submitActionLua)
 
 var (
 	errGameNotFound        = errors.New("game not found")
@@ -65,6 +72,67 @@ func (s *Store) saveSession(ctx context.Context, sess *PvPSession) error {
 	return s.rdb.Set(ctx, GameKeyPrefix+sess.GameState.GameID, raw, GameTTLSeconds*time.Second).Err()
 }
 
+// SubmitResult is the typed parse of the Lua script's mixed-shape return.
+type SubmitResult struct {
+	Status     string // "missing", "not_in_progress", "no_round", "unknown_action",
+	//                 "not_in_game", "cant_afford", "stored", "resolve"
+	TurnNumber int
+	P1Action   Action
+	P2Action   Action
+	Ki         int // populated when Status == "cant_afford"
+}
+
+// submitActionAtomic stores a player's action in a single Redis round-trip
+// via the Lua script (vs WATCH/MULTI/EXEC which is 2-3 round-trips + retry
+// on conflict). Returns whether the caller must resolveTurn (both submitted).
+func (s *Store) submitActionAtomic(
+	ctx context.Context,
+	gameID, playerID string,
+	action Action,
+) (SubmitResult, error) {
+	res, err := submitActionScript.Run(
+		ctx, s.rdb,
+		[]string{GameKeyPrefix + gameID},
+		playerID, string(action), GameTTLSeconds,
+	).Result()
+	if err != nil {
+		return SubmitResult{}, fmt.Errorf("lua submit: %w", err)
+	}
+	arr, ok := res.([]interface{})
+	if !ok || len(arr) == 0 {
+		return SubmitResult{}, fmt.Errorf("unexpected lua return shape: %T", res)
+	}
+	status, _ := arr[0].(string)
+	out := SubmitResult{Status: status}
+	switch status {
+	case "cant_afford":
+		if len(arr) > 1 {
+			if ki, ok := arr[1].(int64); ok {
+				out.Ki = int(ki)
+			}
+		}
+	case "stored":
+		if len(arr) > 1 {
+			if tn, ok := arr[1].(int64); ok {
+				out.TurnNumber = int(tn)
+			}
+		}
+	case "resolve":
+		if len(arr) >= 4 {
+			if tn, ok := arr[1].(int64); ok {
+				out.TurnNumber = int(tn)
+			}
+			if p1, ok := arr[2].(string); ok {
+				out.P1Action = Action(p1)
+			}
+			if p2, ok := arr[3].(string); ok {
+				out.P2Action = Action(p2)
+			}
+		}
+	}
+	return out, nil
+}
+
 // watchAndUpdate is the canonical mutate-then-save with optimistic
 // concurrency. Mirror of Python GameStore.watch_and_update (DR-14).
 //
@@ -111,6 +179,7 @@ func (s *Store) watchAndUpdate(
 		}
 		if errors.Is(err, redis.TxFailedErr) {
 			lastErr = err
+			watchRetriesTotal.Inc()
 			continue
 		}
 		return nil, err
