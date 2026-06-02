@@ -8,9 +8,19 @@
 #   API_DOMAIN=api.kiclash.com docker compose -f docker-compose.prod.yml up -d
 # Default below is `api.kiclash.com`.
 
-{$API_DOMAIN:api.kiclash.com} {
-    # Reverse proxy to the FastAPI service on the docker network.
-    # Caddy automatically handles WebSocket upgrade headers.
+{$API_DOMAIN:api.kiclash.daeseon.ai} {
+    # /api/v1/ws/game/* — real-time gameplay WebSocket. Routed to the Go
+    # game server (replaces the equivalent Python endpoint at higher
+    # concurrency — see go-server/README.md). Both servers serve the same
+    # Redis-backed state, so a comment-out of this matcher safely falls
+    # back to Python.
+    @gameWS {
+        path /api/v1/ws/game/*
+    }
+    reverse_proxy @gameWS game:8001
+
+    # Everything else — REST (auth, rooms, matchmaking, profile) plus the
+    # matchmaking WebSocket — stays on the Python platform server.
     reverse_proxy api:8000
 
     # Compress responses (saves egress bandwidth)

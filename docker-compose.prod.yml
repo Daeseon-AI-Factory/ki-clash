@@ -70,11 +70,37 @@ services:
       retries: 5
       start_period: 30s
 
+  # Go game server — full PvP game loop (engine + session + pub/sub).
+  # Reads/writes the SAME Redis state as the Python api service, so a
+  # single match can be served by either runtime (DR-15 stateless workers).
+  # The Caddyfile routes /api/v1/ws/game/* to this service; everything else
+  # (auth, rooms, matchmaking, REST) stays on Python.
+  game:
+    build: ./go-server
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      PORT: "8001"
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+    expose:
+      - "8001"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8001/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
     depends_on:
       api:
+        condition: service_healthy
+      game:
         condition: service_healthy
     ports:
       - "80:80"

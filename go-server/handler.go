@@ -1,12 +1,7 @@
 package main
 
-// WebSocket handler — connects a player to a PvP game session.
-//
-// Scope for this milestone: identify the player via JWT, load the session
-// from Redis, push a `connected` envelope, and echo client `ping` messages
-// as `pong`. Full game-loop wiring (turn arbitration, action submission,
-// matchmaking) comes in the next milestone — the contract is established
-// here so the Python and Go servers can run side-by-side.
+// WebSocket handler — bridges a player's WS connection to the Session
+// orchestration layer. Mirror of app/api/v1/endpoints/ws.py.
 
 import (
 	"context"
@@ -15,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -23,30 +19,43 @@ import (
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		// Trust the configured CORS origins; matches the Python server's
-		// allow_origins behavior — Caddy will reject mismatched origins
-		// before they hit us in production.
-		return true
-	},
+	CheckOrigin:     func(r *http.Request) bool { return true },
 }
 
 type wsHandler struct {
-	store    *Store
-	secret   string
-	pingFreq time.Duration
+	store   *Store
+	pubsub  *PubSub
+	session *Session
+	secret  string
 }
 
-func newWSHandler(store *Store, secret string) *wsHandler {
-	return &wsHandler{store: store, secret: secret, pingFreq: 25 * time.Second}
+func newWSHandler(store *Store, pubsub *PubSub, session *Session, secret string) *wsHandler {
+	return &wsHandler{store: store, pubsub: pubsub, session: session, secret: secret}
 }
 
-// gameWebsocket is the canonical endpoint: /ws/game/{game_id}?token=...
-// (mirrors the Python URL so the frontend can swap servers transparently)
+// safeConn wraps a websocket.Conn with a write mutex so concurrent
+// goroutines (pubsub relay + main read loop + heartbeat) can't interleave
+// writes (which corrupts the WS frame protocol).
+type safeConn struct {
+	conn *websocket.Conn
+	mu   sync.Mutex
+}
+
+func (c *safeConn) WriteJSON(v any) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.conn.WriteJSON(v)
+}
+
+func (c *safeConn) WriteControl(messageType int, data []byte, deadline time.Time) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.conn.WriteControl(messageType, data, deadline)
+}
+
 func (h *wsHandler) gameWebsocket(w http.ResponseWriter, r *http.Request) {
-	// Path: /ws/game/{game_id}
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	if len(parts) < 3 {
+	if len(parts) == 0 {
 		http.Error(w, "bad path", http.StatusBadRequest)
 		return
 	}
@@ -59,92 +68,87 @@ func (h *wsHandler) gameWebsocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
-	sess, err := h.store.loadSession(ctx, gameID)
+	authCtx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	sess, err := h.store.loadSession(authCtx, gameID)
 	cancel()
 	if err != nil {
 		if errors.Is(err, errGameNotFound) {
 			http.Error(w, "game not found", http.StatusNotFound)
 			return
 		}
-		slog.Error("session load", "err", err, "game_id", gameID)
+		slog.Error("session_load", "err", err, "game_id", gameID)
 		http.Error(w, "internal", http.StatusInternalServerError)
 		return
 	}
-
-	if sess.Player1ID != playerID && sess.Player2ID != playerID {
+	if !sess.IsPlayer(playerID) {
 		http.Error(w, "not a player in this game", http.StatusForbidden)
 		return
 	}
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		slog.Error("ws upgrade", "err", err)
+		slog.Error("ws_upgrade", "err", err)
 		return
 	}
-	defer conn.Close()
+	sc := &safeConn{conn: conn}
+
+	// Subscribe to per-player Redis channel for cross-instance pushes.
+	sessionCtx, sessionCancel := context.WithCancel(context.Background())
+	defer sessionCancel()
+	h.pubsub.register(sessionCtx, playerID, sc)
+	defer h.pubsub.unregister(playerID)
 
 	slog.Info("ws_connected",
 		"game_id", gameID,
 		"player_id", playerID,
-		"player1", sess.Player1ID,
-		"player2", sess.Player2ID,
 	)
 
-	// Welcome envelope so the client knows who we identified them as.
-	_ = conn.WriteJSON(ServerMessage{
-		Type: "go_server_connected",
-		Data: map[string]string{
-			"player_id": playerID,
-			"game_id":   gameID,
-			"server":    "go",
-		},
-	})
+	// Distinguish first-connect from reconnect + (idempotent) start the game.
+	h.session.handleConnect(sessionCtx, gameID, playerID)
+	h.session.start(sessionCtx, gameID)
 
-	// Heartbeat goroutine — periodic ping keeps proxies / NAT awake.
-	stop := make(chan struct{})
-	defer close(stop)
+	// Heartbeat.
+	stopHeartbeat := make(chan struct{})
+	defer close(stopHeartbeat)
 	go func() {
-		ticker := time.NewTicker(h.pingFreq)
+		ticker := time.NewTicker(25 * time.Second)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
-				_ = conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(5*time.Second))
-			case <-stop:
+				_ = sc.WriteControl(websocket.PingMessage, nil, time.Now().Add(5*time.Second))
+			case <-stopHeartbeat:
 				return
 			}
 		}
 	}()
 
-	// Read loop — for now we just echo `ping` → `pong` and log everything
-	// else so end-to-end connectivity is verifiable before the full game
-	// loop ports over.
+	// Read loop.
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
 				slog.Warn("ws_read_error", "err", err, "game_id", gameID, "player_id", playerID)
 			}
+			h.session.handleDisconnect(context.Background(), gameID, playerID)
 			return
 		}
 		var client ClientMessage
 		if err := json.Unmarshal(msg, &client); err != nil {
-			slog.Warn("ws_bad_json", "err", err, "raw", string(msg))
+			slog.Warn("ws_bad_json", "err", err)
 			continue
 		}
 		switch client.Type {
 		case "ping":
-			_ = conn.WriteJSON(ServerMessage{Type: "pong", Data: struct{}{}})
+			_ = sc.WriteJSON(pongMsg())
 		case "submit_action":
-			// TODO(milestone-2): port the engine — for now just echo so the
-			// frontend dev can see the round-trip.
-			_ = conn.WriteJSON(ServerMessage{
-				Type: "action_received",
-				Data: map[string]string{"action": client.Action, "server": "go"},
-			})
+			if client.Action == "" {
+				_ = sc.WriteJSON(errorMsg("missing action"))
+				continue
+			}
+			h.session.submitAction(context.Background(), gameID, playerID, Action(client.Action))
 		default:
-			slog.Debug("ws_unhandled", "type", client.Type, "raw", string(msg))
+			slog.Debug("ws_unhandled", "type", client.Type)
 		}
 	}
 }

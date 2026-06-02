@@ -1,20 +1,13 @@
 package main
 
-// Ki Clash — Go game server.
-//
-// Standalone WebSocket gateway for PvP game sessions. Reads/writes the
-// SAME Redis state as the Python platform server (DR-15 — workers are
-// stateless w.r.t. game state, so any number of language runtimes can
-// serve the same game concurrently).
+// Ki Clash — Go game server entry point.
 //
 // Boundaries:
-//   - Platform / auth / matchmaking / rooms / DB → still Python
-//   - Hot path WebSocket game loop                → eventually Go
+//   - Auth / matchmaking / rooms / DB / Stripe → Python
+//   - PvP WebSocket game loop                    → Go (this server)
 //
-// Run alongside Python: both bind their own ports. A reverse proxy
-// (Caddy/Nginx) routes /api/v1/ws/game/* to Go and everything else to
-// Python. Until that switch, the Python /ws/game/* endpoint stays
-// authoritative — this server proves the architecture works.
+// Both servers read/write the same Redis keys, so a single match can
+// migrate between them mid-session (DR-15 stateless workers).
 
 import (
 	"context"
@@ -27,11 +20,12 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	slog.SetDefault(logger)
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
 
 	port := envOrDefault("PORT", "8001")
 	redisURL := envOrDefault("REDIS_URL", "redis://localhost:6379/0")
@@ -54,7 +48,14 @@ func main() {
 	}
 	defer store.close()
 
-	handler := newWSHandler(store, jwtSecret)
+	// Build the pub/sub layer on a separate connection — keeps the
+	// blocking SUBSCRIBE loop off the main client pool.
+	pubsubRDB := redis.NewClient(&redis.Options{Addr: addr, Password: password, DB: db})
+	defer pubsubRDB.Close()
+
+	ps := newPubSub(pubsubRDB)
+	session := newSession(store, ps)
+	handler := newWSHandler(store, ps, session, jwtSecret)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
@@ -69,7 +70,6 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	// Graceful shutdown on SIGINT/SIGTERM.
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
@@ -94,17 +94,12 @@ func envOrDefault(key, dflt string) string {
 	return dflt
 }
 
-// parseRedisURL accepts redis://[:password@]host:port[/db] and decomposes it
-// into the fields go-redis wants. Avoids pulling in a URL-parser dep for a
-// fixed shape we control end-to-end.
 func parseRedisURL(raw string) (addr, password string, db int, err error) {
 	const prefix = "redis://"
 	if !strings.HasPrefix(raw, prefix) {
 		return "", "", 0, errors.New("REDIS_URL must start with redis://")
 	}
 	body := strings.TrimPrefix(raw, prefix)
-
-	// Optional /db suffix.
 	if idx := strings.LastIndex(body, "/"); idx != -1 {
 		dbStr := body[idx+1:]
 		body = body[:idx]
@@ -115,15 +110,10 @@ func parseRedisURL(raw string) (addr, password string, db int, err error) {
 			}
 		}
 	}
-
-	// Optional password@host
 	if at := strings.LastIndex(body, "@"); at != -1 {
-		password = body[:at]
+		password = strings.TrimPrefix(body[:at], ":")
 		body = body[at+1:]
-		// strip leading ":" if format was ":pwd@host"
-		password = strings.TrimPrefix(password, ":")
 	}
-
 	addr = body
 	return
 }

@@ -1,7 +1,11 @@
 package main
 
-// Redis adapter — reads/writes the SAME keys as the Python GameStore so
-// both servers can serve concurrent traffic against the same data.
+// Redis adapter — reads/writes the SAME keys as Python GameStore so both
+// runtimes can serve concurrent traffic against the same data.
+//
+// Includes WATCH/MULTI/EXEC optimistic concurrency (DR-14) — both
+// servers must use this pattern or they'll clobber each other's writes
+// during simultaneous action submissions.
 
 import (
 	"context"
@@ -13,12 +17,10 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-const (
-	gameTTL      = time.Hour
-	gameKeyPrefix = "ki_clash:game:"
+var (
+	errGameNotFound        = errors.New("game not found")
+	errTooManyWatchRetries = errors.New("too many WATCH conflicts")
 )
-
-var errGameNotFound = errors.New("game not found")
 
 type Store struct {
 	rdb *redis.Client
@@ -38,8 +40,10 @@ func newStore(addr, password string, db int) (*Store, error) {
 	return &Store{rdb: rdb}, nil
 }
 
+func (s *Store) close() error { return s.rdb.Close() }
+
 func (s *Store) loadSession(ctx context.Context, gameID string) (*PvPSession, error) {
-	raw, err := s.rdb.Get(ctx, gameKeyPrefix+gameID).Bytes()
+	raw, err := s.rdb.Get(ctx, GameKeyPrefix+gameID).Bytes()
 	if err == redis.Nil {
 		return nil, errGameNotFound
 	}
@@ -53,15 +57,66 @@ func (s *Store) loadSession(ctx context.Context, gameID string) (*PvPSession, er
 	return &sess, nil
 }
 
-// saveSession persists the session JSON with the standard 1-hour TTL.
 func (s *Store) saveSession(ctx context.Context, sess *PvPSession) error {
 	raw, err := json.Marshal(sess)
 	if err != nil {
 		return fmt.Errorf("session marshal: %w", err)
 	}
-	return s.rdb.Set(ctx, gameKeyPrefix+sess.GameState.GameID, raw, gameTTL).Err()
+	return s.rdb.Set(ctx, GameKeyPrefix+sess.GameState.GameID, raw, GameTTLSeconds*time.Second).Err()
 }
 
-func (s *Store) close() error {
-	return s.rdb.Close()
+// watchAndUpdate is the canonical mutate-then-save with optimistic
+// concurrency. Mirror of Python GameStore.watch_and_update (DR-14).
+//
+// `mutator` mutates the loaded session in place. If it returns an error,
+// the transaction is aborted and the error bubbles up.
+func (s *Store) watchAndUpdate(
+	ctx context.Context,
+	gameID string,
+	mutator func(*PvPSession) error,
+) (*PvPSession, error) {
+	key := GameKeyPrefix + gameID
+	var lastErr error
+
+	for attempt := 0; attempt < DefaultMaxWatchRetries; attempt++ {
+		err := s.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			raw, err := tx.Get(ctx, key).Bytes()
+			if err == redis.Nil {
+				return errGameNotFound
+			}
+			if err != nil {
+				return err
+			}
+			var sess PvPSession
+			if err := json.Unmarshal(raw, &sess); err != nil {
+				return fmt.Errorf("session unmarshal: %w", err)
+			}
+			if err := mutator(&sess); err != nil {
+				return err
+			}
+			out, err := json.Marshal(&sess)
+			if err != nil {
+				return err
+			}
+			_, txErr := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.Set(ctx, key, out, GameTTLSeconds*time.Second)
+				return nil
+			})
+			return txErr
+		}, key)
+
+		if err == nil {
+			// Load the persisted state (Watch closure doesn't return the session).
+			return s.loadSession(ctx, gameID)
+		}
+		if errors.Is(err, redis.TxFailedErr) {
+			lastErr = err
+			continue
+		}
+		return nil, err
+	}
+	if lastErr == nil {
+		lastErr = errTooManyWatchRetries
+	}
+	return nil, fmt.Errorf("%w: %v", errTooManyWatchRetries, lastErr)
 }
