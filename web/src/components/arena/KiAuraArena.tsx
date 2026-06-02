@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import confetti from "canvas-confetti";
 import type { ActionKind, ActionPhase } from "@/lib/actions";
 import type { TurnOutcome } from "@/lib/api";
 import { getCharacter, type Character } from "@/lib/characters";
@@ -255,33 +256,108 @@ function ActionFXOverlay({ action, phase, color, side }: ActionFXProps) {
 }
 
 function ChargeFX({ phase, color }: { phase: ActionPhase; color: string }) {
-  const motes = [0, 60, 120, 180, 240, 300];
+  // Rising particle columns + concentric pulse rings + ground glow pillar.
+  // Far richer than the original 6-dot converge — gives "powering up" weight.
+  const columns = [-32, -16, 0, 16, 32];
+  const motes = [0, 45, 90, 135, 180, 225, 270, 315];
   return (
     <AnimatePresence>
       {(phase === "windup" || phase === "impact") && (
         <motion.div
           key="charge"
-          className="absolute inset-0 flex items-center justify-center"
+          className="absolute inset-0 pointer-events-none"
           exit={{ opacity: 0 }}
         >
+          {/* Light pillar from the ground */}
+          <motion.div
+            className="absolute left-1/2 bottom-0 -translate-x-1/2 rounded-t-full origin-bottom"
+            style={{
+              width: 70,
+              height: "100%",
+              background: `linear-gradient(to top, ${color}aa, ${color}55, transparent)`,
+              filter: "blur(8px)",
+            }}
+            initial={{ opacity: 0, scaleY: 0.3 }}
+            animate={{ opacity: 1, scaleY: 1 }}
+            transition={{ duration: 0.4 }}
+          />
+
+          {/* Three concentric pulsing rings */}
+          {[0, 0.2, 0.4].map((delay, i) => (
+            <motion.div
+              key={`ring-${i}`}
+              className="absolute left-1/2 top-1/2 rounded-full -translate-x-1/2 -translate-y-1/2"
+              style={{
+                width: 110,
+                height: 110,
+                border: `2px solid ${color}`,
+                filter: `drop-shadow(0 0 12px ${color})`,
+              }}
+              initial={{ scale: 0.3, opacity: 0 }}
+              animate={{ scale: [0.3, 1.5], opacity: [0.8, 0] }}
+              transition={{
+                duration: 1.2,
+                delay,
+                repeat: Infinity,
+                ease: "easeOut",
+              }}
+            />
+          ))}
+
+          {/* Rising particle columns */}
+          <div className="absolute left-1/2 bottom-0 -translate-x-1/2 flex gap-3">
+            {columns.map((offset, ci) => (
+              <div key={ci} className="relative" style={{ left: offset }}>
+                {[0, 0.15, 0.3, 0.45, 0.6, 0.75].map((delay, i) => (
+                  <motion.div
+                    key={i}
+                    className="absolute rounded-full"
+                    style={{
+                      bottom: 0,
+                      width: 6,
+                      height: 6,
+                      background: color,
+                      filter: `drop-shadow(0 0 6px ${color}) blur(0.5px)`,
+                    }}
+                    initial={{ y: 0, opacity: 0, scale: 0.5 }}
+                    animate={{
+                      y: -180,
+                      opacity: [0, 1, 1, 0],
+                      scale: [0.5, 1.2, 1, 0],
+                    }}
+                    transition={{
+                      duration: 1.2,
+                      delay: delay + ci * 0.07,
+                      repeat: Infinity,
+                      ease: "easeOut",
+                    }}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+
+          {/* Orbiting motes — the original ring, but more of them and brighter */}
           {motes.map((deg, i) => (
             <motion.div
-              key={i}
-              className="absolute rounded-full"
+              key={`mote-${i}`}
+              className="absolute left-1/2 top-1/2 rounded-full"
               style={{
-                width: 12,
-                height: 12,
-                background: `radial-gradient(circle, ${color} 0%, transparent 70%)`,
+                width: 8,
+                height: 8,
+                marginLeft: -4,
+                marginTop: -4,
+                background: `radial-gradient(circle, white 0%, ${color} 50%, transparent 70%)`,
                 filter: `drop-shadow(0 0 8px ${color})`,
               }}
               initial={{
-                x: Math.cos((deg * Math.PI) / 180) * 80,
-                y: Math.sin((deg * Math.PI) / 180) * 80,
+                x: Math.cos((deg * Math.PI) / 180) * 85,
+                y: Math.sin((deg * Math.PI) / 180) * 85,
                 opacity: 0,
                 scale: 0.5,
               }}
               animate={{ x: 0, y: 0, opacity: 1, scale: 1.4 }}
-              transition={{ duration: 0.6, delay: i * 0.05, ease: "easeIn" }}
+              transition={{ duration: 0.55, delay: i * 0.04, ease: "easeIn" }}
             />
           ))}
         </motion.div>
@@ -291,39 +367,85 @@ function ChargeFX({ phase, color }: { phase: ActionPhase; color: string }) {
 }
 
 function BlockFX({ phase }: { phase: ActionPhase }) {
+  // Multi-layer hex shield — outer glow halo, primary shield, inner shimmer,
+  // and three expanding shockwave rings on impact.
   return (
     <AnimatePresence>
       {(phase === "impact" || phase === "recover") && (
         <motion.div
           key="block"
-          className="absolute inset-0 flex items-center justify-center"
+          className="absolute inset-0 flex items-center justify-center pointer-events-none"
           initial={{ opacity: 0, scale: 0.5 }}
-          animate={{ opacity: 0.9, scale: 1 }}
+          animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 1.3 }}
           transition={{ duration: 0.3 }}
         >
-          <svg width="120" height="140" viewBox="0 0 120 140">
+          {/* Outer aura halo */}
+          <div
+            className="absolute rounded-full"
+            style={{
+              width: 180,
+              height: 180,
+              background:
+                "radial-gradient(circle, #60A5FA88 0%, #3B82F644 40%, transparent 70%)",
+              filter: "blur(16px)",
+            }}
+          />
+
+          {/* Three expanding shockwave rings — staggered */}
+          {[0, 0.15, 0.3].map((delay, i) => (
+            <motion.div
+              key={`shock-${i}`}
+              className="absolute rounded-full"
+              style={{
+                width: 150,
+                height: 150,
+                border: "3px solid #93C5FD",
+                filter: "drop-shadow(0 0 12px #60A5FA)",
+              }}
+              initial={{ scale: 0.6, opacity: 0.9 }}
+              animate={{ scale: 1.8, opacity: 0 }}
+              transition={{ duration: 0.8, delay, ease: "easeOut" }}
+            />
+          ))}
+
+          {/* Primary hexagonal shield */}
+          <svg width="140" height="160" viewBox="0 0 140 160" className="relative">
             <defs>
-              <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#60A5FA" stopOpacity="0.9" />
-                <stop offset="50%" stopColor="#3B82F6" stopOpacity="0.5" />
+              <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#DBEAFE" stopOpacity="0.9" />
+                <stop offset="30%" stopColor="#60A5FA" stopOpacity="0.8" />
+                <stop offset="70%" stopColor="#3B82F6" stopOpacity="0.6" />
                 <stop offset="100%" stopColor="#1D4ED8" stopOpacity="0.3" />
               </linearGradient>
+              <radialGradient id="shieldShine" cx="50%" cy="30%" r="50%">
+                <stop offset="0%" stopColor="white" stopOpacity="0.6" />
+                <stop offset="100%" stopColor="white" stopOpacity="0" />
+              </radialGradient>
             </defs>
             <polygon
-              points="60,15 110,42 110,98 60,125 10,98 10,42"
+              points="70,15 125,48 125,112 70,145 15,112 15,48"
               fill="url(#shieldGrad)"
               stroke="#93C5FD"
-              strokeWidth="2"
-              style={{ filter: "drop-shadow(0 0 12px #60A5FA)" }}
+              strokeWidth="2.5"
+              style={{ filter: "drop-shadow(0 0 16px #60A5FA)" }}
             />
+            {/* Inner shimmer highlight */}
             <polygon
-              points="60,15 110,42 110,98 60,125 10,98 10,42"
+              points="70,15 125,48 125,112 70,145 15,112 15,48"
+              fill="url(#shieldShine)"
+            />
+            {/* Inner border */}
+            <polygon
+              points="70,25 115,53 115,107 70,135 25,107 25,53"
               fill="none"
               stroke="white"
-              strokeWidth="1"
-              opacity="0.6"
+              strokeWidth="1.5"
+              opacity="0.7"
             />
+            {/* Center cross */}
+            <line x1="70" y1="60" x2="70" y2="100" stroke="white" strokeWidth="1.5" opacity="0.5" />
+            <line x1="50" y1="80" x2="90" y2="80" stroke="white" strokeWidth="1.5" opacity="0.5" />
           </svg>
         </motion.div>
       )}
@@ -332,6 +454,7 @@ function BlockFX({ phase }: { phase: ActionPhase }) {
 }
 
 function AttackFX({ phase, side }: { phase: ActionPhase; side: "left" | "right" }) {
+  // Multi-slash + spark burst + chromatic aberration ring. Pure code, no FX assets.
   return (
     <AnimatePresence>
       {phase === "impact" && (
@@ -343,22 +466,83 @@ function AttackFX({ phase, side }: { phase: ActionPhase; side: "left" | "right" 
           exit={{ opacity: 0 }}
           transition={{ duration: 0.3 }}
         >
-          {/* Diagonal slash mark */}
-          <div
-            className="absolute"
-            style={{
-              width: 160,
-              height: 8,
-              background:
-                "linear-gradient(90deg, transparent, #FCA5A5, #DC2626, #FCA5A5, transparent)",
-              transform: `rotate(${side === "left" ? -15 : 15}deg)`,
-              filter: "drop-shadow(0 0 8px #EF4444) blur(0.5px)",
-            }}
-          />
+          {/* Chromatic aberration ring — red + blue offset hexagons */}
+          {[
+            { rgb: "#FF1744", dx: -3, dy: 0 },
+            { rgb: "#00E5FF", dx: 3, dy: 0 },
+          ].map((c, i) => (
+            <motion.div
+              key={`chrom-${i}`}
+              className="absolute rounded-full"
+              style={{
+                width: 100,
+                height: 100,
+                border: `3px solid ${c.rgb}`,
+                left: `calc(50% + ${c.dx}px)`,
+                top: `calc(50% + ${c.dy}px)`,
+                transform: "translate(-50%, -50%)",
+                mixBlendMode: "screen",
+                filter: `drop-shadow(0 0 8px ${c.rgb})`,
+              }}
+              initial={{ scale: 0.3, opacity: 1 }}
+              animate={{ scale: 2.2, opacity: 0 }}
+              transition={{ duration: 0.45, ease: "easeOut" }}
+            />
+          ))}
+
+          {/* Triple slash marks — different angles, staggered */}
+          {[
+            { angle: side === "left" ? -25 : 25, delay: 0, w: 180 },
+            { angle: side === "left" ? -5 : 5, delay: 0.05, w: 200 },
+            { angle: side === "left" ? 15 : -15, delay: 0.1, w: 160 },
+          ].map((s, i) => (
+            <motion.div
+              key={`slash-${i}`}
+              className="absolute"
+              style={{
+                width: s.w,
+                height: 6,
+                background:
+                  "linear-gradient(90deg, transparent 0%, #FCA5A5 20%, #DC2626 50%, white 50.5%, #DC2626 51%, #FCA5A5 80%, transparent 100%)",
+                transform: `rotate(${s.angle}deg)`,
+                filter: "drop-shadow(0 0 10px #EF4444) blur(0.5px)",
+              }}
+              initial={{ opacity: 0, scaleX: 0 }}
+              animate={{ opacity: [0, 1, 1, 0], scaleX: [0, 1.1, 1, 0.95] }}
+              transition={{ duration: 0.4, delay: s.delay }}
+            />
+          ))}
+
+          {/* Spark burst — 12 dots radiating outward */}
+          {Array.from({ length: 12 }).map((_, i) => {
+            const angle = (i * 360) / 12;
+            const dist = 60 + (i % 3) * 20;
+            return (
+              <motion.div
+                key={`spark-${i}`}
+                className="absolute rounded-full"
+                style={{
+                  width: 5,
+                  height: 5,
+                  background: i % 2 ? "#FCD34D" : "white",
+                  filter: "drop-shadow(0 0 6px #FCD34D)",
+                }}
+                initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+                animate={{
+                  x: Math.cos((angle * Math.PI) / 180) * dist,
+                  y: Math.sin((angle * Math.PI) / 180) * dist,
+                  opacity: 0,
+                  scale: 0.3,
+                }}
+                transition={{ duration: 0.5, ease: "easeOut" }}
+              />
+            );
+          })}
+
           {/* Radiating speed lines */}
           {[-30, -15, 0, 15, 30].map((deg) => (
             <div
-              key={deg}
+              key={`line-${deg}`}
               className="absolute"
               style={{
                 width: 80,
@@ -377,27 +561,91 @@ function AttackFX({ phase, side }: { phase: ActionPhase; side: "left" | "right" 
 }
 
 function TeleportFX({ phase }: { phase: ActionPhase }) {
+  // Portal swirl — rotating conic gradient + chromatic split + afterimage trails.
   return (
     <AnimatePresence>
       {(phase === "impact" || phase === "recover") && (
         <motion.div
           key="teleport"
           className="absolute inset-0 flex items-center justify-center pointer-events-none"
-          initial={{ opacity: 1, scale: 0.8 }}
-          animate={{ opacity: 0, scale: 1.5 }}
+          initial={{ opacity: 1 }}
+          animate={{ opacity: 0 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.5 }}
+          transition={{ duration: 0.65 }}
         >
-          <div
-            className="rounded-full"
+          {/* Outer chromatic ring — purple + cyan offset */}
+          {[
+            { color: "#A78BFA", dx: -4 },
+            { color: "#22D3EE", dx: 4 },
+          ].map((c, i) => (
+            <motion.div
+              key={`chrom-${i}`}
+              className="absolute rounded-full"
+              style={{
+                width: 130,
+                height: 130,
+                border: `3px solid ${c.color}`,
+                left: `calc(50% + ${c.dx}px)`,
+                top: "50%",
+                transform: "translate(-50%, -50%)",
+                mixBlendMode: "screen",
+                filter: `drop-shadow(0 0 12px ${c.color})`,
+              }}
+              initial={{ scale: 0.6, opacity: 1 }}
+              animate={{ scale: 1.8, opacity: 0 }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
+            />
+          ))}
+
+          {/* Rotating conic-gradient portal */}
+          <motion.div
+            className="absolute rounded-full"
             style={{
-              width: 110,
-              height: 110,
+              width: 120,
+              height: 120,
               background:
-                "radial-gradient(circle, white 0%, #A78BFA 30%, transparent 70%)",
-              filter: "blur(8px)",
+                "conic-gradient(from 0deg, transparent, #A78BFA, white, #22D3EE, transparent, #A78BFA, transparent)",
+              filter: "blur(6px)",
+              mixBlendMode: "screen",
             }}
+            initial={{ rotate: 0, scale: 0.3, opacity: 1 }}
+            animate={{ rotate: 720, scale: 1.8, opacity: 0 }}
+            transition={{ duration: 0.55, ease: "easeOut" }}
           />
+
+          {/* Bright center flash */}
+          <motion.div
+            className="absolute rounded-full"
+            style={{
+              width: 80,
+              height: 80,
+              background:
+                "radial-gradient(circle, white 0%, #C4B5FD 40%, transparent 70%)",
+              filter: "blur(4px)",
+            }}
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: [0, 1, 0], scale: [0.5, 1.6, 2.2] }}
+            transition={{ duration: 0.4 }}
+          />
+
+          {/* Three vertical afterimage slits drifting up */}
+          {[0, 0.1, 0.2].map((delay, i) => (
+            <motion.div
+              key={`after-${i}`}
+              className="absolute"
+              style={{
+                width: 4,
+                height: 60,
+                left: `${48 + i * 2}%`,
+                background:
+                  "linear-gradient(to top, transparent, white, transparent)",
+                filter: "drop-shadow(0 0 4px #A78BFA)",
+              }}
+              initial={{ y: 30, opacity: 0 }}
+              animate={{ y: -40, opacity: [0, 0.8, 0] }}
+              transition={{ duration: 0.5, delay }}
+            />
+          ))}
         </motion.div>
       )}
     </AnimatePresence>
@@ -405,26 +653,81 @@ function TeleportFX({ phase }: { phase: ActionPhase }) {
 }
 
 function EnergyChargeFX({ phase, color }: { phase: ActionPhase; color: string }) {
+  // Multi-layer energy orb buildup with electric arcs converging.
   return (
     <AnimatePresence>
       {phase === "windup" && (
         <motion.div
           key="energy-charge"
           className="absolute inset-0 flex items-center justify-center pointer-events-none"
-          initial={{ opacity: 0, scale: 0.2 }}
-          animate={{ opacity: 1, scale: 1 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
           exit={{ opacity: 0, scale: 1.5 }}
           transition={{ duration: 0.5 }}
         >
-          <div
-            className="rounded-full animate-energy-ball"
+          {/* Outer aura glow */}
+          <motion.div
+            className="absolute rounded-full"
             style={{
-              width: 60,
-              height: 60,
+              width: 130,
+              height: 130,
+              background: `radial-gradient(circle, ${color}88 0%, #F9731644 40%, transparent 70%)`,
+              filter: "blur(16px)",
+            }}
+            initial={{ scale: 0.3, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.5 }}
+          />
+
+          {/* Mid energy ball — pulsing */}
+          <div
+            className="absolute rounded-full animate-energy-ball"
+            style={{
+              width: 70,
+              height: 70,
               background: `radial-gradient(circle, white 0%, ${color} 40%, #F97316 70%, transparent 100%)`,
-              filter: `drop-shadow(0 0 24px ${color}) drop-shadow(0 0 48px #F97316)`,
+              filter: `drop-shadow(0 0 28px ${color}) drop-shadow(0 0 56px #F97316)`,
             }}
           />
+
+          {/* Bright white core */}
+          <motion.div
+            className="absolute rounded-full"
+            style={{
+              width: 28,
+              height: 28,
+              background:
+                "radial-gradient(circle, white 0%, #FFF7ED 60%, transparent 100%)",
+              filter: "blur(2px)",
+            }}
+            animate={{ scale: [0.7, 1.2, 0.7] }}
+            transition={{ duration: 0.4, repeat: Infinity, ease: "easeInOut" }}
+          />
+
+          {/* Electric arcs converging from 6 directions */}
+          {[0, 60, 120, 180, 240, 300].map((deg, i) => (
+            <motion.div
+              key={`arc-${i}`}
+              className="absolute origin-left"
+              style={{
+                width: 90,
+                height: 2,
+                background: `linear-gradient(90deg, ${color}, white, transparent)`,
+                transform: `rotate(${deg}deg)`,
+                filter: `drop-shadow(0 0 4px ${color})`,
+                left: "50%",
+                top: "50%",
+              }}
+              initial={{ scaleX: 1.5, opacity: 0 }}
+              animate={{ scaleX: 0.2, opacity: [0, 1, 0] }}
+              transition={{
+                duration: 0.45,
+                delay: i * 0.06,
+                repeat: Infinity,
+                ease: "easeIn",
+              }}
+            />
+          ))}
         </motion.div>
       )}
     </AnimatePresence>
@@ -453,39 +756,112 @@ function CrossScreenFX({
   const playerPunch = playerAction === "attack" && phase === "impact";
   const aiPunch = aiAction === "attack" && phase === "impact";
 
+  // Confetti spark burst when an attack lands. Cheap drama at the impact
+  // point — gold sparks for punch, orange embers for energy wave.
+  const confettiFiredRef = useRef<string | null>(null);
+  useEffect(() => {
+    const key = `${phase}|${playerAction}|${aiAction}`;
+    if (confettiFiredRef.current === key) return;
+    if (phase !== "impact") {
+      confettiFiredRef.current = null;
+      return;
+    }
+    if (playerPunch || aiPunch) {
+      confettiFiredRef.current = key;
+      const x = playerPunch ? 0.7 : 0.3;
+      confetti({
+        particleCount: 30,
+        spread: 50,
+        startVelocity: 22,
+        origin: { x, y: 0.45 },
+        colors: ["#FCD34D", "#FBBF24", "#FFFFFF", "#FCA5A5"],
+        scalar: 0.8,
+        ticks: 60,
+      });
+    } else if (playerBeam || aiBeam) {
+      confettiFiredRef.current = key;
+      const x = playerBeam ? 0.78 : 0.22;
+      confetti({
+        particleCount: 60,
+        spread: 80,
+        startVelocity: 28,
+        origin: { x, y: 0.5 },
+        colors: ["#F97316", "#FACC15", "#FFFFFF", playerBeam ? playerColor : aiColor],
+        scalar: 1.1,
+        ticks: 90,
+      });
+    }
+  }, [phase, playerAction, aiAction, playerPunch, aiPunch, playerBeam, aiBeam, playerColor, aiColor]);
+
   return (
     <AnimatePresence>
       {playerBeam && (
-        <motion.div
-          key="player-beam"
-          className="absolute left-[18%] right-[18%] top-1/2 -translate-y-1/2 h-12 pointer-events-none"
-          initial={{ clipPath: "inset(0 100% 0 0)", opacity: 0 }}
-          animate={{ clipPath: "inset(0 0 0 0)", opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.4, ease: "easeOut" }}
-          style={{
-            background: `linear-gradient(90deg, ${playerColor}, #F97316, white, #F97316, ${playerColor})`,
-            filter:
-              "drop-shadow(0 0 16px #F97316) drop-shadow(0 0 32px #FACC15) blur(0.5px)",
-            borderRadius: 24,
-          }}
-        />
+        <>
+          <motion.div
+            key="player-beam"
+            className="absolute left-[18%] right-[18%] top-1/2 -translate-y-1/2 h-14 pointer-events-none"
+            initial={{ clipPath: "inset(0 100% 0 0)", opacity: 0 }}
+            animate={{ clipPath: "inset(0 0 0 0)", opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
+            style={{
+              background: `linear-gradient(90deg, ${playerColor}, #F97316, white, #F97316, ${playerColor})`,
+              filter:
+                "drop-shadow(0 0 20px #F97316) drop-shadow(0 0 40px #FACC15) blur(0.5px)",
+              borderRadius: 28,
+            }}
+          />
+          {/* Impact explosion at AI side */}
+          <motion.div
+            key="player-beam-impact"
+            className="absolute right-[10%] top-1/2 -translate-y-1/2 rounded-full pointer-events-none"
+            style={{
+              width: 180,
+              height: 180,
+              background:
+                "radial-gradient(circle, white 0%, #FACC15 25%, #F97316 50%, transparent 75%)",
+              filter: "blur(2px)",
+              mixBlendMode: "screen",
+            }}
+            initial={{ scale: 0.2, opacity: 0 }}
+            animate={{ scale: [0.2, 1.3, 1.8], opacity: [0, 1, 0] }}
+            transition={{ duration: 0.6, delay: 0.25 }}
+          />
+        </>
       )}
       {aiBeam && (
-        <motion.div
-          key="ai-beam"
-          className="absolute left-[18%] right-[18%] top-1/2 -translate-y-1/2 h-12 pointer-events-none"
-          initial={{ clipPath: "inset(0 0 0 100%)", opacity: 0 }}
-          animate={{ clipPath: "inset(0 0 0 0)", opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.4, ease: "easeOut" }}
-          style={{
-            background: `linear-gradient(270deg, ${aiColor}, #F97316, white, #F97316, ${aiColor})`,
-            filter:
-              "drop-shadow(0 0 16px #F97316) drop-shadow(0 0 32px #FACC15) blur(0.5px)",
-            borderRadius: 24,
-          }}
-        />
+        <>
+          <motion.div
+            key="ai-beam"
+            className="absolute left-[18%] right-[18%] top-1/2 -translate-y-1/2 h-14 pointer-events-none"
+            initial={{ clipPath: "inset(0 0 0 100%)", opacity: 0 }}
+            animate={{ clipPath: "inset(0 0 0 0)", opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
+            style={{
+              background: `linear-gradient(270deg, ${aiColor}, #F97316, white, #F97316, ${aiColor})`,
+              filter:
+                "drop-shadow(0 0 20px #F97316) drop-shadow(0 0 40px #FACC15) blur(0.5px)",
+              borderRadius: 28,
+            }}
+          />
+          {/* Impact explosion at player side */}
+          <motion.div
+            key="ai-beam-impact"
+            className="absolute left-[10%] top-1/2 -translate-y-1/2 rounded-full pointer-events-none"
+            style={{
+              width: 180,
+              height: 180,
+              background:
+                "radial-gradient(circle, white 0%, #FACC15 25%, #F97316 50%, transparent 75%)",
+              filter: "blur(2px)",
+              mixBlendMode: "screen",
+            }}
+            initial={{ scale: 0.2, opacity: 0 }}
+            animate={{ scale: [0.2, 1.3, 1.8], opacity: [0, 1, 0] }}
+            transition={{ duration: 0.6, delay: 0.25 }}
+          />
+        </>
       )}
       {/* Flying fist for basic Attack — projectile crossing from attacker toward target */}
       {playerPunch && (
