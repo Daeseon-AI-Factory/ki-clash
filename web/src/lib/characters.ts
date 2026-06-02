@@ -1,15 +1,25 @@
 /**
  * Character roster for Ki Clash.
  *
- * 6 original fighters with names, emoji portraits, color themes,
- * and AI trash talk lines. Purely cosmetic — no gameplay differences.
+ * 6 original fighters with international names + Korean heritage names,
+ * emoji symbols (lobby/fallback only), color themes, bios, and AI trash
+ * talk lines. Purely cosmetic — no gameplay differences between them.
+ *
+ * The `id` field is the STABLE key used in URLs, Redis, file paths
+ * (`/fighters/<id>/*.png`, `ki_clash:room:*`, etc.) — must not change.
+ * Names/bios are free to edit.
  */
 
 export interface Character {
+  /** Stable identifier — used in URLs and assets. Never rename. */
   id: string;
+  /** International display name (English, easy to read globally). */
   name: string;
+  /** Korean heritage name shown as subtitle. */
   koreanName: string;
+  /** Symbol emoji — fallback when no PNG is available. */
   emoji: string;
+  /** Theme color used for borders, auras, HUD accents. */
   color: string;
   bio: string;
   trashTalk: string[];
@@ -17,12 +27,13 @@ export interface Character {
 
 export const CHARACTERS: Character[] = [
   {
+    // Goku-vibe shonen hero — orange gi, spiky black hair with blue tips
     id: "haneul",
-    name: "Haneul",
-    koreanName: "하늘",
+    name: "Kael",
+    koreanName: "하늘 · Sky",
     emoji: "🌀",
     color: "#60A5FA", // blue-400
-    bio: "A calm philosophical monk who fights with the wind.",
+    bio: "Calm sky-monk. Strikes with the wind itself.",
     trashTalk: [
       "The wind whispers your next move to me...",
       "Stillness defeats all aggression.",
@@ -31,12 +42,13 @@ export const CHARACTERS: Character[] = [
     ],
   },
   {
+    // Trunks/Selene-vibe lavender warrior — moon emblem
     id: "bora",
-    name: "Bora",
-    koreanName: "보라",
+    name: "Selene",
+    koreanName: "보라 · Moon Oracle",
     emoji: "🔮",
     color: "#C084FC", // purple-400
-    bio: "A mysterious oracle who taunts from the shadows.",
+    bio: "Lavender oracle. The moon reveals her next strike.",
     trashTalk: [
       "The cards already told me your next move...",
       "I saw this outcome three turns ago.",
@@ -46,12 +58,13 @@ export const CHARACTERS: Character[] = [
     ],
   },
   {
+    // Naruto-vibe blond brawler — bright spiky, headband
     id: "taeyang",
-    name: "Taeyang",
-    koreanName: "태양",
+    name: "Blaze",
+    koreanName: "태양 · Sun",
     emoji: "☀️",
     color: "#FACC15", // yellow-400
-    bio: "A brash hothead who burns everything in his path.",
+    bio: "Brash sun-born. Burns hotter than common sense.",
     trashTalk: [
       "HAHA! Is that all you've got?!",
       "My ki burns hotter than a thousand suns!",
@@ -61,12 +74,13 @@ export const CHARACTERS: Character[] = [
     ],
   },
   {
+    // Hitsugaya/Yuki-vibe silver captain — calm, deadly water
     id: "danbi",
-    name: "Danbi",
-    koreanName: "단비",
+    name: "Yuki",
+    koreanName: "단비 · Sweet Rain",
     emoji: "🌊",
     color: "#22D3EE", // cyan-400
-    bio: "Serene like rain, but deadly like a flood.",
+    bio: "Silver captain. Calm rain, drowning tsunami.",
     trashTalk: [
       "Flow like water... strike like a tsunami.",
       "Your aggression creates openings. Thank you.",
@@ -75,12 +89,13 @@ export const CHARACTERS: Character[] = [
     ],
   },
   {
+    // Old-master strongman — topknot, beard
     id: "seokjin",
-    name: "Seokjin",
-    koreanName: "석진",
+    name: "Atlas",
+    koreanName: "석진 · Stone Master",
     emoji: "🪨",
     color: "#FB923C", // orange-400
-    bio: "An immovable old master carved from mountain stone.",
+    bio: "Mountain-old master. Immovable, until you wake him.",
     trashTalk: [
       "I've been blocking attacks since before you were born.",
       "Hit me. Go on. I dare you.",
@@ -90,12 +105,13 @@ export const CHARACTERS: Character[] = [
     ],
   },
   {
+    // Boa Hancock-vibe elegant queen — long pink hair, condescending
     id: "yuri",
-    name: "Yuri",
-    koreanName: "유리",
+    name: "Rosa",
+    koreanName: "유리 · Crystal",
     emoji: "💎",
     color: "#F472B6", // pink-400
-    bio: "Elegant, precise, and utterly condescending.",
+    bio: "Crystal-edged queen. Cold beauty, sharper words.",
     trashTalk: [
       "Oh, that was your best move? How... quaint.",
       "I could win this with my eyes closed, darling.",

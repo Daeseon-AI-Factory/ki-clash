@@ -405,7 +405,10 @@ export default function MatchFinale({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Final-Blow Stage — winner powers up, fires beam, loser is blasted away.
+// Final-Blow Stage — apocalyptic finisher: winner charges, fires a screen-
+// filling beam, loser is OBLITERATED with screen shake + chromatic split +
+// debris swarm + crater explosion. Drug-trip-level intensity per user
+// feedback ("약빤정도로 상대를 파괴하듯이").
 
 type BlowSub = "ready" | "charge" | "fire" | "hit" | "fly" | "land";
 
@@ -424,16 +427,60 @@ function FinalBlowStage({
   palette,
 }: FinalBlowStageProps) {
   const [sub, setSub] = useState<BlowSub>("ready");
+  const confettiFiredRef = useRef(false);
 
   useEffect(() => {
     const t: ReturnType<typeof setTimeout>[] = [];
     t.push(setTimeout(() => setSub("charge"), 200));
-    t.push(setTimeout(() => setSub("fire"), 800));
-    t.push(setTimeout(() => setSub("hit"), 1050));
-    t.push(setTimeout(() => setSub("fly"), 1250));
-    t.push(setTimeout(() => setSub("land"), 1900));
+    t.push(setTimeout(() => setSub("fire"), 1000));   // longer charge buildup
+    t.push(setTimeout(() => setSub("hit"), 1200));
+    t.push(setTimeout(() => setSub("fly"), 1700));    // longer destruction frame
+    t.push(setTimeout(() => setSub("land"), 2400));
     return () => t.forEach(clearTimeout);
   }, []);
+
+  // Multi-burst confetti barrage at the moment of impact — fires once.
+  useEffect(() => {
+    if (sub !== "hit" || confettiFiredRef.current) return;
+    confettiFiredRef.current = true;
+    const impactX = winnerOnLeft ? 0.78 : 0.22;
+    // Wave 1 — concentrated bright burst from the impact point
+    confetti({
+      particleCount: 220,
+      spread: 100,
+      startVelocity: 55,
+      origin: { x: impactX, y: 0.5 },
+      colors: ["#FFFFFF", "#FEF3C7", "#FACC15", "#F97316", "#EF4444"],
+      scalar: 1.4,
+      ticks: 180,
+    });
+    // Wave 2 — orange/red shockwave
+    setTimeout(() => {
+      confetti({
+        particleCount: 140,
+        spread: 180,
+        startVelocity: 35,
+        origin: { x: impactX, y: 0.5 },
+        colors: ["#F97316", "#EF4444", "#7F1D1D", "#1F2937"],
+        scalar: 1.1,
+        ticks: 150,
+      });
+    }, 120);
+    // Wave 3 — debris streaming sideways (away from winner)
+    setTimeout(() => {
+      confetti({
+        particleCount: 80,
+        spread: 60,
+        startVelocity: 70,
+        origin: { x: impactX, y: 0.5 },
+        angle: winnerOnLeft ? 30 : 150,  // straight to opposite side
+        colors: ["#1F2937", "#374151", "#7F1D1D"],
+        scalar: 0.9,
+        shapes: ["square"],
+        ticks: 200,
+      });
+    }, 240);
+  }, [sub, winnerOnLeft]);
 
   // Loser flies AWAY from the winner — direction depends on which side they're on.
   const loserFlyX = winnerOnLeft ? 900 : -900;
@@ -446,21 +493,40 @@ function FinalBlowStage({
   const loserPose =
     sub === "hit" ? "hit" : sub === "fly" || sub === "land" ? "ko" : "idle";
 
+  // Camera-shake during destruction frame — applied to entire stage.
+  const isDestroying = sub === "hit" || sub === "fly";
   return (
     <motion.div
-      className="absolute inset-0 overflow-hidden"
+      className={`absolute inset-0 overflow-hidden ${isDestroying ? "animate-cinematic-shake" : ""}`}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
     >
-      {/* Arena background — gradient sky + horizon glow */}
+      {/* Arena background — base + heat-damage red wash during destruction */}
       <div
         className="absolute inset-0"
         style={{
           background:
             "linear-gradient(180deg, #1e1b4b 0%, #4c1d95 40%, #c2410c 100%)",
         }}
+      />
+      <motion.div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            "linear-gradient(180deg, #7F1D1D 0%, #B91C1C 50%, #DC2626 100%)",
+          mixBlendMode: "multiply",
+        }}
+        animate={{
+          opacity:
+            sub === "charge" ? 0.15
+            : sub === "fire" ? 0.3
+            : sub === "hit" ? 0.5
+            : sub === "fly" ? 0.4
+            : 0,
+        }}
+        transition={{ duration: 0.25 }}
       />
       <div
         className="absolute left-0 right-0 bottom-0 h-1/3 pointer-events-none"
@@ -471,91 +537,288 @@ function FinalBlowStage({
       />
       <div className="absolute left-0 right-0 bottom-1/3 h-px bg-orange-300/60 pointer-events-none" />
 
-      {/* Power-up shockwave from winner during charge */}
+      {/* CHARGE: vignette darkens, speed lines converge from screen edges */}
       <AnimatePresence>
         {sub === "charge" && (
+          <>
+            <motion.div
+              key="vignette"
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background:
+                  "radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.7) 80%)",
+              }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.6 }}
+            />
+            {/* Speed lines converging on winner from all sides */}
+            {Array.from({ length: 16 }).map((_, i) => {
+              const angle = (i * 360) / 16;
+              return (
+                <motion.div
+                  key={`speed-${i}`}
+                  className="absolute origin-right"
+                  style={{
+                    left: winnerOnLeft ? "20%" : "80%",
+                    top: "50%",
+                    width: 300,
+                    height: 2,
+                    background: `linear-gradient(90deg, transparent, white, transparent)`,
+                    transform: `rotate(${angle}deg)`,
+                    filter: "drop-shadow(0 0 3px white)",
+                  }}
+                  initial={{ scaleX: 0, opacity: 0 }}
+                  animate={{ scaleX: 1, opacity: [0, 0.9, 0.3] }}
+                  transition={{ duration: 0.5, delay: i * 0.02 }}
+                />
+              );
+            })}
+            {/* Charging shockwave */}
+            <motion.div
+              key="shockwave"
+              className="absolute rounded-full pointer-events-none"
+              style={{
+                left: winnerOnLeft ? "20%" : "80%",
+                top: "50%",
+                width: 260,
+                height: 260,
+                x: "-50%",
+                y: "-50%",
+                background: `radial-gradient(circle, ${palette.accent}00 30%, ${palette.glow}aa 60%, transparent 80%)`,
+                filter: "blur(3px)",
+              }}
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: [0, 3], opacity: [0, 1, 0] }}
+              transition={{ duration: 0.8 }}
+            />
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* FIRE: FULL-SCREEN white flash for the moment of release */}
+      <AnimatePresence>
+        {sub === "fire" && (
           <motion.div
-            key="shockwave"
-            className="absolute rounded-full pointer-events-none"
-            style={{
-              left: winnerOnLeft ? "20%" : "80%",
-              top: "50%",
-              width: 200,
-              height: 200,
-              x: "-50%",
-              y: "-50%",
-              background: `radial-gradient(circle, ${palette.accent}00 30%, ${palette.glow}aa 60%, transparent 80%)`,
-              filter: "blur(2px)",
-            }}
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: [0, 2.5], opacity: [0, 1, 0] }}
-            transition={{ duration: 0.55 }}
+            key="fire-flash"
+            className="absolute inset-0 bg-white pointer-events-none"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0, 1, 0.6] }}
+            transition={{ duration: 0.18 }}
           />
         )}
       </AnimatePresence>
 
-      {/* Energy beam — fires from winner toward loser during the "fire" sub-stage */}
+      {/* MASSIVE energy beam — fills the central 35% of viewport height */}
       <AnimatePresence>
         {(sub === "fire" || sub === "hit") && (
-          <motion.div
-            key="beam"
-            className="absolute top-1/2 -translate-y-1/2 h-20 pointer-events-none"
-            style={{
-              left: winnerOnLeft ? "22%" : "22%",
-              right: winnerOnLeft ? "22%" : "22%",
-              background: `linear-gradient(${winnerOnLeft ? 90 : 270}deg,
-                ${palette.accent}, #F97316, white, #F97316, ${palette.glow})`,
-              filter:
-                "drop-shadow(0 0 24px #F97316) drop-shadow(0 0 64px #FACC15) blur(0.5px)",
-              borderRadius: 36,
-            }}
-            initial={{
-              clipPath: winnerOnLeft
-                ? "inset(0 100% 0 0)"
-                : "inset(0 0 0 100%)",
-              opacity: 0,
-            }}
-            animate={{ clipPath: "inset(0 0 0 0)", opacity: 1 }}
-            exit={{ opacity: 0, scale: 1.3 }}
-            transition={{ duration: 0.3, ease: "easeOut" }}
-          />
+          <>
+            {/* Outer halo — soft yellow plasma glow */}
+            <motion.div
+              key="beam-halo"
+              className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
+              style={{
+                left: 0,
+                right: 0,
+                height: "60vh",
+                maxHeight: 500,
+                background:
+                  "radial-gradient(ellipse at center, #FACC1577 0%, #F9731644 40%, transparent 70%)",
+                filter: "blur(40px)",
+                mixBlendMode: "screen",
+              }}
+              initial={{
+                clipPath: winnerOnLeft ? "inset(0 100% 0 0)" : "inset(0 0 0 100%)",
+                opacity: 0,
+              }}
+              animate={{ clipPath: "inset(0 0 0 0)", opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+            />
+            {/* Main beam */}
+            <motion.div
+              key="beam-main"
+              className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
+              style={{
+                left: 0,
+                right: 0,
+                height: 180,
+                background: `linear-gradient(${winnerOnLeft ? 90 : 270}deg,
+                  ${palette.accent}, #F97316, #FACC15, white, #FACC15, #F97316, ${palette.glow})`,
+                filter:
+                  "drop-shadow(0 0 40px #F97316) drop-shadow(0 0 80px #FACC15) blur(1px)",
+                borderRadius: 60,
+              }}
+              initial={{
+                clipPath: winnerOnLeft ? "inset(0 100% 0 0)" : "inset(0 0 0 100%)",
+                opacity: 0,
+                scaleY: 0.3,
+              }}
+              animate={{ clipPath: "inset(0 0 0 0)", opacity: 1, scaleY: 1 }}
+              exit={{ opacity: 0, scaleY: 1.4 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+            />
+            {/* White-hot core */}
+            <motion.div
+              key="beam-core"
+              className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
+              style={{
+                left: 0,
+                right: 0,
+                height: 50,
+                background:
+                  "linear-gradient(90deg, transparent, white 20%, #FEF3C7 50%, white 80%, transparent)",
+                filter: "drop-shadow(0 0 24px white) blur(1px)",
+                borderRadius: 40,
+              }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+            />
+          </>
         )}
       </AnimatePresence>
 
-      {/* Impact explosion at loser position when beam connects */}
+      {/* Chromatic RGB split on HIT — world-breaking effect */}
+      <AnimatePresence>
+        {sub === "hit" && (
+          <>
+            {[
+              { color: "#FF1744", dx: -10 },
+              { color: "#00E5FF", dx: 10 },
+            ].map((c, i) => (
+              <motion.div
+                key={`chrom-${i}`}
+                className="absolute pointer-events-none"
+                style={{
+                  inset: 0,
+                  background: c.color,
+                  mixBlendMode: "screen",
+                  transform: `translateX(${c.dx}px)`,
+                }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: [0, 0.35, 0] }}
+                transition={{ duration: 0.3 }}
+              />
+            ))}
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Impact crater explosion — multi-layer at receive site */}
       <AnimatePresence>
         {(sub === "hit" || sub === "fly") && (
-          <motion.div
-            key="impact-burst"
-            className="absolute rounded-full pointer-events-none"
-            style={{
-              left: winnerOnLeft ? "80%" : "20%",
-              top: "50%",
-              width: 280,
-              height: 280,
-              x: "-50%",
-              y: "-50%",
-              background:
-                "radial-gradient(circle, white 0%, #FCD34D 25%, #F97316 50%, transparent 75%)",
-              filter: "blur(2px)",
-            }}
-            initial={{ scale: 0.2, opacity: 0 }}
-            animate={{ scale: [0.2, 1.6, 2.4], opacity: [0, 1, 0] }}
-            transition={{ duration: 0.6 }}
-          />
+          <>
+            {/* White-hot core */}
+            <motion.div
+              key="impact-core"
+              className="absolute rounded-full pointer-events-none"
+              style={{
+                left: winnerOnLeft ? "80%" : "20%",
+                top: "50%",
+                width: 200,
+                height: 200,
+                x: "-50%",
+                y: "-50%",
+                background:
+                  "radial-gradient(circle, white 0%, #FEF3C7 30%, #FACC15 60%, transparent 80%)",
+                filter: "blur(2px)",
+                mixBlendMode: "screen",
+              }}
+              initial={{ scale: 0.1, opacity: 0 }}
+              animate={{ scale: [0.1, 1.8, 2.5], opacity: [0, 1, 0] }}
+              transition={{ duration: 0.7 }}
+            />
+            {/* Orange shell */}
+            <motion.div
+              key="impact-shell"
+              className="absolute rounded-full pointer-events-none"
+              style={{
+                left: winnerOnLeft ? "80%" : "20%",
+                top: "50%",
+                width: 380,
+                height: 380,
+                x: "-50%",
+                y: "-50%",
+                background:
+                  "radial-gradient(circle, #F97316 0%, #DC2626 40%, transparent 70%)",
+                filter: "blur(8px)",
+                mixBlendMode: "screen",
+              }}
+              initial={{ scale: 0.2, opacity: 0 }}
+              animate={{ scale: [0.2, 1.4, 2.8], opacity: [0, 0.9, 0] }}
+              transition={{ duration: 0.8, delay: 0.05 }}
+            />
+            {/* Secondary blast ring */}
+            <motion.div
+              key="impact-ring"
+              className="absolute rounded-full pointer-events-none border-4"
+              style={{
+                left: winnerOnLeft ? "80%" : "20%",
+                top: "50%",
+                width: 60,
+                height: 60,
+                x: "-50%",
+                y: "-50%",
+                borderColor: "white",
+                filter: "drop-shadow(0 0 16px white)",
+              }}
+              initial={{ scale: 0.5, opacity: 1 }}
+              animate={{ scale: 8, opacity: 0 }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
+            />
+          </>
         )}
       </AnimatePresence>
 
-      {/* Brief white screen flash on impact */}
+      {/* Brief full-screen white flash on hit (in addition to fire flash) */}
       <AnimatePresence>
         {sub === "hit" && (
           <motion.div
             key="hit-flash"
             className="absolute inset-0 bg-white pointer-events-none"
             initial={{ opacity: 0 }}
-            animate={{ opacity: [0, 0.85, 0] }}
-            transition={{ duration: 0.22 }}
+            animate={{ opacity: [0, 0.95, 0.3, 0] }}
+            transition={{ duration: 0.3 }}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Debris trail following the loser (small dark chunks) */}
+      <AnimatePresence>
+        {sub === "fly" && (
+          <>
+            {Array.from({ length: 14 }).map((_, i) => {
+              const driftAngle = (i % 5) * 20 - 40;
+              const dist = 200 + i * 30;
+              const flyDir = winnerOnLeft ? 1 : -1;
+              return (
+                <motion.div
+                  key={`debris-${i}`}
+                  className="absolute"
+                  style={{
+                    left: winnerOnLeft ? "78%" : "22%",
+                    top: "50%",
+                    width: 6 + (i % 4),
+                    height: 6 + (i % 4),
+                    background: i % 3 === 0 ? "#DC2626" : i % 3 === 1 ? "#1F2937" : "#7F1D1D",
+                    borderRadius: i % 2 ? "50%" : 1,
+                    filter: i % 2 ? "drop-shadow(0 0 4px #F97316)" : undefined,
+                  }}
+                  initial={{ x: 0, y: 0, opacity: 1, scale: 1, rotate: 0 }}
+                  animate={{
+                    x: flyDir * dist + Math.cos((driftAngle * Math.PI) / 180) * 100,
+                    y: Math.sin((driftAngle * Math.PI) / 180) * 200 + 100,
+                    opacity: 0,
+                    scale: 0.3,
+                    rotate: 720,
+                  }}
+                  transition={{ duration: 0.7, ease: "easeOut", delay: i * 0.02 }}
+                />
+              );
+            })}
+          </>
         )}
       </AnimatePresence>
 
