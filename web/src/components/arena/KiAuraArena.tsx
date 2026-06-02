@@ -454,7 +454,9 @@ function BlockFX({ phase }: { phase: ActionPhase }) {
 }
 
 function AttackFX({ phase, side }: { phase: ActionPhase; side: "left" | "right" }) {
-  // Multi-slash + spark burst + chromatic aberration ring. Pure code, no FX assets.
+  // Physical PUNCH — fast, hard, red/black. Visually opposite to Energy Wave
+  // (which is wide/glowing/yellow). One sharp flash, debris particles, knock-
+  // back lines. No glowing energy palette — keep it visceral.
   return (
     <AnimatePresence>
       {phase === "impact" && (
@@ -464,93 +466,122 @@ function AttackFX({ phase, side }: { phase: ActionPhase; side: "left" | "right" 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.3 }}
+          transition={{ duration: 0.18 }}
         >
-          {/* Chromatic aberration ring — red + blue offset hexagons */}
-          {[
-            { rgb: "#FF1744", dx: -3, dy: 0 },
-            { rgb: "#00E5FF", dx: 3, dy: 0 },
-          ].map((c, i) => (
-            <motion.div
-              key={`chrom-${i}`}
-              className="absolute rounded-full"
-              style={{
-                width: 100,
-                height: 100,
-                border: `3px solid ${c.rgb}`,
-                left: `calc(50% + ${c.dx}px)`,
-                top: `calc(50% + ${c.dy}px)`,
-                transform: "translate(-50%, -50%)",
-                mixBlendMode: "screen",
-                filter: `drop-shadow(0 0 8px ${c.rgb})`,
-              }}
-              initial={{ scale: 0.3, opacity: 1 }}
-              animate={{ scale: 2.2, opacity: 0 }}
-              transition={{ duration: 0.45, ease: "easeOut" }}
-            />
-          ))}
+          {/* Single hard impact flash — pure white burst, fast */}
+          <motion.div
+            className="absolute rounded-full"
+            style={{
+              width: 80,
+              height: 80,
+              background: "radial-gradient(circle, white 0%, #FCA5A5 40%, transparent 70%)",
+              filter: "blur(1px)",
+              mixBlendMode: "screen",
+            }}
+            initial={{ scale: 0.2, opacity: 1 }}
+            animate={{ scale: 1.6, opacity: 0 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+          />
 
-          {/* Triple slash marks — different angles, staggered */}
+          {/* Crimson shock-burst behind the flash — gives weight */}
+          <motion.div
+            className="absolute rounded-full"
+            style={{
+              width: 140,
+              height: 140,
+              background: "radial-gradient(circle, #DC2626 0%, #7F1D1D 40%, transparent 70%)",
+              filter: "blur(8px)",
+              mixBlendMode: "multiply",
+            }}
+            initial={{ scale: 0.4, opacity: 0.9 }}
+            animate={{ scale: 1.4, opacity: 0 }}
+            transition={{ duration: 0.28, ease: "easeOut" }}
+          />
+
+          {/* Pow-style starburst — angular jagged hit mark (Roy Lichtenstein POW) */}
+          <motion.svg
+            width="220"
+            height="220"
+            viewBox="-110 -110 220 220"
+            className="absolute"
+            initial={{ scale: 0, rotate: side === "left" ? -20 : 20, opacity: 0 }}
+            animate={{ scale: [0, 1.2, 1], rotate: 0, opacity: [0, 1, 0] }}
+            transition={{ duration: 0.35 }}
+          >
+            <polygon
+              points="0,-100 18,-32 80,-58 30,-12 100,0 30,12 80,58 18,32 0,100 -18,32 -80,58 -30,12 -100,0 -30,-12 -80,-58 -18,-32"
+              fill="#FCA5A5"
+              stroke="#DC2626"
+              strokeWidth="4"
+              style={{ filter: "drop-shadow(0 0 12px #EF4444)" }}
+            />
+            <polygon
+              points="0,-60 12,-22 50,-38 18,-10 60,0 18,10 50,38 12,22 0,60 -12,22 -50,38 -18,10 -60,0 -18,-10 -50,-38 -12,-22"
+              fill="white"
+            />
+          </motion.svg>
+
+          {/* Two crossing slash lines — sharper, no gradient glow (sharp = physical) */}
           {[
-            { angle: side === "left" ? -25 : 25, delay: 0, w: 180 },
-            { angle: side === "left" ? -5 : 5, delay: 0.05, w: 200 },
-            { angle: side === "left" ? 15 : -15, delay: 0.1, w: 160 },
+            { angle: side === "left" ? -35 : 35 },
+            { angle: side === "left" ? 35 : -35 },
           ].map((s, i) => (
             <motion.div
               key={`slash-${i}`}
               className="absolute"
               style={{
-                width: s.w,
-                height: 6,
+                width: 220,
+                height: 4,
                 background:
-                  "linear-gradient(90deg, transparent 0%, #FCA5A5 20%, #DC2626 50%, white 50.5%, #DC2626 51%, #FCA5A5 80%, transparent 100%)",
+                  "linear-gradient(90deg, transparent 0%, white 40%, white 60%, transparent 100%)",
                 transform: `rotate(${s.angle}deg)`,
-                filter: "drop-shadow(0 0 10px #EF4444) blur(0.5px)",
+                filter: "drop-shadow(0 0 2px black)",
               }}
-              initial={{ opacity: 0, scaleX: 0 }}
-              animate={{ opacity: [0, 1, 1, 0], scaleX: [0, 1.1, 1, 0.95] }}
-              transition={{ duration: 0.4, delay: s.delay }}
+              initial={{ scaleX: 0, opacity: 0 }}
+              animate={{ scaleX: [0, 1, 0.8], opacity: [0, 1, 0] }}
+              transition={{ duration: 0.25, delay: i * 0.04 }}
             />
           ))}
 
-          {/* Spark burst — 12 dots radiating outward */}
-          {Array.from({ length: 12 }).map((_, i) => {
-            const angle = (i * 360) / 12;
-            const dist = 60 + (i % 3) * 20;
+          {/* Debris — small dark chunks fly outward + downward gravity */}
+          {Array.from({ length: 14 }).map((_, i) => {
+            const angle = (i * 360) / 14 + (i % 2) * 12;
+            const dist = 70 + (i % 4) * 15;
             return (
               <motion.div
-                key={`spark-${i}`}
-                className="absolute rounded-full"
+                key={`debris-${i}`}
+                className="absolute"
                 style={{
-                  width: 5,
-                  height: 5,
-                  background: i % 2 ? "#FCD34D" : "white",
-                  filter: "drop-shadow(0 0 6px #FCD34D)",
+                  width: 4 + (i % 3),
+                  height: 4 + (i % 3),
+                  background: i % 3 === 0 ? "#7F1D1D" : "#1F2937",
+                  borderRadius: i % 2 ? "50%" : "1px",
                 }}
                 initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
                 animate={{
                   x: Math.cos((angle * Math.PI) / 180) * dist,
-                  y: Math.sin((angle * Math.PI) / 180) * dist,
+                  y: Math.sin((angle * Math.PI) / 180) * dist * 0.6 + 40,
                   opacity: 0,
-                  scale: 0.3,
+                  scale: 0.4,
+                  rotate: 360,
                 }}
-                transition={{ duration: 0.5, ease: "easeOut" }}
+                transition={{ duration: 0.6, ease: "easeOut" }}
               />
             );
           })}
 
-          {/* Radiating speed lines */}
-          {[-30, -15, 0, 15, 30].map((deg) => (
+          {/* Sharp directional speed lines (kinetic motion) */}
+          {[-15, -5, 5, 15].map((deg) => (
             <div
               key={`line-${deg}`}
               className="absolute"
               style={{
-                width: 80,
-                height: 2,
-                background:
-                  "linear-gradient(90deg, transparent, white, transparent)",
-                transform: `rotate(${deg}deg) translateX(${side === "left" ? 30 : -30}px)`,
-                opacity: 0.7,
+                width: 100,
+                height: 3,
+                background: "white",
+                transform: `rotate(${deg}deg) translateX(${side === "left" ? -60 : 60}px)`,
+                opacity: 0.8,
+                filter: "drop-shadow(0 0 1px black)",
               }}
             />
           ))}
@@ -653,7 +684,9 @@ function TeleportFX({ phase }: { phase: ActionPhase }) {
 }
 
 function EnergyChargeFX({ phase, color }: { phase: ActionPhase; color: string }) {
-  // Multi-layer energy orb buildup with electric arcs converging.
+  // KAMEHAMEHA charge — massive plasma buildup with 12 electric arcs,
+  // pulsing core that grows over the full windup, and rising plasma
+  // streams. Visually opposite to Attack (which is fast/sharp/red).
   return (
     <AnimatePresence>
       {phase === "windup" && (
@@ -665,72 +698,254 @@ function EnergyChargeFX({ phase, color }: { phase: ActionPhase; color: string })
           exit={{ opacity: 0, scale: 1.5 }}
           transition={{ duration: 0.5 }}
         >
-          {/* Outer aura glow */}
+          {/* Far-out aura — yellow plasma glow that grows during charge */}
           <motion.div
             className="absolute rounded-full"
             style={{
-              width: 130,
-              height: 130,
-              background: `radial-gradient(circle, ${color}88 0%, #F9731644 40%, transparent 70%)`,
-              filter: "blur(16px)",
+              width: 220,
+              height: 220,
+              background: `radial-gradient(circle, #FACC1588 0%, #F9731655 30%, ${color}33 60%, transparent 80%)`,
+              filter: "blur(28px)",
+              mixBlendMode: "screen",
             }}
             initial={{ scale: 0.3, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.5 }}
+            animate={{ scale: [0.3, 1, 1.3], opacity: [0, 1, 1] }}
+            transition={{ duration: 0.55 }}
           />
 
-          {/* Mid energy ball — pulsing */}
-          <div
-            className="absolute rounded-full animate-energy-ball"
-            style={{
-              width: 70,
-              height: 70,
-              background: `radial-gradient(circle, white 0%, ${color} 40%, #F97316 70%, transparent 100%)`,
-              filter: `drop-shadow(0 0 28px ${color}) drop-shadow(0 0 56px #F97316)`,
-            }}
-          />
-
-          {/* Bright white core */}
+          {/* Mid plasma orb — pulsing, growing */}
           <motion.div
             className="absolute rounded-full"
             style={{
-              width: 28,
-              height: 28,
-              background:
-                "radial-gradient(circle, white 0%, #FFF7ED 60%, transparent 100%)",
-              filter: "blur(2px)",
+              width: 110,
+              height: 110,
+              background: `radial-gradient(circle, white 0%, #FEF3C7 25%, ${color} 50%, #F97316 75%, transparent 100%)`,
+              filter: `drop-shadow(0 0 36px ${color}) drop-shadow(0 0 72px #F97316)`,
             }}
-            animate={{ scale: [0.7, 1.2, 0.7] }}
-            transition={{ duration: 0.4, repeat: Infinity, ease: "easeInOut" }}
+            initial={{ scale: 0.2 }}
+            animate={{ scale: [0.2, 1.3, 1] }}
+            transition={{ duration: 0.55, ease: "easeOut" }}
           />
 
-          {/* Electric arcs converging from 6 directions */}
-          {[0, 60, 120, 180, 240, 300].map((deg, i) => (
-            <motion.div
-              key={`arc-${i}`}
-              className="absolute origin-left"
-              style={{
-                width: 90,
-                height: 2,
-                background: `linear-gradient(90deg, ${color}, white, transparent)`,
-                transform: `rotate(${deg}deg)`,
-                filter: `drop-shadow(0 0 4px ${color})`,
-                left: "50%",
-                top: "50%",
-              }}
-              initial={{ scaleX: 1.5, opacity: 0 }}
-              animate={{ scaleX: 0.2, opacity: [0, 1, 0] }}
-              transition={{
-                duration: 0.45,
-                delay: i * 0.06,
-                repeat: Infinity,
-                ease: "easeIn",
-              }}
-            />
+          {/* Bright white core — pulses fast for "charging" feel */}
+          <motion.div
+            className="absolute rounded-full"
+            style={{
+              width: 40,
+              height: 40,
+              background:
+                "radial-gradient(circle, white 0%, #FFF7ED 50%, transparent 100%)",
+              filter: "blur(2px)",
+            }}
+            animate={{ scale: [0.8, 1.4, 0.8] }}
+            transition={{ duration: 0.3, repeat: Infinity, ease: "easeInOut" }}
+          />
+
+          {/* 12 electric arcs converging from all directions — denser than Attack */}
+          {Array.from({ length: 12 }).map((_, i) => {
+            const deg = (i * 360) / 12;
+            return (
+              <motion.div
+                key={`arc-${i}`}
+                className="absolute origin-left"
+                style={{
+                  width: 120,
+                  height: 2,
+                  background: `linear-gradient(90deg, ${color}, white, transparent)`,
+                  transform: `rotate(${deg}deg)`,
+                  filter: `drop-shadow(0 0 4px ${color})`,
+                  left: "50%",
+                  top: "50%",
+                }}
+                initial={{ scaleX: 1.6, opacity: 0 }}
+                animate={{ scaleX: 0.15, opacity: [0, 1, 0] }}
+                transition={{
+                  duration: 0.5,
+                  delay: i * 0.04,
+                  repeat: Infinity,
+                  ease: "easeIn",
+                }}
+              />
+            );
+          })}
+
+          {/* Rising plasma streams — 5 columns of yellow-orange motes */}
+          {[-30, -15, 0, 15, 30].map((offset, ci) => (
+            <div key={`col-${ci}`} className="absolute" style={{ left: `calc(50% + ${offset}px)`, bottom: "-20%" }}>
+              {[0, 0.15, 0.3].map((delay, i) => (
+                <motion.div
+                  key={i}
+                  className="absolute rounded-full"
+                  style={{
+                    bottom: 0,
+                    width: 5,
+                    height: 5,
+                    background: "#FACC15",
+                    filter: "drop-shadow(0 0 4px #FACC15) blur(0.5px)",
+                  }}
+                  initial={{ y: 0, opacity: 0 }}
+                  animate={{ y: -100, opacity: [0, 1, 0], scale: [0.5, 1, 0] }}
+                  transition={{
+                    duration: 0.9,
+                    delay: delay + ci * 0.05,
+                    repeat: Infinity,
+                    ease: "easeOut",
+                  }}
+                />
+              ))}
+            </div>
           ))}
         </motion.div>
       )}
     </AnimatePresence>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Kamehameha-style beam — wide multi-layer plasma with screen-wide
+// shockwave at impact. Visually distinct from the punch (which is fast,
+// red, debris-based). This is slow-build, wide, yellow plasma + electric.
+
+function KamehamehaBeam({ color, from }: { color: string; from: "left" | "right" }) {
+  const isLeft = from === "left";
+  const initialClip = isLeft ? "inset(0 100% 0 0)" : "inset(0 0 0 100%)";
+  const beamGradient = isLeft
+    ? `linear-gradient(90deg, ${color}, #FACC15, white, #FACC15, #F97316)`
+    : `linear-gradient(270deg, ${color}, #FACC15, white, #FACC15, #F97316)`;
+
+  return (
+    <>
+      {/* Outer glow halo — soft yellow-orange across the full beam path */}
+      <motion.div
+        key="beam-glow"
+        className="absolute left-[15%] right-[15%] top-1/2 -translate-y-1/2 pointer-events-none"
+        style={{
+          height: 140,
+          background:
+            "radial-gradient(ellipse at center, #FACC1588 0%, #F9731644 40%, transparent 70%)",
+          filter: "blur(28px)",
+          mixBlendMode: "screen",
+        }}
+        initial={{ clipPath: initialClip, opacity: 0 }}
+        animate={{ clipPath: "inset(0 0 0 0)", opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.3, ease: "easeOut" }}
+      />
+
+      {/* Main beam — wide plasma column */}
+      <motion.div
+        key="beam-main"
+        className="absolute left-[15%] right-[15%] top-1/2 -translate-y-1/2 pointer-events-none"
+        style={{
+          height: 70,
+          background: beamGradient,
+          filter:
+            "drop-shadow(0 0 24px #F97316) drop-shadow(0 0 48px #FACC15) blur(0.3px)",
+          borderRadius: 40,
+        }}
+        initial={{ clipPath: initialClip, opacity: 0, scaleY: 0.4 }}
+        animate={{ clipPath: "inset(0 0 0 0)", opacity: 1, scaleY: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.35, ease: "easeOut" }}
+      />
+
+      {/* Inner white-hot core — narrower, brighter */}
+      <motion.div
+        key="beam-core"
+        className="absolute left-[15%] right-[15%] top-1/2 -translate-y-1/2 pointer-events-none"
+        style={{
+          height: 24,
+          background:
+            "linear-gradient(90deg, transparent 0%, white 15%, #FEF3C7 50%, white 85%, transparent 100%)",
+          filter: "drop-shadow(0 0 12px white) blur(0.5px)",
+          borderRadius: 20,
+        }}
+        initial={{ clipPath: initialClip, opacity: 0 }}
+        animate={{ clipPath: "inset(0 0 0 0)", opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.32, ease: "easeOut" }}
+      />
+
+      {/* Electric arcs flickering along the beam length */}
+      {[0.15, 0.35, 0.55, 0.75].map((leftPct, i) => (
+        <motion.div
+          key={`arc-${i}`}
+          className="absolute pointer-events-none"
+          style={{
+            left: `${15 + leftPct * 70}%`,
+            top: "50%",
+            width: 40,
+            height: 60,
+            background: "linear-gradient(180deg, transparent, white, transparent)",
+            transform: "translate(-50%, -50%) rotate(15deg)",
+            filter: "drop-shadow(0 0 6px white) blur(0.5px)",
+            mixBlendMode: "screen",
+          }}
+          initial={{ opacity: 0, scaleY: 0 }}
+          animate={{ opacity: [0, 1, 0, 1, 0], scaleY: [0, 1, 0.8, 1, 0] }}
+          transition={{ duration: 0.5, delay: 0.1 + i * 0.05 }}
+        />
+      ))}
+
+      {/* Impact explosion at the receiving fighter's location */}
+      <motion.div
+        key="beam-impact-glow"
+        className="absolute top-1/2 -translate-y-1/2 rounded-full pointer-events-none"
+        style={{
+          [isLeft ? "right" : "left"]: "5%",
+          width: 280,
+          height: 280,
+          background:
+            "radial-gradient(circle, white 0%, #FEF3C7 15%, #FACC15 30%, #F97316 55%, transparent 80%)",
+          filter: "blur(3px)",
+          mixBlendMode: "screen",
+        }}
+        initial={{ scale: 0.2, opacity: 0 }}
+        animate={{ scale: [0.2, 1.4, 2.2], opacity: [0, 1, 0] }}
+        transition={{ duration: 0.7, delay: 0.25 }}
+      />
+
+      {/* Screen-wide vignette flash — yellow tint pulsing once */}
+      <motion.div
+        key="beam-screen-flash"
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            "radial-gradient(ellipse at center, #FACC1533 0%, transparent 60%)",
+          mixBlendMode: "screen",
+        }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: [0, 0.9, 0] }}
+        transition={{ duration: 0.45, delay: 0.2 }}
+      />
+
+      {/* Lingering smoke wisps at impact (after beam fades) */}
+      {Array.from({ length: 6 }).map((_, i) => {
+        const angle = (i * 360) / 6;
+        const dist = 100;
+        return (
+          <motion.div
+            key={`smoke-${i}`}
+            className="absolute top-1/2 -translate-y-1/2 rounded-full pointer-events-none"
+            style={{
+              [isLeft ? "right" : "left"]: "10%",
+              width: 30,
+              height: 30,
+              background: "radial-gradient(circle, #FCA5A555 0%, transparent 70%)",
+              filter: "blur(8px)",
+            }}
+            initial={{ x: 0, y: 0, opacity: 0, scale: 0.5 }}
+            animate={{
+              x: (isLeft ? 1 : -1) * Math.cos((angle * Math.PI) / 180) * dist,
+              y: Math.sin((angle * Math.PI) / 180) * dist * 0.6 - 30,
+              opacity: [0, 0.7, 0],
+              scale: [0.5, 1.6, 2],
+            }}
+            transition={{ duration: 0.9, delay: 0.4 }}
+          />
+        );
+      })}
+    </>
   );
 }
 
@@ -795,74 +1010,8 @@ function CrossScreenFX({
 
   return (
     <AnimatePresence>
-      {playerBeam && (
-        <>
-          <motion.div
-            key="player-beam"
-            className="absolute left-[18%] right-[18%] top-1/2 -translate-y-1/2 h-14 pointer-events-none"
-            initial={{ clipPath: "inset(0 100% 0 0)", opacity: 0 }}
-            animate={{ clipPath: "inset(0 0 0 0)", opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.35, ease: "easeOut" }}
-            style={{
-              background: `linear-gradient(90deg, ${playerColor}, #F97316, white, #F97316, ${playerColor})`,
-              filter:
-                "drop-shadow(0 0 20px #F97316) drop-shadow(0 0 40px #FACC15) blur(0.5px)",
-              borderRadius: 28,
-            }}
-          />
-          {/* Impact explosion at AI side */}
-          <motion.div
-            key="player-beam-impact"
-            className="absolute right-[10%] top-1/2 -translate-y-1/2 rounded-full pointer-events-none"
-            style={{
-              width: 180,
-              height: 180,
-              background:
-                "radial-gradient(circle, white 0%, #FACC15 25%, #F97316 50%, transparent 75%)",
-              filter: "blur(2px)",
-              mixBlendMode: "screen",
-            }}
-            initial={{ scale: 0.2, opacity: 0 }}
-            animate={{ scale: [0.2, 1.3, 1.8], opacity: [0, 1, 0] }}
-            transition={{ duration: 0.6, delay: 0.25 }}
-          />
-        </>
-      )}
-      {aiBeam && (
-        <>
-          <motion.div
-            key="ai-beam"
-            className="absolute left-[18%] right-[18%] top-1/2 -translate-y-1/2 h-14 pointer-events-none"
-            initial={{ clipPath: "inset(0 0 0 100%)", opacity: 0 }}
-            animate={{ clipPath: "inset(0 0 0 0)", opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.35, ease: "easeOut" }}
-            style={{
-              background: `linear-gradient(270deg, ${aiColor}, #F97316, white, #F97316, ${aiColor})`,
-              filter:
-                "drop-shadow(0 0 20px #F97316) drop-shadow(0 0 40px #FACC15) blur(0.5px)",
-              borderRadius: 28,
-            }}
-          />
-          {/* Impact explosion at player side */}
-          <motion.div
-            key="ai-beam-impact"
-            className="absolute left-[10%] top-1/2 -translate-y-1/2 rounded-full pointer-events-none"
-            style={{
-              width: 180,
-              height: 180,
-              background:
-                "radial-gradient(circle, white 0%, #FACC15 25%, #F97316 50%, transparent 75%)",
-              filter: "blur(2px)",
-              mixBlendMode: "screen",
-            }}
-            initial={{ scale: 0.2, opacity: 0 }}
-            animate={{ scale: [0.2, 1.3, 1.8], opacity: [0, 1, 0] }}
-            transition={{ duration: 0.6, delay: 0.25 }}
-          />
-        </>
-      )}
+      {playerBeam && <KamehamehaBeam color={playerColor} from="left" />}
+      {aiBeam && <KamehamehaBeam color={aiColor} from="right" />}
       {/* Flying fist for basic Attack — projectile crossing from attacker toward target */}
       {playerPunch && (
         <motion.div
