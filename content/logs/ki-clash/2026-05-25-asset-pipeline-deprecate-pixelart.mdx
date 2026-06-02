@@ -1,0 +1,45 @@
+---
+title: "Asset pipeline + fallback components; pixel-art moved to deprecated/"
+date: "2026-05-25"
+project: ki-clash
+kind: tech-retro
+visibility: public
+language: en
+summary: "Scaffolded a drop-in asset pipeline with graceful emoji fallback components on web and mobile, and moved the pixel-art code into a deprecated/ folder via git mv since 12+ active screens still import it."
+tags: ["assets", "frontend", "refactor"]
+---
+
+## Context
+
+Components had hardcoded emojis and pixel-art character portraits, with no way for designs to flow in. The goal was a "drop-in" asset pipeline: as designs arrive, components auto-pick them up without code changes, with graceful emoji fallback while files are still missing.
+
+## What changed
+
+- Moved pixel-art directories to `deprecated/` on both web and mobile using `git mv` to preserve history; internal cross-references updated via `sed` (12 files of pixel-art path changes).
+- Created `lib/assets.ts` on web and mobile with identical IDs: typed paths for `CharacterId`, `CharacterExpression`, `EffectId`, `BackgroundId`, `SoundId` plus path helpers. Tagged `# CORE_CANDIDATE` as a reusable pattern.
+- Web assets use URL strings with `<img onError>` swap to emoji; mobile uses a static `require()` manifest (Metro bundler needs static paths) returning `null` if an entry is missing for emoji fallback.
+- New `CharacterPortrait` component (web + mobile): renders the image asset if the character ID is known and the image loads, otherwise falls back to the roster emoji via an `imageBroken` boolean toggled by `onError`.
+- Refactored `ActionCard` and `CharacterSelect`: `ActionCard` gains a card-icon asset with emoji fallback; `CharacterSelect` swaps `PixelPortrait` for `CharacterPortrait` as a one-line change.
+- Created `public/` (web) and `assets/` (mobile) folders for characters, cards, effects, backgrounds, sounds with `.gitkeep`.
+
+## Dependencies
+
+Added with explicit approval: web `framer-motion`, `canvas-confetti`, `@types/canvas-confetti`. Deferred: `@tsparticles/react` (workspace:^ npm bug) and mobile `react-native-reanimated` + `@shopify/react-native-skia` (peer dep conflict with react-dom 19.2.6).
+
+## Notes on approach
+
+Chose plain `<img>` over Next/Image because Next/Image hides broken state behind its loader, complicating fallback UX. The blast radius of pixel-art was 12+ files / 12+ active screens.
+
+## Verification
+
+- `npx tsc --noEmit` clean on both web and mobile.
+- `npx eslint` clean on the refactored files.
+
+## Decisions
+
+- **DR-3 — Asset pipeline shape (fallback components vs hard wiring).** Chosen: graceful fallback components — all asset-consuming components attempt the real asset and degrade to emoji/default if missing. Why: optimizes the design-developer handoff so the game stays playable during parallel design work, accepting that broken assets are discoverable rather than loud.
+- **DR-4 — Deprecate vs delete the pixel-art code.** Chosen: move pixel-art directories to a `deprecated/` subfolder via `git mv`, update all imports, keep compiling. Why: 12+ active screens still import pixel-art, so it can't be deleted yet; `deprecated/` walls it off while consumers migrate incrementally (folder-level strangler fig). The graveyard-folder pattern is common in 5+ year codebases; the delete option would have only saved ~10% disk/clone size.
+
+## Commits
+
+- `f1233c4` — feat: scaffold asset pipeline + character/icon fallback components

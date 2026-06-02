@@ -1,0 +1,52 @@
+---
+title: "PvP simulator surfaces 4 concurrency bugs (captured as xfail tests)"
+date: "2026-05-26"
+project: ki-clash
+kind: troubleshoot
+visibility: public
+language: en
+summary: "Driving a real Bo3 match through a PvP simulator against the live docker stack surfaced 4 concurrency/protocol bugs, which were then locked into a permanent pytest integration harness as xfail tests."
+tags: ["pvp", "bugs", "testing", "xfail"]
+---
+
+## What happened
+
+Jason wanted to see the PvP server work end-to-end, not just read code. We ran the full stack via docker compose (Postgres 16, Redis 7, FastAPI on port 8000) and drove a real match.
+
+The first `POST /api/v1/auth/guest` returned 500 because the tables did not exist. Root cause: `docker-compose.yml` overrode the Dockerfile `CMD` and skipped `alembic upgrade head`. Fixed by running the 2 migrations manually (`a67ac29dd885` + `b8f3c72e1a44`).
+
+We wrote `scripts/pvp_simulator.py` (~210 lines): two virtual players (P1 aggro, P2 defensive), concurrent guest registration via `httpx`, concurrent WS via the `websockets` library, driving `queue join -> match_found -> game WS -> submit_action loop -> match_result`.
+
+Running with `--seed 42`, a full Bo3 match completed in ~12s with a final score of 2-0 and ~400ms matchmaking pair latency — validating REST auth, matchmaking pairing, game WS, simultaneous reveal, perspective flipping, and round/match termination. Along the way the simulator exposed 4 bugs.
+
+## The 4 bugs
+
+**Bug 1 — spurious `opponent_reconnected` on first connect.** When P2 first connects, the session already exists (P1 created it), so the code falls into the reconnect branch via `handle_reconnect()` at `ws.py:158-162`. There's no distinction between first connect and reconnect-after-disconnect.
+
+**Bug 2 — duplicate `waiting_for_action` per turn.** `session.start()` is called from two places in `ws.py` (lines 151 and 171), both firing when both players connect, doubling `_send_waiting_for_action`. Lacks an idempotency check.
+
+**Bug 3 — message-order race.** The server sends `action_confirmed` and `turn_result` via two separate `await ws.send_json` calls, and the `_resolve_turn()` path crosses two players' sockets, so `turn_result` can arrive before `action_confirmed`.
+
+**Bug 4 — `action_confirmed` lacks a turn sequence number.** Originally described as "messages don't carry a turn sequence number." During test writing this was reassessed: reading `app/schemas/ws.py` showed that `turn_result` *does* carry `turn_number`, so the original description was inaccurate. The real gap is narrower — `action_confirmed` lacks `turn_number`. This was split into a passing positive regression test (`test_turn_result_carries_turn_sequence_number`) and an xfail (`test_action_confirmed_carries_turn_number`).
+
+> Note: the milestone title says the simulator "surfaces 4 concurrency bugs," but after the Bug 4 reassessment the 4th xfail reflects this revised, smaller scope. The code locations above are quoted from the engineering log, not independently re-verified against source.
+
+## Converting to a permanent test harness
+
+Phase 2.1 turned the CLI simulator into a pytest integration harness under `tests/integration/`. `conftest.py` drives one full Bo3 match against the live docker stack and records every WebSocket event into a `MatchRecording` dataclass (auto-skips if the API is unreachable). `test_pvp_flow.py` asserts on the recording.
+
+The test file splits into two classes:
+
+- **`TestMatchFlowBasics`** — 5 passing tests validating registration, matchmaking into a single `game_id`, both players receiving `match_result`, perspective inversion, and Bo3 termination.
+- **`TestKnownBugs`** — 4 xfail tests, one per discovered bug, each citing the code location and naming Phase 3 as owner.
+
+Final run: **6 passed, 4 xfailed in 15.06s**. The bugs are explicitly deferred to Phase 3 — neither commit is a `feat` fix.
+
+## Decisions
+
+- **DR-6 — How to record the 4 known PvP bugs without breaking CI.** Chose `@pytest.mark.xfail(strict=False)` with the full bug reason in the marker. Why: xfail keeps the bug visible (XFAIL) and the suite green, flips to XPASS when fixed as a discoverable signal, and `strict=False` tolerates concurrency-race flakiness — unlike skip/comment/TODO, which rot or hide the bug.
+
+## Commits
+
+- `441d65f` — chore: add PvP simulator + engineering log
+- `cb090f5` — test: add PvP integration test capturing 4 known bugs as xfail

@@ -1,0 +1,41 @@
+---
+title: "Phase 8 — Tekken-style room PvP (create code, share, character select, ready up)"
+date: "2026-06-01"
+project: ki-clash
+kind: update
+visibility: public
+language: en
+summary: "Phase 8 adds Tekken-style room PvP — create a room code, share it, pick a character, and ready up — with a backend rooms API plus the frontend /pvp flow, followed by a chore to auto-derive the WebSocket URL from the API URL in production."
+tags: ["pvp", "rooms", "multiplayer"]
+---
+
+## What
+
+Phase 8 implements Tekken-style room PvP: create a room code, share it, character select, and ready up.
+
+**Backend room flow:**
+- `app/api/v1/endpoints/rooms.py` — new rooms API endpoint
+- `app/api/v1/router.py` — wires the rooms endpoint into the v1 router
+- `app/core/room_store.py` — in-memory/core room store backing the flow
+- `app/schemas/room.py` — Pydantic room schema
+
+**Frontend PvP experience:**
+- `web/src/app/pvp/page.tsx` — the `/pvp` page
+- `web/src/components/room/RoomScreen.tsx` — RoomScreen component
+- `web/src/hooks/usePvP.ts` — usePvP hook
+- `web/src/lib/api.ts` — API client wiring
+
+**Follow-up chore (0ea9df7):** auto-derive the WebSocket URL from the API URL in production.
+- `web/.env.production.example` — prod env example
+- `web/src/hooks/usePvP.ts` — usePvP hook
+
+## Notes
+
+No engineering-log lines or decision sections were specified for this milestone, so the bullets above are grounded only in the commit subjects and changed-file lists, not in prose rationale.
+
+Committer dates are in -04:00 (EDT); the local calendar date is 2026-06-01, matching the planned date — note the timezone offset when comparing against any UTC-based log headers.
+
+## Commits
+
+- `9cb0e99` — feat(pvp): Tekken-style room PvP — create code, share, character select, ready up (Phase 8)
+- `0ea9df7` — chore(web): auto-derive WS URL from API URL in prod

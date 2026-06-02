@@ -1,0 +1,76 @@
+---
+title: "Toronto rebuild kickoff — spec re-grounded, 2-tier strategy, anime pivot"
+date: "2026-05-24"
+project: ki-clash
+kind: tech-retro
+visibility: public
+language: en
+summary: "A strategy/planning session (no code commit) that re-grounded the Ki Clash spec, locked a 2-tier Python-now/Go-later backend, and pivoted the visuals from pixel art to a modern anime card-game aesthetic with AI-generated assets."
+tags: ["strategy", "architecture", "decisions"]
+---
+
+## What this is
+
+No code commit. This milestone is a strategy/planning session recorded only in `docs/engineering-log.md` (dated 2026-05-24). It re-grounds the project spec and locks two big direction decisions.
+
+Note on "genesis": the log titles this entry "Project genesis," but git history shows the project actually started earlier — earliest commit `19874e6` on 2026-02-12 ("Initial commit"), with a working FastAPI game engine + web frontend landing in `0512942` on 2026-02-22. So this is honestly the genesis of the documented **rebuild/strategy**, not the literal first code.
+
+## Spec re-grounded
+
+Ki Clash is initialized as **Product003** of the AI Product Factory — a real-time 1v1 strategy game based on the Korean schoolyard "기싸움" (Dragon Ball ki-battle) hand game:
+
+- Best-of-3 rounds
+- 5 actions: Charge / Block / Attack / Energy Wave / Teleport
+- Simultaneous reveal
+- Ki economy
+
+(log lines 163-166)
+
+Original tech stack re-grounded per `docs/spec.md` + CLAUDE.md defaults (log lines 168-176):
+
+- Backend: Python 3.11 / FastAPI / SQLAlchemy 2.0 async / PostgreSQL / Redis
+- Realtime: FastAPI WebSocket
+- Auth: JWT (guest-first)
+- Payment: Stripe
+- Web: Next.js 16 + Tailwind 4
+- Mobile: Expo 54 + React Native
+- Deploy: Railway / Vercel / Docker
+- AI opponent: deterministic (no-LLM)
+
+## Decisions
+
+**DR-1 — Backend language for the game server (Python vs Spring vs Go).**
+Chosen: Option D, a hybrid 2-tier split — Python/FastAPI platform server now (auth, payment, profile, history), Go game server later once DAU exceeds ~500. Why: Spring is a known game-server anti-pattern and breaks Factory ROI (LangChain4j lags Python LangChain by 6-12 months); Python is good-enough CRUD for the platform tier; Go's goroutine model (~10KB/conn, <1ms GC, 50-100k conns) is only needed at scale, so the rewrite is deferred under "Build for 100, optimize later" (log lines 200-208).
+
+**DR-2 — Visual aesthetic (pixel art vs modern card game).**
+Chosen: Option B, a modern anime card-game aesthetic with AI-generated assets (Firefly + Figma), all original art, Dragon Ball-style effects. Why: Ki Clash monetizes via ads, so first-5-second visual impact drives the funnel; the initial pixel-art system in `web/src/components/pixel-art/` reads "indie cheap" on mobile, outsourced art ($300-800/character) breaks the Factory, and geometric is too far from the Dragon Ball-energy target — anime + AI gives a high ceiling, low marginal cost, and compounding skill (log lines 210-214).
+
+## Supporting calls
+
+- **AI as visual director, not designer.** Jason drives Adobe Firefly / DALL-E / Suno + Figma curation, framed as ~80 hours (also stated 40-80h in the DR-2 table — discrepancy noted) of skill investment that compounds across products, the content channel, and AI-video ambitions (log lines 216-218).
+- **Workflow split locked.** Claude.ai web for design ideation / prompt iteration / screenshot critique; Claude Code for code integration / asset wiring / dev server / git; Figma + Firefly for canvas work; browser for Pinterest / Mobbin / Dribbble references (log lines 220-225).
+
+## Follow-on roadmap (2026-05-26)
+
+A 5-phase sequential plan under "Make it work → make it right → make it fast" (log lines 231-242):
+
+1. Asset pipeline + frontend prep (2-3 days)
+2. Tests + observability (3-4 days)
+3. PvP hardening in Python (4-5 days)
+4. Distributed game state via Redis (3-4 days) — note: the roadmap marks this as "Externalize state; absorbed into Phase 5," i.e. folded into the Go build rather than run standalone
+5. Go game server new build (2-3 weeks), targeting 5000+ concurrent connections
+
+## Numbers behind DR-1 (from the log)
+
+- WebSocket memory: ~100KB/conn Python & Spring vs ~10KB Go (2KB goroutine stack)
+- GC pause: Python 0, Spring 1-10ms, Go <1ms
+- Concurrent connections: Python/Spring 5-10k vs Go 50-100k practical
+- Startup time: Python 200ms, Spring 3-10s, Go <50ms
+- Container image: Python 200MB+, Spring 300MB+, Go 30-50MB
+- Net: Go gives 5-10x WebSocket connection density
+- Counterweight: FastAPI handles 5k req/s on one instance, and Python ships CRUD features 2-3x faster than Go — hence Python stays on the platform tier
+- Cost framing: outsourced art $300-800/character → $3-8k across 10 products
+
+## Commits
+
+This was a planning / no-commit session — no code commit exists on 2026-05-24 (verified via git log). It is recorded only in `docs/engineering-log.md`.

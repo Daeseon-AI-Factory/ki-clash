@@ -1,0 +1,26 @@
+---
+title: "Game feel — Web Audio SFX, card-flip reveal, screen shake, countdown rhythm"
+date: "2026-02-22"
+project: ki-clash
+kind: ux-retro
+visibility: public
+language: en
+summary: "A game-feel pass on the web client: a 3-beat countdown between action confirm and reveal, procedural Web Audio sound effects with a mute toggle, a card-flip reveal with screen shake on outcomes, and an animated AI thinking indicator."
+tags: ["ux", "audio", "animation", "game-feel"]
+---
+
+This session added "juice" to the web client — pacing, sound, and animation around the turn loop. All points below come from commit subjects and the changed-file lists (git-only milestone; no engineering-log lines were recorded for it).
+
+## What changed
+
+- **Countdown rhythm** — Added a 3-beat countdown between action confirmation and reveal to pace the turn (`5f137f5`). Introduced `web/src/components/Countdown.tsx`, wired through `web/src/hooks/useGame.ts` and `web/src/app/page.tsx`, with supporting styles in `web/src/app/globals.css`.
+- **Sound effects** — Added procedural Web Audio API sound effects for all game events (`fc88a50`) via the `web/src/hooks/useSoundEffects.ts` hook, plus a `web/src/components/MuteButton.tsx` to toggle audio in `web/src/app/page.tsx`.
+- **Reveal + screen shake** — Added a dramatic card-flip reveal and screen shake on outcomes (`690ca97`) through `web/src/components/TurnReveal.tsx` and `web/src/app/globals.css` animations, driven from `web/src/app/page.tsx`.
+- **AI thinking indicator** — Added an animated AI thinking indicator shown during action selection (`4b9780b`) via `web/src/components/AIThinking.tsx`, integrated alongside `web/src/components/MatchHUD.tsx` in `web/src/app/page.tsx`. (Not named in the milestone title, but part of the same session and commit set, so included as a related game-feel change.)
+
+## Commits
+
+- `5f137f5` — feat: add 3-beat countdown rhythm between action confirm and reveal
+- `fc88a50` — feat: add procedural Web Audio API sound effects for all game events
+- `690ca97` — feat: add dramatic card flip reveal and screen shake on outcomes
+- `4b9780b` — feat: add animated AI thinking indicator during action selection

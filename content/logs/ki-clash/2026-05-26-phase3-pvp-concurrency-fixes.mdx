@@ -1,0 +1,45 @@
+---
+title: "Phase 3 — fixed the 4 PvP concurrency bugs"
+date: "2026-05-26"
+project: ki-clash
+kind: troubleshoot
+visibility: public
+language: en
+summary: "Phase 3 fixed the 4 PvP concurrency bugs documented as xfail during Phase 2.1; the integration suite went from 6 passed / 4 xfailed to 10 passed, and the full suite to 126 passed."
+tags: ["pvp", "concurrency", "bugfix"]
+---
+
+Phase 3 was bug-fix scope. It cleared the 4 PvP concurrency bugs that had been parked as `xfail` tests during Phase 2.1. All 4 clustered around two root causes — session lifecycle confusion (Bugs 1+2) and turn-correlation ambiguity (Bugs 3+4) — and were addressed in one PR.
+
+## The 4 bugs
+
+**Bug 1 — spurious `opponent_reconnected` on first connect.** `ws.py` used an `if session is None / else` branch where the `else` (any existing session) was treated as a reconnect, so the second player to connect always hit the reconnect path. Fixed by adding `self._connected_players: set[UUID]` and a single `handle_connect(player_id)` entrypoint that distinguishes first-connect (silent) from a real reconnect. `handle_reconnect()` was kept as a thin deprecation alias, and `ws.py` now always calls `session.handle_connect()`.
+
+**Bug 2 — duplicate `waiting_for_action` per turn.** `session.start()` was called from two paths in `ws.py`, so `_send_waiting_for_action` ran twice per turn at match start. Fixed with `self._started: bool` making `start()` idempotent (early-return if already started) and collapsing the two `start()` call sites into one.
+
+**Bug 3 — `action_confirmed` / `turn_result` out-of-order.** No additional code. It fell out of the Bug 2 cleanup: the `xfail` flipped to `XPASS` automatically once Bug 2 was fixed, because the duplicate `start()` had created the extra await points where events interleaved.
+
+**Bug 4 — `action_confirmed` lacks `turn_number`.** The message had been an inline dict literal in `game_session.py` rather than a schema function. Fixed by adding an `action_confirmed(turn_number, action)` schema function in `app/schemas/ws.py`, with `submit_action()` passing `current_round.turn_number + 1` to match the `waiting_for_action` convention.
+
+Note: line-number references seen in the engineering log (e.g. `game_session.py:139-142` for the `action_confirmed` dict literal) are author-stated and were not independently verified against the source files in this task.
+
+## Verification
+
+- Integration suite: 10 passed (was 6 passed, 4 xfailed) — 10 passed in 19.04s.
+- Full suite: 126 passed in 21.69s, zero failures and zero xfail.
+- All `xfail` markers removed; tests renamed `TestKnownBugs` → `TestPhase3Regressions` to serve as regression guards.
+
+## Scope notes
+
+Several originally-listed Phase 3 items were deferred or already done. Heartbeat/ping every 10s and idempotent action re-submission were deferred to Phase 5. The 30s reconnect window, 20-turn round match timeout, and server-side input validation were already implemented. The real gap was the 4 simulator-discovered bugs.
+
+Next up is Phase 4 — distributed game state: move `active_games` + `game_players` into Redis with pub/sub for cross-worker routing, required to scale to 5000+ concurrent.
+
+## Decisions
+
+- **DR-10 — single `handle_connect()` vs separate first/reconnect handlers.** Chosen: Option A, a single method with internal distinction — the caller (`ws.py`) calls one `handle_connect()` and the session decides internally. Why: the bug was the caller wrong-branching on a "does session exist?" signal that didn't actually mean "this player reconnected." The information lives in the session's `_connected_players` set, so the decision was pushed to where the data is (tell, don't ask).
+
+## Commits
+
+- `7dc3dde` — fix(pvp): fix 4 PvP concurrency bugs (Phase 3)
+- `b4fba14` — docs(log): record Phase 3 completion (4 PvP bugs fixed)

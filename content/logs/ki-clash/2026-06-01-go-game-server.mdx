@@ -1,0 +1,51 @@
+---
+title: "Phase 10 — standalone Go WebSocket game server (scaffold → game loop → hardening)"
+date: "2026-06-01"
+project: ki-clash
+kind: tech-retro
+visibility: public
+language: en
+summary: "Three commits stood up the Go game-server tier from DR-1's hybrid 2-tier design: a WebSocket scaffold, a full game-loop port wired for prod, and a hardening pass adding cross-instance reconnect, metrics, Sentry, unit tests, and a load harness."
+tags: ["go", "websocket", "performance", "game-server"]
+---
+
+Phase 10 stands up the Go game-server tier as three milestones on 2026-06-01. This realizes decision DR-1: a hybrid 2-tier backend (Python platform + Go game server).
+
+## What changed
+
+**Milestone 1 — scaffold (`1bf0f7b`).** Initial structure of the Go game-server tier: `main.go`, `handler.go`, `auth.go`, `store.go`, `types.go`, a `Dockerfile`, `go.mod`/`go.sum`, a `.gitignore`, and a `README.md`.
+
+**Milestone 2 — game loop + prod wiring (`0ec0bb8`).** Ported the full game loop and wired it for production. Added `engine.go` (game loop), `messages.go`, `pubsub.go`, `session.go`, and an e2e test (`test_e2e.py`). Edited `docker-compose.prod.yml` (adding the `game` service built from `go-server/`), `handler.go`, `main.go`, `store.go`, `types.go`, and **modified** the existing `Caddyfile` (it already existed from `7266d18`) to route `/api/v1/ws/game/*` to the Go `game:8001` service while everything else stays on Python `api:8000`.
+
+**Milestone 3 — hardening (`8d0a431`).** Per its subject, adds cross-instance reconnect, metrics, Sentry, unit tests, and a load harness. Reflected in new files:
+- `observability.go` — metrics / Sentry
+- `engine_test.go` — unit tests
+- `load_test.py` — load harness
+- `submit_action.lua` — atomic Redis action submission supporting cross-instance reconnect
+
+It also edited `docker-compose.prod.yml`, `Dockerfile`, `handler.go`, `main.go`, `session.go`, and `store.go`.
+
+## Why Go for this tier
+
+DR-1's reasoning grounds the language choice:
+- Goroutine memory model gives ~5–10x WebSocket connection density at the same RAM budget (`~10KB/conn` for a Go goroutine with a 2KB stack vs `~100KB/conn` for Python/Spring).
+- Sub-ms GC pauses (`GC pause < 1ms`) so the 30Hz game-tick loop doesn't suffer.
+- Connection density of `50–100k concurrent connections per instance` for Go vs `5–10k` for Python/Spring.
+- Single-binary deploys (`startup <50ms`, container image `30–50MB`) eliminate JVM/CPython runtime drift.
+
+These commits are the planned beginning of the Go port. DR-1 deferred the rewrite until DAU passes ~500 ("build for 100 users, optimize when they stress the system").
+
+## Decisions
+
+- **DR-1** — Backend language for the game server (Python vs Spring vs Go). **Chosen:** Option D, a hybrid 2-tier setup — Python/FastAPI platform layer plus a Go game server, beginning the Go port when DAU exceeds ~500. **Why:** Go's goroutine model gives the WebSocket density and sub-ms GC pauses the 30Hz tick loop needs, while keeping Python for CRUD/LLM platform code preserves Factory ROI (Python ships features 2–3x faster than Go for CRUD); Spring would win the platform layer in isolation but breaks the Factory thesis (LangChain4j lags LangChain by 6–12 months).
+
+## Notes
+
+- The density / GC / per-connection / DAU numbers come from the DR-1 trade-off reasoning, not from any commit subject. The only numbers literally in commit subjects are the milestone/phase identifiers (Phase 10, milestone 1, milestone 2, m3).
+- No engineering-log narrative lines exist for this milestone (git-only / planning-only), so the what/why above are grounded in commit subjects, the changed-file list, and the DR-1 decision text.
+
+## Commits
+
+- `1bf0f7b` — feat(go-server): standalone Go WebSocket game server scaffold (Phase 10 milestone 1)
+- `0ec0bb8` — feat(go-server): full game loop port + prod wiring (Phase 10 milestone 2)
+- `8d0a431` — feat(go-server): hardening pass — cross-instance reconnect, metrics, Sentry, unit tests, load harness (Phase 10 m3)

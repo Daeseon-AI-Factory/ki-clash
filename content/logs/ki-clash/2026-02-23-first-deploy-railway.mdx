@@ -1,0 +1,53 @@
+---
+title: "First deploy night — Railway + auto-migration, dynamic PORT, Dockerfile fixes, energy-beam finish"
+date: "2026-02-23"
+project: ki-clash
+kind: troubleshoot
+visibility: public
+language: en
+summary: "First-deploy night on Railway — added a Dockerfile and railway.toml with auto-migration, fixed dynamic PORT binding and Dockerfile COPY order, and shipped the dramatic match-finish energy-wave beam."
+tags: ["deploy", "railway", "docker", "migration"]
+---
+
+## What happened
+
+First deploy night for Ki Clash on Railway, with some front-end polish on either side of the deploy work.
+
+The deploy setup landed in a few steps:
+
+- Added Railway deployment config with auto-migration via a new `Dockerfile` and `railway.toml` (`2ba8dfa`).
+- Fixed the container to bind to a dynamic `PORT` instead of a hardcoded value, editing the `Dockerfile` (`23a9a0f`). This is a standard requirement for Railway-style platforms that inject the port at runtime.
+- Added migration-status logging in `railway.toml` to debug the deploy (`76983bf`).
+- Fixed `Dockerfile` COPY ordering and embedded the start command, touching both `Dockerfile` and `railway.toml` (`20dafa4`).
+
+> Note: no error text or specific failure symptom appears in any commit subject (only "debug: log migration status"), so none is reproduced here.
+
+## Front-end polish around the deploy
+
+Earlier the same night, animations were slowed down and fighters made to animate independently (`bac38a5`), then dynamic fighter animations with per-action effects were added (`8309958`) — the polish leading into the deploy.
+
+After the deploy config, the dramatic match finish and a visible energy-wave beam shipped across the battle/effects front-end (`547925f`), touching `BattleArena`, `PixelEffects`, `PixelFighter`, and `pixel-art-types`.
+
+## Housekeeping
+
+- Merged the founding-philosophy branch into main (`bf941d6`) — an empty-file-list merge commit.
+- Commit `0b58547` ("last") edited `railway.toml` and added a `test-animations` page plus `web` package changes; intent is not fully groundable from the subject alone.
+- Closed out the session by adding a comprehensive project guide for interview prep at `docs/PROJECT_GUIDE.md` (`2e67e41`).
+
+## Notes
+
+- All what/why points are grounded solely in git commit subjects and changed-file lists; diffs were not inspected.
+- Date tension: two commits (`bac38a5` at 2026-02-22T23:15:28+09:00 and `8309958` at 2026-02-23T00:32:08+09:00) straddle midnight JST. The frontmatter date is set to 2026-02-23, the majority committer date of the deploy cluster.
+
+## Commits
+
+- `bac38a5` — fix: slow down animations and make fighters animate independently
+- `8309958` — feat: dynamic fighter animations with per-action effects
+- `2ba8dfa` — chore: add Railway deployment config with auto-migration
+- `547925f` — feat: dramatic match finish and visible energy wave beam
+- `0b58547` — last
+- `bf941d6` — chore: merge founding philosophy branch into main
+- `23a9a0f` — fix: use dynamic PORT
+- `76983bf` — debug: log migration status
+- `20dafa4` — fix: fix Dockerfile copy order and embed start command
+- `2e67e41` — docs: add comprehensive project guide for interview prep

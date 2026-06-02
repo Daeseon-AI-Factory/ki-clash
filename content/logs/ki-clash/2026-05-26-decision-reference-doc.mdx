@@ -1,0 +1,54 @@
+---
+title: "Wrote the Engineering Decision Reference (DR-1..11)"
+date: "2026-05-26"
+project: ki-clash
+kind: tech-retro
+visibility: public
+language: en
+summary: "Added a 'Part 2 — Engineering Decision Reference' section to docs/engineering-log.md with 11 deep trade-off analyses (DR-1..DR-11), each documenting the decision, options, trade-off table, reasoning chain, meta-pattern, and interview framing."
+tags: ["decisions", "documentation", "architecture"]
+---
+
+## What
+
+Added a new "Part 2 — Engineering Decision Reference" section to `docs/engineering-log.md` (log line 1089-1091): topic-organized deep dives on every major architectural decision made in Ki Clash so far. The commit covers **11 deep trade-off analyses** (DR-1..DR-11).
+
+## Why
+
+Intended as a study guide — each entry is designed to give "staff-engineer-level depth on a specific choice" (log lines 1103-1104).
+
+Each entry follows a fixed structure (log lines 1094-1101):
+
+- **Decision** — one-line summary
+- **Options considered**
+- **Trade-off table** — each option scored on the dimensions that mattered
+- **Reasoning chain** — why the chosen option won
+- **Meta-pattern** — generalizable engineering principle
+- **Interview framing** — how to talk about it in a Toronto interview
+
+## The 11 entries
+
+Verified from the log headers:
+
+- **DR-1** — Backend language for game server: Python vs Spring vs Go
+- **DR-2** — Visual aesthetic: pixel art vs modern card game
+- **DR-3** — Asset pipeline shape: fallback components vs hard wiring
+- **DR-4** — Deprecate vs delete the pixel-art code
+- **DR-5** — JWT 401: recover client-side vs prevent server-side
+- **DR-6** — xfail tests for known bugs vs commented-out / skipped
+- **DR-7** — Real Redis vs fakeredis for matchmaking unit tests
+- **DR-8** — Stdlib JSON logging vs python-json-logger
+- **DR-9** — Conditional imports for Sentry/Prometheus
+- **DR-10** — Single `handle_connect()` vs separate first/reconnect handlers
+- **DR-11** — Defer Phase 4 (Python Redis state) in favor of Phase 5 (Go) — i.e. skip Phase 4 and go straight from Phase 3 to the Go build. *(This is DR-11 as written in this commit; it was reversed shortly after — see Note.)*
+
+## Note
+
+This commit (`d6a9966`) introduced DR-1 through DR-11. Two things changed afterward, verified by diffing the later commit `62ff273`:
+
+- **DR-11 was reversed.** As written in *this* commit, DR-11 reads *"Defer Phase 4 … Skip Phase 4. Go directly from Phase 3 to Phase 5 (Go)"* (chosen option A; *"Do Phase 4 fully (Python Redis-backed state) then Phase 5"* was the **rejected** option B). The next commit `62ff273` ("docs(log): Phase 4 design decisions — DR-11 revised + DR-12..15") **flipped** DR-11 to the opposite call — do Phase 4 fully in Python first — which is why the present-day `docs/engineering-log.md` shows the reversed DR-11 header.
+- **DR-12..DR-15 were added later**, also in `62ff273`. So the current log holds DR-1..DR-15, but this commit only added DR-1..DR-11.
+
+## Commits
+
+- `d6a9966` — docs(log): add Decision Reference section — 11 deep trade-off analyses

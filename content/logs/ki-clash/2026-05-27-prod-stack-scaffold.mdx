@@ -1,0 +1,49 @@
+---
+title: "Phase 6 — production stack scaffold (AWS EC2 + Vercel hybrid)"
+date: "2026-05-27"
+project: ki-clash
+kind: update
+visibility: public
+language: en
+summary: "Scaffolded the production deployment stack as an AWS EC2 + Vercel hybrid — a single docker-compose stack (db + redis + api + caddy) on EC2 with Caddy terminating TLS and reverse-proxying the FastAPI backend, and the Next.js frontend on Vercel."
+tags: ["deploy", "aws", "vercel", "docker"]
+---
+
+## What
+
+Scaffolded the production stack for an AWS EC2 + Vercel hybrid deployment (Phase 6). Commit subject: `chore(deploy): scaffold prod stack for AWS EC2 + Vercel hybrid (Phase 6)`.
+
+The split:
+
+- **Backend on AWS EC2** — a single `docker-compose.prod.yml` stack with four services: `db` (Postgres) + `redis` + `api` (Python/FastAPI) + `caddy`. At this commit there is **no Go `game` service** — the realtime tier is still Python-only.
+- **Frontend on Vercel** — the Next.js web app.
+- **Domains (defaults in this commit)** — `api.kiclash.com` for the backend (the `API_DOMAIN` default in the `Caddyfile`), and `kiclash.vercel.app` for the frontend (`CORS_ORIGINS=["https://kiclash.vercel.app"]`, `NEXT_PUBLIC_API_URL=https://api.kiclash.com`). The `daeseon.ai` domain does **not** appear yet — it was introduced later in `7b3557e` (2026-06-01).
+
+## How it works
+
+- **Caddy** is the reverse proxy: a single `reverse_proxy api:8000` to the FastAPI service. No route-splitting at this commit — every request goes to Python. (The `/api/v1/ws/game/*` → Go route split was added later, in `0ec0bb8` on 2026-06-01, when the Go `game` service first appeared.)
+- **TLS** — Caddy auto-fetches a Let's Encrypt cert for `{$API_DOMAIN:api.kiclash.com}` on first start, terminating TLS on the EC2 host.
+- **Env templates** — both halves of the hybrid get one:
+  - `deploy/aws-ec2/.env.prod.example` — backend env template (`API_DOMAIN=api.kiclash.com`, `CORS_ORIGINS=["https://kiclash.vercel.app"]`).
+  - `web/.env.production.example` — Vercel env template (`NEXT_PUBLIC_API_URL=https://api.kiclash.com`).
+- **Docs** — `deploy/aws-ec2/README.md` provides the EC2-side setup background.
+
+## Files (all newly added in this commit)
+
+- `Caddyfile`
+- `deploy/aws-ec2/.env.prod.example`
+- `deploy/aws-ec2/README.md`
+- `docker-compose.prod.yml`
+- `web/.env.production.example`
+- `web/vercel.json`
+
+## Notes / grounding
+
+- The engineering-log section nearest this work is headed "Phase 9 — exact next steps for Jason (deploy)"; there is no log section literally titled "Phase 6." The commit/milestone label is "Phase 6."
+- The log's Part 0 header is dated 2026-06-01 (deploy-night session) while this commit's committer date is 2026-05-27 — the scaffold predates that log snapshot.
+- The Go `game` service, the Caddy route split, and the `daeseon.ai` domain are all **later** additions (2026-06-01) — they are intentionally NOT attributed to this scaffold commit.
+- Runtime behavior (Caddy actually fetching Let's Encrypt, the compose stack booting) was not executed — only the committed file set was inspected.
+
+## Commits
+
+- `7266d18` — chore(deploy): scaffold prod stack for AWS EC2 + Vercel hybrid (Phase 6)

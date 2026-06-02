@@ -1,0 +1,36 @@
+---
+title: "Phases 7D-F — fighter sprites, hit/KO reactions, image-first pipeline + 6 AI idle sprites"
+date: "2026-06-01"
+project: ki-clash
+kind: ux-retro
+visibility: public
+language: en
+summary: "Phases 7D-F replaced placeholder fighters with humanoid then shōnen-knockoff sprites, added hit/KO reactions and a match-end final-blow KO sequence, and moved to an image-first pipeline backed by 6 AI-generated idle sprites."
+tags: ["sprites", "ux", "art", "pipeline", "ai-generated"]
+---
+
+A run of arena/sprite work across Phases 7D-F, ending with the full 6-fighter idle roster generated via Pollinations/flux.
+
+## What changed
+
+**Phase 7D (`6c9174c`)** — Introduced humanoid fighter sprites plus hit/KO reactions and a 5s timer. Touched the arena (`FighterSprite.tsx`, `KiAuraArena.tsx`), the `Countdown` component, `GameBoard.tsx`, the finale (`MatchFinale.tsx`), and both the landing and PvP pages (`page.tsx`, `pvp/page.tsx`).
+
+**Phase 7E (`fb32b62`)** — Reworked the fighter sprites toward a shōnen-knockoff style and added auto-advance turns. Scoped to `page.tsx` and `FighterSprite.tsx`.
+
+**Phase 7F (`09973a6`)** — Added a match-end final-blow KO sequence and shifted to an image-first sprite pipeline. Added `docs/firefly-prompts.md`, a fighters README (`web/public/fighters/README.md`), and `web/src/lib/assets.ts`, alongside changes to `FighterSprite.tsx` and `MatchFinale.tsx`.
+
+**`9f383b2`** — Added a pose-specific PNG fallback chain in `FighterSprite.tsx` and committed the first reference sprite asset, `web/public/fighters/haneul/idle.png`.
+
+**`ca85233`** — Generated the fighter idle sprites via Pollinations/flux, committing `idle.png` PNGs for bora, danbi, seokjin, taeyang, and yuri.
+
+## Roster note
+
+This commit's subject reads "all 6 fighter idle sprites," but `ca85233` itself only changed 5 `idle.png` files (bora, danbi, seokjin, taeyang, yuri). The 6th — `haneul/idle.png` — was committed earlier in `9f383b2`. So "all 6" refers to the roster reaching completion, not 6 files in this single commit.
+
+## Commits
+
+- `6c9174c` — feat(web): humanoid fighter sprites, hit/KO reactions, 5s timer (Phase 7D)
+- `fb32b62` — feat(web): shōnen-knockoff fighter sprites + auto-advance turns (Phase 7E)
+- `09973a6` — feat(web): match-end final-blow KO sequence + image-first sprite pipeline (Phase 7F)
+- `9f383b2` — feat(web): pose-specific PNG fallback chain + haneul reference sprite
+- `ca85233` — feat(art): all 6 fighter idle sprites via Pollinations/flux

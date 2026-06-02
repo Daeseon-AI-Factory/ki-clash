@@ -1,0 +1,38 @@
+---
+title: "Pixel-art fighter system (web + mobile)"
+date: "2026-02-22"
+project: ki-clash
+kind: ux-retro
+visibility: public
+language: en
+summary: "Built a dedicated pixel-art rendering layer plus per-fighter frame data for 6 fighters, wired it into the live web game UI, and ported the whole system to the React Native mobile client."
+tags: ["pixel-art", "animation", "frontend"]
+---
+
+## What
+
+Added a pixel-art fighter system spanning both the web and mobile clients.
+
+- A dedicated web rendering layer: `BattleArena`, `PixelFighter`, `PixelSprite`, `PixelPortrait`, `PixelEffects`, and `Scanlines` components, a `usePixelAnimation` hook, and pixel-art type/util libraries (`pixel-art-types.ts`, `pixel-art-utils.ts`). (commit `18c348b`)
+- Per-fighter pixel frame data for 6 fighters — bora, danbi, haneul, seokjin, taeyang, yuri — plus a shared `palette` module under `web/src/lib/pixel-frames/`. (commit `18c348b`)
+- Integration into the live web game UI: `page.tsx`, `CharacterSelect`, `MatchHUD`, `AITrashTalk`, and `globals.css`. (commit `2f13f68`)
+- The test-animations `PixelArtPanel` refactored to consume the shared pixel-art modules instead of its own copy, consolidating on one rendering path. (commit `06fd3e1`)
+- A port of the pixel-art system to the React Native mobile client, wired across the game, pvp, `CharacterSelect`, `MatchHUD`, and `AITrashTalk` screens. The same 6 fighter frame files and palette were duplicated under `mobile/src/lib/pixel-frames/`. (commit `54827c4`)
+
+## Why
+
+The web client gained a self-contained rendering layer for pixel fighters, so animation/frame logic lives in one place rather than being scattered through game screens. Encoding frame data per fighter keeps each character's animation data separate from the shared rendering code and palette. Refactoring the test-animations panel onto the shared modules means there is a single rendering path to maintain. Porting to mobile brings the same visual system to the React Native client across all relevant screens.
+
+The mobile port re-duplicates the 6 fighter frame files and palette under `mobile/src/lib/pixel-frames/` rather than sharing a single source with web.
+
+## Notes
+
+- The "6 fighters" count is inferred from the 6 distinct frame files (bora, danbi, haneul, seokjin, taeyang, yuri) present in commits `18c348b` and `54827c4`, not from any commit subject or log line.
+- No numeric metrics appear in the commit subjects; none are reported here.
+
+## Commits
+
+- `18c348b` — feat: add pixel art frame data and rendering components
+- `2f13f68` — feat: integrate pixel art fighters into game UI
+- `06fd3e1` — refactor: update test-animations to use shared pixel art modules
+- `54827c4` — feat: port pixel art system to mobile and integrate across all screens

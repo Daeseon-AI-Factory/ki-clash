@@ -1,0 +1,67 @@
+---
+title: "Deploy-night checkpoint — Phase 7G/8/10 done, Phase 9 (live deploy) pending Jason"
+date: "2026-06-01"
+project: ki-clash
+kind: update
+visibility: public
+language: en
+summary: "Deploy-night checkpoint: Phases 1-4, 7, 8, and 10 are done and the backend is production-ready; Phase 9 (the actual AWS EC2 + Vercel deploy) is the only outstanding work and is waiting on Jason — nothing is live yet."
+tags: ["deploy", "status", "checkpoint"]
+---
+
+## State
+
+Deploy-night checkpoint. The following phases are marked DONE:
+
+- Phases 1-4 — backend foundation
+- Phase 7 — visual overhaul + 6 real PNG fighter sprites
+- Phase 8 — Tekken-style Room PvP
+- Phase 10 — Go game server full port
+
+Phase 9 (deploy to AWS EC2 + Vercel) is the only outstanding phase, marked "Waiting on Jason — code ready, QUICKSTART.md in place".
+
+> Nothing is live yet. All deploy code is committed; provisioning is Jason's next move (AWS console clicks, Vercel auth, DNS).
+
+## What's ready
+
+- **Backend (production-ready).** Python side: distributed Redis, JWT auto-recovery, Stripe/Sentry/metrics. Go side: full game loop ported, E2E tested. Both runtimes serve the same Redis state. Python test suite at 149+ passed.
+- **Go (Phase 10).** Full game-loop port — engine + session + pub/sub + WATCH/MULTI/EXEC — E2E tested against the Python contract. Python stays authoritative for auth/rooms/REST; Go owns the hot-path game loop in prod.
+- **Graphics (Phase 7G).** Real Pollinations/flux PNGs at `web/public/fighters/<id>/idle.png`, SVG fallback retained. Some PNGs land close to specific anime characters — flagged fine for portfolio/MVP, regenerate via Adobe Firefly before revenue.
+
+## Prod topology
+
+`docker-compose.prod.yml` runs api (Python) + game (Go) + redis + db + caddy. The Caddyfile routes `/api/v1/ws/game/*` to the Go service and the rest to Python — so switching game traffic between runtimes is a one-line Caddy edit.
+
+Domain plan (locked):
+
+- `kiclash.daeseon.ai` → Vercel apex (CNAME → `cname.vercel-dns.com`)
+- `api.kiclash.daeseon.ai` → AWS EC2 backend (A record → Elastic IP)
+
+## Phase 9 — next steps for Jason
+
+1. Launch a t3.micro Ubuntu 24.04 instance, security group ports 22/80/443, attach an Elastic IP.
+2. Install docker, set DNS, `git clone` to `/opt/ki-clash`.
+3. Generate secrets: `JWT_SECRET_KEY` via `openssl rand -hex 32`, `POSTGRES_PASSWORD` via `openssl rand -base64 24`.
+4. `docker compose -f docker-compose.prod.yml up -d --build` (boots api Python, game Go, redis, db, caddy with Let's Encrypt auto-cert).
+5. `alembic upgrade head`.
+6. Vercel: `npx vercel` then `npx vercel --prod`, with `NEXT_PUBLIC_API_URL = https://api.kiclash.daeseon.ai`.
+
+Rough timing per the log: AWS EC2 deploy ~25 min, Vercel deploy ~5 min.
+
+## Open post-deploy follow-ups
+
+- Only `idle.png` exists per character; windup/impact poses fall back to idle (≈30 extra generations for per-action sprites).
+- Firefly migration for commercial indemnification.
+- Port the Python pytest suite to Go (currently only `go-server/test_e2e.py` smoke test).
+- PvP character select for Quick Match (currently fixed to haneul/bora).
+
+## Caveats
+
+- Phase 9 is NOT done — it is explicitly waiting on Jason. Nothing is live; only the deploy code/QUICKSTART is committed. `kiclash.daeseon.ai` is not deployed.
+- Test counts are stated as "149+" (a floor, not an exact verified count). No test run was performed to confirm.
+- AWS/Vercel/DNS claims describe Jason's planned next steps, not completed actions — they could not be independently verified beyond what the log asserts.
+
+## Commits
+
+- `7b3557e` — docs(deploy): personalize env defaults + QUICKSTART for kiclash.daeseon.ai
+- `95d2091` — docs(log): Part 0 — deploy-night state (Phase 7G + 8 + 10 done, 9 waiting on Jason)

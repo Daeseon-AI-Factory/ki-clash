@@ -1,0 +1,68 @@
+---
+title: "Monetization v1 + social — AdSense, Stripe ad-free pass, ranked ELO, leaderboard, match history, friend challenge"
+date: "2026-02-22"
+project: ki-clash
+kind: monetization
+visibility: private
+language: en
+summary: "Shipped monetization v1 (AdSense ads + Stripe ad-free pass) alongside ranked ELO, a leaderboard API, and social/retention surfaces (match history, friend challenge) across web and mobile clients."
+tags: ["monetization", "stripe", "adsense", "elo", "retention"]
+---
+
+## What
+
+This milestone brought monetization and social/retention features to Ki Clash across the web, server, and mobile clients.
+
+### Ads (AdSense)
+
+- Added a lobby banner and a between-match interstitial via reusable ad components (`AdBanner`, `InterstitialAd`) plus a `useAdTiming` hook (`web/src/components/ads/*`, `web/src/hooks/useAdTiming.ts`).
+- Wired ads into the PvP page alongside pixel art (`web/src/app/pvp/page.tsx`).
+- Injected the AdSense script tag into the root layout in an env-driven way so the publisher ID is not hardcoded (`web/src/app/layout.tsx`).
+- Made ad rendering conditional so ads are suppressed for ad-free users, wired through `web/src/lib/api.ts`.
+
+### Server: ranked + payments
+
+One server commit (`9f10dc5`) shipped a ranked ELO system, a Stripe ad-free pass, and a leaderboard API together, backed by:
+
+- An Alembic migration adding ranked and payment fields (`alembic/versions/b8f3c72e1a44_add_ranked_and_payment_fields.py`).
+- A Stripe payment handler under `app/core/payment/` (`stripe_handler.py`).
+- Dedicated ranked/payment/player schemas (`app/schemas/ranked.py`, `app/schemas/payment.py`, `app/schemas/player.py`) and services (`app/services/ranked_service.py`, `app/services/payment_service.py`).
+- New endpoints (`app/api/v1/endpoints/ranked.py`, `purchases.py`, `players.py`) registered in `app/api/v1/router.py`.
+
+Stripe was added as a project dependency in `pyproject.toml` (`4ad4628`).
+
+### Web client surfaces
+
+- Ranked leaderboard page (`web/src/app/ranked/page.tsx`).
+- Ad-free shop page (`web/src/app/shop/page.tsx`).
+- Match history page backed by the API (`web/src/app/history/page.tsx`).
+- Friend challenge flow via share link with lobby navigation (`web/src/app/invite/page.tsx`, `web/src/app/page.tsx`).
+
+### Mobile (Expo) parity
+
+- Ranked leaderboard screen (`mobile/app/ranked.tsx`).
+- Match history and friend invite screens (`mobile/app/history.tsx`, `mobile/app/invite.tsx`).
+- Each wired through `mobile/src/lib/api.ts`.
+
+## Why
+
+Monetization v1 combines two revenue paths: ad impressions (AdSense lobby banner + interstitial) and a paid Stripe ad-free pass. Ranked ELO, a leaderboard, match history, and friend challenge were added together as retention surfaces, giving players reasons to return and to invite others. Mobile received parity screens so both clients expose the same features.
+
+## Notes
+
+- No engineering-log lines or decision sections were provided for this milestone; all bullets above are grounded solely in commit subjects and the changed-file lists. The actual diffs were not inspected.
+- No numeric/quantitative claims appear in these commit subjects, so no metrics are recorded here.
+- Commit `d89b743` subject mentions "pixel art", which may conflict with the recorded visual-direction preference (pixel art was previously rejected). Flagged but not verifiable from commit metadata alone.
+
+## Commits
+
+- `4b5d717` — feat: add AdSense integration with lobby banner and match interstitial
+- `d89b743` — feat: integrate pixel art and ads into PvP page
+- `c3d31c9` — feat: add AdSense script tag to layout (env-driven)
+- `9f10dc5` — feat: add ranked ELO system, Stripe ad-free pass, and leaderboard API
+- `e1cf9ba` — feat: add ranked leaderboard page, ad-free shop, conditional ads
+- `dd2879a` — feat: add ranked leaderboard screen to mobile
+- `4ad4628` — chore: add stripe dependency for payment integration
+- `77242ed` — feat: add match history page with API integration
+- `f6a8c36` — feat: add friend challenge via share link and lobby navigation
+- `fb31171` — feat: add match history, friend invite screens to mobile

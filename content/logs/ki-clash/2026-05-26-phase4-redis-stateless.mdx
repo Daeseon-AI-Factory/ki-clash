@@ -1,0 +1,74 @@
+---
+title: "Phase 4 — Redis-backed stateless PvP (game store, cross-worker pub/sub, 149 tests)"
+date: "2026-05-26"
+project: ki-clash
+kind: tech-retro
+visibility: public
+language: en
+summary: "Phase 4 externalized all in-memory PvP state to Redis, added per-player pub/sub for cross-worker routing, and used optimistic concurrency for atomic two-player turns — landing the full suite at 149 tests passing in ~23s."
+tags: ["redis", "distributed-state", "scaling", "pubsub"]
+---
+
+## What Phase 4 did
+
+Phase 4 made PvP stateless. All in-memory game state moved to Redis, workers became stateless façades over that state, and cross-worker messaging went through per-player Redis pub/sub. The log calls this the most architecturally consequential change in the project so far, so the design was locked in (DR-12..15) before any code was written.
+
+The Python implementation here is intended as the reference spec for Phase 5 (the Go rewrite): storage representation, pub/sub topology, and concurrency model were all chosen to be language-agnostic and translate directly.
+
+Total scope: ~1,480 LOC of distributed-systems engineering. Full suite after Phase 4: 149 tests passing in ~23s. Phase 4 added 23 tests (16 + 7).
+
+## Sub-phases
+
+**4.1 — Redis-backed game store** (`app/core/game_store.py`)
+- `PvPSessionState` wraps the pure `GameState` with PvP runtime fields: `player1_id`, `player2_id`, `connected_players`, `started`, `p1_action`, `p2_action`. Keeps the engine layer free of PvP concerns.
+- `GameStore` exposes `save`/`load`/`delete`/`exists` plus the centerpiece `watch_and_update(game_id, mutator)`: atomic load→mutate→save via Redis WATCH/MULTI/EXEC with a 3-retry budget, and a 1-hour TTL on game keys to auto-clean abandoned sessions.
+- 16 game_store tests added.
+
+**4.2 + 4.3 — Stateless PvPGameSession + matchmaking** (commit `84a71d1`)
+- `PvPGameSession` rewritten as a stateless façade (DR-15): constructor takes only `(store, ws_manager)`; all public methods take `game_id` and mutate Redis state via `store.watch_and_update()`.
+- `MatchmakingService` dropped its in-memory `active_games` and `game_players` dicts.
+- `ws.py` removed its in-memory `_game_sessions` dict.
+- Suite went from 126 → 142 passing. All 10 integration tests still passed end-to-end against the live docker stack. External WebSocket contract preserved exactly.
+
+**4.4 — Per-player pub/sub** (commit `9df2fc3`)
+- `WSManager` accepts an optional `redis_client`, spawns a background subscriber task per connected player.
+- `send_to_player` routes local-first: direct send if the player is connected on this worker, else publish to channel `ki_clash:player:{player_id}`.
+- Backward compatible with `redis_client=None` for single-worker dev.
+- 7 pubsub tests added.
+
+**4.5 — Two-process integration test (deferred)**
+- A true 2-uvicorn-process integration test was explicitly deferred. The log judges the maintenance cost outweighs the marginal confidence over existing coverage, with a note to revisit if production issues surface.
+
+## Production behaviors unlocked
+
+- Worker restart without state loss
+- Multiple workers serving the same game
+- Cross-worker message delivery
+- Atomic two-player turn submission
+- 1-hour Redis TTL cleanup of abandoned sessions
+- Clean degradation to single-worker mode when Redis is missing
+
+## Decisions
+
+- **DR-11** — Full Python Redis-backed state phase before the Go port? → Option B: do Phase 4 fully, then Phase 5. Optimization target was engineering growth and production safety, not calendar speed; a working Python reference de-risks the Go port into a translation exercise.
+- **DR-12** — How to represent PvP state in Redis? → Option A: single JSON blob per game keyed `ki_clash:game:{game_id}`, serialized via Pydantic `model_dump_json()`. State is small (~500 bytes), Pydantic gives free serialization with schema evolution, and a single SET inside WATCH/MULTI/EXEC is the cleanest atomic-update story (plus 1-hour TTL).
+- **DR-13** — Pub/sub channel topology? → Option A: per-player channel `ki_clash:player:{player_id}`, each worker subscribing for its connected players. Direct routing with no filtering or game-id dispatch; ~10,000 subscriptions at 5k games is well within Redis limits.
+- **DR-14** — Concurrency control for two-player turns? → Option A: Redis WATCH/MULTI/EXEC optimistic concurrency, retry on WatchError up to 3 times then surface the error. True contention is < 0.1% of operations, so optimistic wins with no lock overhead in the common case and natural first-writer-wins ordering; locks risk blocking/deadlock and Lua duplicates the engine.
+- **DR-15** — Workers hold game state or Redis is the single source of truth? → Option A: stateless workers, Redis is truth; only WebSocket connections live in worker memory. Eliminates cache-coherence bugs, makes horizontal scaling trivial and worker crashes recoverable, at the cost of one sub-ms Redis round-trip per operation.
+
+## Metrics
+
+- 149 tests passing in ~23s (full suite)
+- 142 passed (was 126) after the 4.2+4.3 refactor; 10/10 integration tests still pass end-to-end
+- Phase 4 tests added: 16 (game_store) + 7 (pubsub) = 23; 17 matchmaking tests
+- ~1,480 LOC total: +539 LOC game_store + tests, +571 LOC game_session/ws/matchmaking refactor, +370 LOC ws_manager pubsub + tests
+- ~500 bytes serialized GameState, 3-retry WATCH/MULTI/EXEC budget, 1-hour TTL
+- Contention < 0.1% of operations; ~10,000 per-player channels at 5k games; 5000ms turn budget
+
+## Commits
+
+- `62ff273` — docs(log): Phase 4 design decisions (DR-11 revised + DR-12..15)
+- `c268878` — feat(store): Redis-backed PvP game store (Phase 4.1, implements DR-12/14/15)
+- `84a71d1` — refactor(pvp): make PvPGameSession + matchmaking stateless via GameStore (Phase 4.2+4.3, DR-15)
+- `9df2fc3` — feat(ws): per-player Redis pub/sub for cross-worker routing (Phase 4.4, DR-13)
+- `ba35560` — docs(log): Phase 4 completion summary (149 tests, all sub-phases)

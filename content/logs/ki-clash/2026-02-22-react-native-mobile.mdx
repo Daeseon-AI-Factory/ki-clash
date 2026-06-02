@@ -1,0 +1,28 @@
+---
+title: "React Native (Expo) mobile app + full game flow"
+date: "2026-02-22"
+project: ki-clash
+kind: update
+visibility: public
+language: en
+summary: "Scaffolded a React Native (Expo) mobile app with TypeScript and expo-router, then built the full game UI, AI/PvP flow, and ported the web 'game feel' features to native."
+tags: ["react-native", "expo", "mobile", "typescript"]
+---
+
+Brought Ki Clash to mobile with a React Native (Expo) app, then ported the full game flow and game-feel features across.
+
+## What changed
+
+- **Scaffold** — Set up the Expo project with TypeScript and expo-router (file-based routing: `app/index.tsx`, `app/game.tsx`, `app/pvp.tsx`), plus a shared lib for API access (`src/lib/api.ts`) and theming (`src/lib/theme.ts`). (commit `3c8ca45`)
+- **Game UI components** — Added the mobile component set to render the match natively: `ActionCard`, `GameBoard`, `KiMeter`, `MatchHUD`, `TurnReveal`. (commit `821c6d2`)
+- **Game flow** — Implemented the full flow with two driving hooks: `useGame` (AI matches) and `usePvP` (player-vs-player), wired into the game and pvp screens. (commit `9fa0bb1`)
+- **Mobile polish** — Added a `useAppState` hook for foreground/background transitions, `SafeAreaProvider` in the root layout, and environment configuration via `.env.example`. (commit `255ae8c`)
+- **Game feel** — Ported the web game-feel features to native: `AIThinking`, `Countdown`, and `MuteButton` components, sound effects via `useSoundEffects`, plus updates to `MatchHUD`, `TurnReveal`, and `useGame` to match. (commit `8b6095b`)
+
+## Commits
+
+- `3c8ca45` — feat: set up React Native (Expo) project with TypeScript and expo-router
+- `821c6d2` — feat: add mobile game UI components for React Native
+- `9fa0bb1` — feat: implement mobile game flow with AI and PvP hooks
+- `255ae8c` — feat: add mobile polish — AppState handler, SafeAreaProvider, env config
+- `8b6095b` — feat: port all game feel features to React Native mobile

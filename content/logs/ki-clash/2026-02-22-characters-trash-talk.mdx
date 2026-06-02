@@ -1,0 +1,38 @@
+---
+title: "6 original Korean fighters, character select, selection timer, AI trash talk + tutorial"
+date: "2026-02-22"
+project: ki-clash
+kind: ux-retro
+visibility: public
+language: en
+summary: "Added a roster of 6 original Korean fighters with a dedicated character select screen, converted the countdown into a selection timer, layered in AI trash talk and an interactive tutorial, and ported the whole set to mobile."
+tags: ["characters", "ux", "onboarding"]
+---
+
+This session built out the character and onboarding layer of Ki Clash on web, then ported it to mobile.
+
+## What changed
+
+- Added a character roster of **6 original Korean fighters**, shared across web and mobile via parallel `characters.ts` lib files (`be11f95`).
+- Converted the countdown from a post-confirm overlay into a selection timer, touching the countdown component, game board, page, and `useGame` hook (`e99ad80`).
+- Inserted a dedicated character select screen into the flow between difficulty choice and game start (`7444d7f`).
+- Surfaced the chosen character's emoji and name in the in-match HUD and `TurnReveal` (`c667d4c`).
+- Added an AI trash talk speech bubble shown during gameplay, with supporting CSS (`961116d`).
+- Ported the full feature set — character roster, selection timer, trash talk — from web to the mobile app (`a165b5e`).
+- Built an interactive tutorial with **3 guided practice rounds** on web via a tutorial page and `useTutorial` hook (`8e37436`).
+- Added the matching tutorial screen with **3 guided practice rounds** to mobile (`3c5a980`).
+
+## Notes
+
+All grounding for this entry is git-only — no engineering-log lines or decision sections were specified for this milestone. The planned milestone date was 2026-02-22, and all 8 commits' committer dates fall on 2026-02-22 (KST), so the date is consistent with the plan.
+
+## Commits
+
+- `be11f95` — feat: add character roster with 6 original Korean fighters
+- `e99ad80` — feat: convert countdown from post-confirm overlay to selection timer
+- `7444d7f` — feat: add character select screen between difficulty and game start
+- `c667d4c` — feat: display character emoji and name in MatchHUD and TurnReveal
+- `961116d` — feat: add AI trash talk speech bubble during gameplay
+- `a165b5e` — feat: port character roster, selection timer, and trash talk to mobile
+- `8e37436` — feat: add interactive tutorial with 3 guided practice rounds
+- `3c5a980` — feat: add tutorial screen to mobile with 3 guided practice rounds

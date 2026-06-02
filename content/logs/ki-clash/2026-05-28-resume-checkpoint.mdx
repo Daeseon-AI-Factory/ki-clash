@@ -1,0 +1,38 @@
+---
+title: "RESUME-HERE checkpoint added to the engineering log"
+date: "2026-05-28"
+project: ki-clash
+kind: update
+visibility: public
+language: en
+summary: "Added a Part 0 'RESUME HERE' checkpoint to docs/engineering-log.md so the next session opens with a single where-are-we / what's-next handoff snapshot."
+tags: ["documentation", "workflow"]
+---
+
+## What changed
+
+Added a Part 0 "RESUME HERE" checkpoint to `docs/engineering-log.md`. It's a single session-handoff snapshot, explicitly framed as "Read this first when picking the project back up," with a short "where are we / what's next" summary. Parts 1-2 still hold the full history.
+
+## What the checkpoint records
+
+A "Current state at a glance" phase board:
+
+- Phase 1-4 backend foundation — DONE
+- Phase 7 visual overhaul — DONE
+- Phase 8 Tekken-style Room PvP — DONE
+- Phase 9 Deploy to AWS EC2 + Vercel — waiting on Jason (code ready)
+- Phase 10 Go game server full port — DONE
+
+It also captures:
+
+- **Git state** — clean, pushed; main synced with `origin/main`.
+- **What's deployed / running** — nothing live yet, because provisioning is Jason's next move (AWS console, Vercel auth, DNS).
+- **How to restart the local environment** — Docker stack (Postgres + Redis + Python API on :8000), Next.js web dev server on :3000, and the Go server full game loop on :8001.
+
+## Note on dates
+
+The commit date is 2026-05-28, but the log header now reads "last updated 2026-06-01, deploy-night session." The checkpoint section visible in the current working tree reflects that later 2026-06-01 update; the original committed version may have differed. The exact diff for this commit was not inspected, so some bullets above describe the section's present content rather than this commit alone.
+
+## Commits
+
+- `07aadd8` — docs(log): add Part 0 RESUME HERE checkpoint for next session

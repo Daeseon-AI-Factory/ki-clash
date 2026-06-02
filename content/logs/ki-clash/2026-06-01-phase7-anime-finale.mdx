@@ -1,0 +1,42 @@
+---
+title: "Phase 7 — cinematic match-end finale + anime ki-aura arena"
+date: "2026-06-01"
+project: ki-clash
+kind: ux-retro
+visibility: public
+language: en
+summary: "Phase 7 ships a cinematic match-end finale and an anime ki-aura arena in the web client, realizing decision DR-2's move from pixel art to a Dragon Ball-style anime aesthetic."
+tags: ["visual", "anime", "ux"]
+---
+
+## What
+
+Phase 7 delivers a cinematic match-end finale and an anime ki-aura arena in the web client (commit `dfbfc9b`, subject `feat(web): cinematic match-end finale + anime ki-aura arena (Phase 7)`).
+
+## Changes
+
+The work lands in the visual presentation layer:
+
+- New arena components: `web/src/components/arena/KiAuraArena.tsx`, `web/src/components/arena/CharacterAvatar.tsx`.
+- New finale component: `web/src/components/finale/MatchFinale.tsx`.
+- Animation plumbing added/updated via `web/src/hooks/useActionAnimation.ts` and `web/src/lib/actions.ts`, wiring action-driven animations into the arena.
+- Global styling (`web/src/app/globals.css`) and all major pages — `web/src/app/page.tsx`, `web/src/app/pvp/page.tsx`, `web/src/app/shop/page.tsx`, `web/src/app/tutorial/page.tsx`, `web/src/app/invite/page.tsx` — were touched, consistent with a project-wide aesthetic pass.
+- `web/src/components/AITrashTalk.tsx` and `web/src/components/MatchHUD.tsx` were also updated.
+
+## Why
+
+This commit realizes DR-2 in code. DR-2 rejected the already-implemented pixel art in favor of a "modern anime card game" aesthetic with Dragon Ball-style effects (flashy auras, beams, glow) — which the ki-aura arena and finale directly implement.
+
+## Decisions
+
+- **DR-2 — Visual aesthetic (pixel art vs modern card game):** Chose Option B, a modern card-game / anime aesthetic with AI-generated assets (Dragon Ball-style effects, all original art). Why: Ki Clash monetizes via ads, so first-5-second visual impact drives revenue; pixel art reads as "indie demo" on mobile, and the anime + AI workflow compounds skill across the Factory and content creation.
+
+## Notes
+
+- No engineering-log narrative lines were provided for this milestone (git-only); the above derives from the commit subject, the changed-file list, and DR-2 text.
+- DR-2 references AI tools "Firefly + Figma" for asset production, but the verified commit `dfbfc9b` contains only web/Next.js source files. No asset-generation workflow files are present in this commit, so that part of DR-2 is not corroborated by this diff.
+- No quantitative metrics appear in the commit subject or DR-2; "Phase 7" is a phase label, not a countable metric.
+
+## Commits
+
+- `dfbfc9b` — feat(web): cinematic match-end finale + anime ki-aura arena (Phase 7)

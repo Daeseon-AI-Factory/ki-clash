@@ -1,0 +1,30 @@
+---
+title: "PvP realtime backend — WS manager, Redis matchmaking, session loop"
+date: "2026-02-22"
+project: ki-clash
+kind: update
+visibility: public
+language: en
+summary: "Built the realtime PvP backbone for Ki Clash: a room-based WebSocket manager, a Redis-backed FIFO matchmaking service, and a WebSocket-driven game session, plus a PvP frontend with matchmaking and game UI."
+tags: ["websocket", "redis", "matchmaking", "pvp"]
+---
+
+Built the realtime PvP backbone for Ki Clash across four commits.
+
+## What changed
+
+- **WebSocket manager (core)** — Added a room-based connection tracking manager under `app/core/ws_manager/` (`__init__.py`, `manager.py`), with a matching WS schema in `app/schemas/ws.py`. Placed in the core layer so it's reusable across products (commit `9631983`).
+- **Matchmaking service** — Added a Redis-backed matchmaking service implementing a FIFO queue in `app/services/matchmaking_service.py`. Bootstrapped the `ki_clash` product module via `app/modules/__init__.py` and `app/modules/ki_clash/__init__.py` (commit `5fdbed3`).
+- **PvP game session** — Added the PvP game session with WebSocket turn flow in `app/modules/ki_clash/game_session.py`, wired through the WS endpoint `app/api/v1/endpoints/ws.py` and registered in `app/main.py` (commit `d42e0ba`).
+- **PvP frontend** — Added the PvP frontend with WebSocket matchmaking and game UI: `web/src/app/pvp/page.tsx`, the `usePvP` hook (`web/src/hooks/usePvP.ts`), and updates to the landing page `web/src/app/page.tsx` (commit `e39e0d7`).
+
+## Notes
+
+No engineering-log narrative or decision sections were specified for this milestone, so the bullets above are grounded solely in commit subjects and changed-file lists. All four commits are dated 2026-02-22, matching the planned milestone date.
+
+## Commits
+
+- `9631983` — feat: add WebSocket manager with room-based connection tracking
+- `5fdbed3` — feat: add Redis-backed matchmaking service with FIFO queue
+- `d42e0ba` — feat: add PvP game session with WebSocket turn flow
+- `e39e0d7` — feat: add PvP frontend with WebSocket matchmaking and game UI

@@ -1,0 +1,37 @@
+---
+title: "Multiplayer networking reference (Ki Clash vs LoL / Valorant)"
+date: "2026-05-26"
+project: ki-clash
+kind: tech-retro
+visibility: public
+language: en
+summary: "Created a standalone Korean networking reference doc that maps Ki Clash code onto real-time multiplayer concepts, doubling as Toronto game/systems interview prep."
+tags: ["networking", "research", "documentation"]
+---
+
+## What
+
+Added `docs/multiplayer-networking.md`, a permanent learning reference (~470 lines, Korean) explaining how real-time state sharing actually works. It doubles as Toronto game/systems interview prep.
+
+## Why
+
+Two questions prompted it: "how does real-time state sharing actually work?" (a WebSocket conceptual gap) and "how do LoL/Valorant do it so smoothly?". Rather than answer inline, the explanation was captured as a reusable doc, intended as reference when discussing Phase 3 (PvP hardening) and Phase 5 (Go server).
+
+## What the doc covers
+
+- A latency budget framework as the organizing principle, contrasting turn-based 5000ms vs FPS 8ms budgets.
+- Two architecture patterns: server-authoritative vs latency hiding.
+- 5 core techniques: client-side prediction, server reconciliation, lag compensation, high tick rate, and UDP/QUIC.
+- Supplementary techniques: interpolation, delta compression, regional servers, spectator delay, and lockstep.
+- A mapping of Ki Clash code (which file does what) onto the abstract networking concepts to make them concrete.
+- An interview-ready answer template, a keyword list, and a curated reading list (Gambetta, Valve, Glenn Fiedler, Riot Eng Blog).
+
+## Decisions
+
+- `networking-ref-language` — Language of the reference doc: Korean — chosen per Jason's request.
+- `networking-ref-placement` — Where to place the networking explanation: a standalone doc rather than embedded in `spec.md` — it is reference material, not product spec.
+- `networking-ref-style` — How to teach the abstract concepts: concrete Ki Clash code snippets mapped to abstract concepts — makes it real, not just theoretical.
+
+## Commits
+
+- `0e289da` — docs: add multiplayer networking reference (Ki Clash + LoL/Valorant)
