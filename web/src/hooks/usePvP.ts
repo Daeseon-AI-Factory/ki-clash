@@ -18,7 +18,13 @@ export type PvPPhase =
   | "round_end"
   | "match_end";
 
-const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
+// Derive WS URL from the API URL by default so a single env var configures
+// both — production: NEXT_PUBLIC_API_URL=https://api.x → wss://api.x.
+// Set NEXT_PUBLIC_WS_URL explicitly only when the WS endpoint is on a
+// different host (e.g. a separate Go game server).
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const WS_BASE =
+  process.env.NEXT_PUBLIC_WS_URL ?? API_BASE.replace(/^http(s?):/, "ws$1:");
 
 interface TurnResultData {
   turn_number: number;
