@@ -176,7 +176,39 @@ export default function FighterSprite({
     );
   };
 
+  // When a pose-specific PNG is loaded, the pose is already baked into
+  // the image (e.g. ko.png shows the character lying down). Layering a
+  // CSS rotate on top would double-rotate it. So we use SUBTLE transforms
+  // (small scale/translate, no big rotate) when attempt === "pose", and
+  // the original "puppet" transforms when we're on idle/SVG fallback.
+  const hasPosePng = attempt === "pose";
   const poseTransform = (() => {
+    if (hasPosePng) {
+      // Pose baked into asset — only add subtle motion bias.
+      switch (pose) {
+        case "windup":
+          return { scale: 0.97, rotate: 0, x: 0, y: 2 };
+        case "impact":
+          return { scale: 1.08, rotate: 0, x: flip ? -8 : 8, y: -2 };
+        case "recover":
+          return { scale: 1.02, rotate: 0, x: 0, y: 0 };
+        case "hit":
+          return {
+            scale: 0.96,
+            rotate: 0,
+            x: flip ? 10 : -10,
+            y: -2,
+          };
+        case "ko":
+          return { scale: 0.95, rotate: 0, x: 0, y: 6 };
+        case "victory":
+          return { scale: 1.1, rotate: 0, x: 0, y: -6 };
+        default:
+          return { scale: 1, rotate: 0, x: 0, y: 0 };
+      }
+    }
+    // Fallback (idle.png or SVG): old "puppet" transforms — image isn't
+    // pose-aware so we fake motion by rotating/scaling the whole sprite.
     switch (pose) {
       case "windup":
         return { scale: 0.96, rotate: 0, x: 0, y: 0 };
