@@ -22,41 +22,41 @@
 
 ---
 
-# Part 0 — RESUME HERE (last updated 2026-05-28)
+# Part 0 — RESUME HERE (last updated 2026-06-01, deploy-night session)
 
-> Read this first when picking the project back up. It's the single
-> "where are we / what's next" snapshot. Everything below in Parts 1-2
-> is the detailed history.
+> Read this first when picking the project back up. Single
+> "where are we / what's next" snapshot. Parts 1-2 below are full history.
 
 ## Current state at a glance
 
 ```
-Phase 1: Asset pipeline + frontend prep      ✅ DONE
-Phase 2: Tests + observability               ✅ DONE  (149 tests passing)
-Phase 3: PvP hardening (4 bugs fixed)         ✅ DONE
-Phase 4: Distributed game state (Redis)       ✅ DONE
-Phase 5: Go game server                       ⏸️  PENDING (not started, optional)
-Phase 6: Deploy to AWS EC2 + Vercel           🔄 IN PROGRESS (scaffolding done,
-                                                  waiting on Jason actions)
+Phase 1-4 (backend foundation)              ✅ DONE
+Phase 7 (Visual overhaul, multi-pass)        ✅ DONE — anime arena + cinematic
+                                              + 6 real PNG fighter sprites
+Phase 8 (Tekken-style Room PvP)              ✅ DONE — create code, share,
+                                              both ready, auto-start
+Phase 9 (Deploy to AWS EC2 + Vercel)        ⏳ Waiting on Jason — code ready,
+                                              QUICKSTART.md in place
+Phase 10 (Go game server, full port)         ✅ DONE — engine + session +
+                                              pub/sub + WATCH/MULTI/EXEC, E2E
+                                              tested vs Python contract
 ```
 
-**Test suite:** `pytest` → 149 passing in ~23s (requires `docker compose up -d`
-for the Redis/Postgres-backed tests; pure-logic tests run without it).
-
-**Git:** all work committed. Latest commit `7266d18` (Phase 6 deploy
-scaffolding). Branch `main`.
+**Git:** clean, pushed. Latest commits on `main` (origin/main synced).
 
 ## What's deployed / running
 
-- **Nothing is live yet.** No production deployment exists.
-- Local dev: `docker compose up -d` brings up Postgres + Redis + API
-  on localhost:8000. The web dev server (`cd web && npm run dev`) runs
-  on localhost:3000 but is NOT persistent — restart it each session.
+- **Nothing is live yet.** All deploy code is committed; provisioning is
+  Jason's next move (AWS console clicks, Vercel auth, DNS).
+- Local dev:
+  - Docker stack (Postgres + Redis + Python API on :8000) — `docker compose up -d`
+  - Web dev server (Next.js on :3000) — `cd web && npm run dev`
+  - Go server (full game loop on :8001) — `cd go-server && JWT_SECRET_KEY=$(docker compose exec -T api python -c "from app.config import settings; print(settings.jwt_secret_key)") go run .`
 
 ## How to restart the local environment
 
 ```bash
-# 1. Backend stack (Postgres + Redis + API)
+# 1. Backend stack
 cd /Users/daeseonyoo/Documents/GitHub/ai-product/ki-clash
 docker compose up -d
 docker compose exec api alembic upgrade head    # if DB was reset
@@ -64,90 +64,96 @@ docker compose exec api alembic upgrade head    # if DB was reset
 # 2. Web dev server
 cd web && npm run dev    # → http://localhost:3000
 
-# 3. Verify
-curl http://localhost:8000/health    # → {"status":"ok"}
-# Open http://localhost:3000 in browser, play an AI match
+# 3. (Optional) Go game server — only needed for Go-path testing
+cd go-server
+brew services stop redis    # avoid host-Redis vs Docker-Redis collision
+JWT_SECRET=$(cd .. && docker compose exec -T api python -c "from app.config import settings; print(settings.jwt_secret_key)") \
+JWT_SECRET_KEY=$JWT_SECRET go run .
 
-# 4. Run the test suite
+# 4. Verify
+curl http://localhost:8000/health   # → {"status":"ok"}     (Python)
+curl http://localhost:8001/health   # → {"status":"ok","server":"go"}
+
+# 5. Run the Python test suite
 cd /Users/daeseonyoo/Documents/GitHub/ai-product/ki-clash
-python3 -m pytest    # → 149 passed
+python3 -m pytest    # → 149+ passed
 
-# 5. Drive a PvP match end-to-end (visual)
-python3 scripts/pvp_simulator.py --seed 42
+# 6. Run the Go E2E smoke
+cd go-server && python3 test_e2e.py
 ```
 
-## Phase 6 — exact next steps (this is where we paused)
+## Phase 9 — exact next steps for Jason (deploy)
 
-Deployment plan is **Hybrid: Vercel (frontend) + AWS EC2 free tier
-(backend)**. All config is scaffolded and committed. What remains is
-Jason-driven account/infra setup:
+Domain plan locked in: **`kiclash.daeseon.ai`** (Vercel apex)
++ **`api.kiclash.daeseon.ai`** (AWS EC2 backend).
+
+Full step-by-step in `deploy/aws-ec2/QUICKSTART.md`. Summary:
 
 ```
-[BLOCKED ON JASON — decisions/actions needed]
-1. Vercel login:  npx vercel login   (browser GitHub auth)
-2. AWS account:   create new account if Free Tier exhausted on old one
-3. Domain name:   pick one (kiclash.com? alternatives?) — or use free
-                  *.vercel.app + raw EC2 IP for now
+A. AWS EC2 (~25 min):
+   1. Launch t3.micro Ubuntu 24.04, security group 22/80/443
+   2. Elastic IP → attach
+   3. SSH in → install docker.io docker-compose-plugin git
+   4. DNS at daeseon.ai provider:
+        A     api.kiclash.daeseon.ai → <Elastic IP>
+        CNAME kiclash.daeseon.ai     → cname.vercel-dns.com
+   5. git clone https://github.com/Daeseon-AI-Factory/ki-clash.git /opt/ki-clash
+   6. cp deploy/aws-ec2/.env.prod.example .env
+        openssl rand -hex 32     → JWT_SECRET_KEY
+        openssl rand -base64 24  → POSTGRES_PASSWORD
+        (nano .env, paste both)
+   7. docker compose -f docker-compose.prod.yml up -d --build
+        — boots api (Python), game (Go), redis, db, caddy
+        — caddy auto-fetches Let's Encrypt cert on first request
+   8. docker compose -f docker-compose.prod.yml exec api alembic upgrade head
 
-[THEN — guided setup, ~30-45 min]
-4. Deploy frontend to Vercel:
-     cd web && npx vercel        # first deploy → preview URL
-     npx vercel --prod           # production deploy
-   Set env var in Vercel dashboard:
-     NEXT_PUBLIC_API_URL = https://api.<domain>   (or temp EC2 IP)
+B. Vercel (~5 min):
+   1. cd web && npx vercel login (GitHub auth)
+   2. npx vercel               (first deploy)
+   3. Dashboard: set NEXT_PUBLIC_API_URL = https://api.kiclash.daeseon.ai
+   4. npx vercel --prod
+   5. Add custom domain kiclash.daeseon.ai → SSL auto
 
-5. Launch AWS EC2 (full guide: deploy/aws-ec2/README.md):
-     - Ubuntu 24.04, t3.micro, security group 22/80/443
-     - Elastic IP
-     - SSH in, install Docker + Compose
-     - git clone, cp deploy/aws-ec2/.env.prod.example .env, fill secrets
-     - docker compose -f docker-compose.prod.yml up -d --build
-     - docker compose -f docker-compose.prod.yml exec api alembic upgrade head
-
-6. DNS (Cloudflare or registrar):
-     A record  api.<domain>  → EC2 Elastic IP
-     A record  <domain>      → Vercel (or CNAME to vercel)
-
-7. Caddy auto-issues SSL on first start (Caddyfile already configured).
-     Verify: curl https://api.<domain>/health
-
-8. Update Vercel NEXT_PUBLIC_API_URL → https://api.<domain>, redeploy.
-
-9. E2E test: open the live URL in two browsers, play a PvP match.
+C. Smoke test:
+   Open https://kiclash.daeseon.ai → PvP → Create Room → grab code
+   → incognito tab → Join Room → both pick + ready → match plays through
 ```
 
-**Key files for Phase 6 (already committed):**
-- `docker-compose.prod.yml` — production stack (restart policies,
-  healthchecks, caddy, 2 uvicorn workers)
-- `Caddyfile` — auto-HTTPS reverse proxy, `API_DOMAIN` env-driven
-- `deploy/aws-ec2/README.md` — full step-by-step setup guide
-- `deploy/aws-ec2/.env.prod.example` — secrets template
-- `web/vercel.json` — Vercel build config (region icn1)
-- `web/.env.production.example` — frontend env template
-
-## Open decisions (waiting on Jason)
-
-1. **Domain:** which name? (drives DNS + CORS + Caddy config)
-2. **Phase 5 (Go):** still want it? It's optional — only matters at
-   5000+ concurrent or as a Toronto-interview systems-design artifact.
-   Reference DR-11 for the reasoning. If yes, it's ~8-12 hours of my
-   focused work or a 2-3 week pair-programming exercise.
-3. **Visual design:** the game still renders emoji fallbacks. The asset
-   pipeline (Phase 1) is ready to receive real art. Jason's 1-week
-   design trial (Figma + Firefly) was proposed but not started — see
-   memory `[[user-creator-ambitions]]`.
+**Key files (already committed + pushed):**
+- `deploy/aws-ec2/QUICKSTART.md` — tight copy-paste sequence for Jason
+- `deploy/aws-ec2/README.md` — full background docs
+- `docker-compose.prod.yml` — api (Python) + game (Go) + redis + db + caddy
+- `Caddyfile` — `/api/v1/ws/game/*` → Go service, rest → Python
+- `deploy/aws-ec2/.env.prod.example` — env template (kiclash.daeseon.ai defaults)
+- `web/.env.production.example` — Vercel env template
 
 ## Mental model reminders (don't re-derive these)
 
-- Backend is **production-ready** — 149 tests, 4 PvP bugs fixed,
-  distributed state, JWT auto-recovery, Stripe/Sentry/metrics wired
-  (need keys to activate). The gap to "shippable product" is **visual
-  polish + deployment + domain**, NOT backend correctness.
-- Go (Phase 5) is **not needed** for the current goal ("interviewers
-  play the game"). It's a separate, optional track.
-- The whole Python distributed implementation (Phase 4) doubles as the
-  **reference spec** for a future Go port — every design choice is
-  language-agnostic.
+- **Backend is production-ready.** Python (149+ tests, distributed Redis,
+  JWT auto-recovery, Stripe/Sentry/metrics) + Go (full game loop ported,
+  E2E tested). Either runtime serves the same Redis state — switching
+  game traffic between them is a one-line Caddy edit.
+- **Rooms (Phase 8)** are how friends invite each other — Quick Match
+  still works too. Both flow through the same WS endpoint (now Go in prod).
+- **Graphics (Phase 7G)** are real Pollinations/flux PNGs at
+  `web/public/fighters/<id>/idle.png`. SVG fallback retained. Some PNGs
+  land uncomfortably close to specific anime characters — fine for
+  portfolio/MVP, regenerate via Adobe Firefly before revenue.
+- **Go (Phase 10)** is the systems-design artifact + horizontal-scaling
+  story. Python remains authoritative for auth/rooms/REST; Go owns the
+  hot-path game loop in prod.
+
+## Open follow-ups (post-deploy)
+
+1. **Pose-specific PNGs** — only `idle.png` exists per character; the
+   FighterSprite pipeline accepts `windup.png`, `impact.png`, etc. and
+   falls back to idle. 30 extra generations would make per-action sprites.
+2. **Firefly migration** — replace Pollinations PNGs with Adobe Firefly
+   variants for commercial indemnification (only matters if revenue).
+3. **Go regression tests** — currently only `go-server/test_e2e.py`
+   smoke test. Port the Python pytest suite next pass.
+4. **PvP character select for Quick Match** — currently fixed to
+   haneul/bora; Room flow has full picker.
 
 ---
 
