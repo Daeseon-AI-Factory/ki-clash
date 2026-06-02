@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import auth, games, players, ranked, purchases
+from app.api.v1.endpoints import auth, games, players, ranked, purchases, rooms
 
 router = APIRouter(prefix="/api/v1")
 
@@ -11,3 +11,4 @@ router.include_router(games.router, prefix="/games", tags=["games"])
 router.include_router(players.router, prefix="/players", tags=["players"])
 router.include_router(ranked.router, prefix="/ranked", tags=["ranked"])
 router.include_router(purchases.router, prefix="/purchases", tags=["purchases"])
+router.include_router(rooms.router, prefix="/rooms", tags=["rooms"])

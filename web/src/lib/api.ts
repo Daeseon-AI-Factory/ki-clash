@@ -291,3 +291,75 @@ export async function createAdFreeCheckout(
     body: JSON.stringify({ success_url: successUrl, cancel_url: cancelUrl }),
   });
 }
+
+// --- Rooms (PvP lobbies) ---
+
+export type RoomStatus = "waiting" | "both_present" | "in_game" | "finished";
+
+export interface RoomPlayerData {
+  id: string;
+  name: string;
+  character_id: string | null;
+  ready: boolean;
+}
+
+export interface RoomData {
+  code: string;
+  host: RoomPlayerData;
+  guest: RoomPlayerData | null;
+  status: RoomStatus;
+  game_id: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export async function createRoom(): Promise<{ code: string; room: RoomData }> {
+  return apiFetch<{ code: string; room: RoomData }>("/api/v1/rooms", {
+    method: "POST",
+  });
+}
+
+export async function getRoom(code: string): Promise<RoomData> {
+  return apiFetch<RoomData>(`/api/v1/rooms/${code.toUpperCase()}`);
+}
+
+export async function joinRoom(code: string): Promise<RoomData> {
+  return apiFetch<RoomData>(`/api/v1/rooms/${code.toUpperCase()}/join`, {
+    method: "POST",
+  });
+}
+
+export async function setRoomCharacter(
+  code: string,
+  characterId: string,
+): Promise<RoomData> {
+  return apiFetch<RoomData>(`/api/v1/rooms/${code.toUpperCase()}/character`, {
+    method: "PUT",
+    body: JSON.stringify({ character_id: characterId }),
+  });
+}
+
+export async function setRoomReady(
+  code: string,
+  ready: boolean,
+): Promise<RoomData> {
+  return apiFetch<RoomData>(`/api/v1/rooms/${code.toUpperCase()}/ready`, {
+    method: "PUT",
+    body: JSON.stringify({ ready }),
+  });
+}
+
+export async function startRoomGame(
+  code: string,
+): Promise<{ game_id: string; room: RoomData }> {
+  return apiFetch<{ game_id: string; room: RoomData }>(
+    `/api/v1/rooms/${code.toUpperCase()}/start`,
+    { method: "POST" },
+  );
+}
+
+export async function leaveRoom(code: string): Promise<void> {
+  await apiFetch<void>(`/api/v1/rooms/${code.toUpperCase()}/leave`, {
+    method: "POST",
+  });
+}

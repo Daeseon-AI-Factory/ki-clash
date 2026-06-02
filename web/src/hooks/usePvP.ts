@@ -66,6 +66,8 @@ interface UsePvPReturn {
   continueFromReveal: () => void;
   continueFromRound: () => void;
   backToLobby: () => void;
+  /** Skip matchmaking — connect directly to an existing game (e.g. spawned by a Room). */
+  joinGame: (gameId: string, opponentName?: string) => Promise<void>;
 }
 
 /**
@@ -246,6 +248,28 @@ export function usePvP(): UsePvPReturn {
     []
   );
 
+  /** Join a pre-existing game (spawned by a Room — bypasses matchmaking). */
+  const joinGame = useCallback(
+    async (gameId: string, name?: string) => {
+      try {
+        setError(null);
+        await ensureAuth();
+        const token = getToken();
+        if (!token) {
+          setError("Not authenticated");
+          return;
+        }
+        if (name) setOpponentName(name);
+        setPhase("matched");
+        connectToGame(gameId, token);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to join game");
+        setPhase("lobby");
+      }
+    },
+    [connectToGame],
+  );
+
   const cancelSearch = useCallback(() => {
     if (matchmakingWs.current) {
       matchmakingWs.current.send(JSON.stringify({ type: "leave_queue" }));
@@ -305,5 +329,6 @@ export function usePvP(): UsePvPReturn {
     continueFromReveal,
     continueFromRound,
     backToLobby,
+    joinGame,
   };
 }

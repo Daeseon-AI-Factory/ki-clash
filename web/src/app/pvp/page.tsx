@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { usePvP } from "@/hooks/usePvP";
 import ActionCard from "@/components/ActionCard";
 import KiMeter from "@/components/KiMeter";
@@ -9,11 +10,11 @@ import type { TurnOutcome } from "@/lib/api";
 import Link from "next/link";
 import KiAuraArena from "@/components/arena/KiAuraArena";
 import MatchFinale from "@/components/finale/MatchFinale";
+import RoomScreen from "@/components/room/RoomScreen";
 import { AdBanner, InterstitialAd } from "@/components/ads";
 import { useActionAnimation } from "@/hooks/useActionAnimation";
 import { useAdTiming } from "@/hooks/useAdTiming";
 import { getCharacter } from "@/lib/characters";
-import { useEffect, useRef } from "react";
 
 const ACTIONS: Action[] = ["charge", "block", "attack", "energy_wave", "teleport"];
 
@@ -34,9 +35,19 @@ const ACTION_EMOJI: Record<string, string> = {
   teleport: "💨",
 };
 
-// Fixed characters for PvP (no character select in PvP flow yet)
-const PLAYER_CHAR_ID = "haneul";
-const OPPONENT_CHAR_ID = "bora";
+/**
+ * Page-level mode controls which top-level UI is showing:
+ *   - "menu"  → PvP entry lobby (Quick Match / Create Room / Join Room)
+ *   - "room"  → RoomScreen (host or guest)
+ *   - "pvp"   → usePvP-driven gameplay flow (matched/playing/.../match_end)
+ *
+ * Quick Match goes menu → pvp directly. Room flows go menu → room → pvp
+ * once both players ready and the server spawns the game.
+ */
+type PageMode = "menu" | "room" | "pvp";
+
+const DEFAULT_PLAYER_CHAR = "haneul";
+const DEFAULT_OPPONENT_CHAR = "bora";
 
 export default function PvPPage() {
   const {
@@ -53,20 +64,29 @@ export default function PvPPage() {
     cancelSearch,
     submitAction,
     backToLobby,
+    joinGame,
   } = usePvP();
+
+  // Page mode + room sub-mode + characters chosen for THIS match.
+  // Characters default to a fixed pair for Quick Match (where there's no
+  // pre-game character select) but are overwritten by the Room flow.
+  const [pageMode, setPageMode] = useState<PageMode>("menu");
+  const [roomMode, setRoomMode] = useState<"create" | "join">("create");
+  const [joinCodeInput, setJoinCodeInput] = useState("");
+  const [chars, setChars] = useState<{ player: string; opponent: string }>({
+    player: DEFAULT_PLAYER_CHAR,
+    opponent: DEFAULT_OPPONENT_CHAR,
+  });
 
   const { action: arenaAction, phase: arenaPhase, triggerAction: triggerArenaAction } =
     useActionAnimation();
   const { showInterstitial, onMatchEnd, dismissInterstitial } = useAdTiming();
 
-  // Derive opponent's animated action from turnResult — synced to the same phase.
   const opponentArenaAction: ActionKind | null =
     arenaAction && turnResult
       ? API_TO_ACTION[turnResult.opponent_action as Action]
       : null;
 
-  // PvP backend uses "you_win"/"you_lose" but KiAuraArena expects the canonical
-  // TurnOutcome shape ("p1_wins_round" / "p2_wins_round" / …) where p1=player.
   const arenaOutcome: TurnOutcome | null = (() => {
     if (!turnResult) return null;
     const o = turnResult.outcome;
@@ -78,16 +98,13 @@ export default function PvPPage() {
     return null;
   })();
 
-  // Resolve characters (currently fixed assignment; character-select PvP is future work)
-  const playerCharacter = getCharacter(PLAYER_CHAR_ID);
-  const opponentCharacter = getCharacter(OPPONENT_CHAR_ID);
+  const playerCharacter = getCharacter(chars.player);
+  const opponentCharacter = getCharacter(chars.opponent);
 
-  // Trigger arena animation on turn reveal + match-end ad timing
   const prevPhase = useRef(phase);
   useEffect(() => {
     const prev = prevPhase.current;
     prevPhase.current = phase;
-
     if (phase === "revealing" && prev !== "revealing" && turnResult) {
       triggerArenaAction(API_TO_ACTION[turnResult.your_action as Action]);
     }
@@ -96,40 +113,132 @@ export default function PvPPage() {
     }
   }, [phase, turnResult, triggerArenaAction, onMatchEnd]);
 
+  // When usePvP returns to its own "lobby" phase (after match end + Play Again),
+  // bring the page mode back to the menu too.
+  useEffect(() => {
+    if (phase === "lobby" && pageMode === "pvp") {
+      setPageMode("menu");
+    }
+  }, [phase, pageMode]);
+
+  // ── Action handlers ────────────────────────────────────────────────────
+
+  const startQuickMatch = async () => {
+    setChars({ player: DEFAULT_PLAYER_CHAR, opponent: DEFAULT_OPPONENT_CHAR });
+    setPageMode("pvp");
+    await findMatch();
+  };
+
+  const startCreateRoom = () => {
+    setRoomMode("create");
+    setPageMode("room");
+  };
+
+  const startJoinRoom = () => {
+    if (joinCodeInput.trim().length !== 4) return;
+    setRoomMode("join");
+    setPageMode("room");
+  };
+
+  const handleRoomGameStart = (
+    gameId: string,
+    oppName: string,
+    ourChar: string,
+    oppChar: string,
+  ) => {
+    setChars({ player: ourChar, opponent: oppChar });
+    setPageMode("pvp");
+    joinGame(gameId, oppName);
+  };
+
+  const handleRoomExit = () => {
+    setJoinCodeInput("");
+    setPageMode("menu");
+  };
+
+  // ── Render ──────────────────────────────────────────────────────────────
+
   return (
     <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4">
       <InterstitialAd show={showInterstitial} onDismiss={dismissInterstitial} />
 
-      {/* Error display */}
-      {error && (
+      {error && pageMode !== "room" && (
         <div className="mb-4 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-300 text-sm max-w-md">
           {error}
         </div>
       )}
 
-      {/* LOBBY */}
-      {phase === "lobby" && (
-        <div className="text-center space-y-8 max-w-md">
+      {/* MENU — Quick Match / Create Room / Join Room */}
+      {pageMode === "menu" && (
+        <div className="text-center space-y-8 max-w-md w-full">
           <div>
             <h1 className="text-5xl font-black mb-2">PvP Mode</h1>
             <p className="text-xl text-gray-400">기싸움 — vs Real Player</p>
-            <p className="text-sm text-gray-500 mt-2">
-              Find an opponent and battle in real-time.
-            </p>
           </div>
 
-          <KiAuraArena
-            playerCharacterId={PLAYER_CHAR_ID}
-            aiCharacterId={OPPONENT_CHAR_ID}
-          />
+          <div className="space-y-3">
+            <button
+              onClick={startQuickMatch}
+              className="w-full py-5 bg-gradient-to-r from-red-600 to-orange-500
+                         hover:from-red-500 hover:to-orange-400
+                         rounded-xl text-xl font-bold transition-all shadow-lg shadow-red-900/40"
+            >
+              ⚡ Quick Match
+              <span className="block text-xs font-medium opacity-80 mt-1">
+                Auto-matched with the next available opponent
+              </span>
+            </button>
 
-          <button
-            onClick={findMatch}
-            className="w-full py-4 bg-red-600 hover:bg-red-500 rounded-xl
-                       text-xl font-bold transition-colors"
-          >
-            Find Match
-          </button>
+            <button
+              onClick={startCreateRoom}
+              className="w-full py-5 bg-gradient-to-r from-blue-600 to-indigo-500
+                         hover:from-blue-500 hover:to-indigo-400
+                         rounded-xl text-xl font-bold transition-all shadow-lg shadow-blue-900/40"
+            >
+              🏠 Create Room
+              <span className="block text-xs font-medium opacity-80 mt-1">
+                Get a code, share with a friend
+              </span>
+            </button>
+
+            {/* Join Room — inline code input */}
+            <div className="p-4 bg-gray-800/80 border border-gray-700 rounded-xl space-y-3">
+              <p className="text-sm font-medium text-gray-300">
+                🚪 Join Room — enter the 4-letter code
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  inputMode="text"
+                  maxLength={4}
+                  autoCapitalize="characters"
+                  value={joinCodeInput}
+                  onChange={(e) =>
+                    setJoinCodeInput(
+                      e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""),
+                    )
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") startJoinRoom();
+                  }}
+                  placeholder="ABCD"
+                  className="flex-1 px-4 py-3 bg-gray-900 border-2 border-gray-700
+                             focus:border-purple-500 rounded-lg text-2xl font-black
+                             tracking-[0.4em] text-center outline-none"
+                />
+                <button
+                  onClick={startJoinRoom}
+                  disabled={joinCodeInput.trim().length !== 4}
+                  className="px-5 py-3 bg-purple-600 hover:bg-purple-500
+                             disabled:bg-gray-700 disabled:text-gray-500
+                             rounded-lg font-bold transition-colors"
+                >
+                  Join
+                </button>
+              </div>
+            </div>
+          </div>
+
           <Link
             href="/"
             className="block text-sm text-gray-500 hover:text-gray-300 transition-colors"
@@ -138,17 +247,27 @@ export default function PvPPage() {
           </Link>
           <AdBanner
             adSlot={process.env.NEXT_PUBLIC_ADSENSE_BANNER_SLOT || ""}
-            className="mt-4"
+            className="mt-2"
           />
         </div>
       )}
 
-      {/* SEARCHING */}
-      {phase === "searching" && (
+      {/* ROOM — host or guest waiting flow */}
+      {pageMode === "room" && (
+        <RoomScreen
+          mode={roomMode}
+          initialCode={joinCodeInput || undefined}
+          onGameStart={handleRoomGameStart}
+          onExit={handleRoomExit}
+        />
+      )}
+
+      {/* PVP — usePvP-driven gameplay phases */}
+      {pageMode === "pvp" && phase === "searching" && (
         <div className="text-center space-y-6 max-w-md">
           <KiAuraArena
-            playerCharacterId={PLAYER_CHAR_ID}
-            aiCharacterId={OPPONENT_CHAR_ID}
+            playerCharacterId={chars.player}
+            aiCharacterId={chars.opponent}
           />
           <div>
             <p className="text-xl font-bold">Searching for opponent...</p>
@@ -157,7 +276,10 @@ export default function PvPPage() {
             </p>
           </div>
           <button
-            onClick={cancelSearch}
+            onClick={() => {
+              cancelSearch();
+              setPageMode("menu");
+            }}
             className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl
                        text-sm font-medium transition-colors"
           >
@@ -166,12 +288,11 @@ export default function PvPPage() {
         </div>
       )}
 
-      {/* MATCHED — brief transition */}
-      {phase === "matched" && (
+      {pageMode === "pvp" && phase === "matched" && (
         <div className="text-center space-y-4">
           <KiAuraArena
-            playerCharacterId={PLAYER_CHAR_ID}
-            aiCharacterId={OPPONENT_CHAR_ID}
+            playerCharacterId={chars.player}
+            aiCharacterId={chars.opponent}
           />
           <p className="text-2xl font-bold">Match Found!</p>
           <p className="text-gray-400">vs {opponentName}</p>
@@ -179,10 +300,8 @@ export default function PvPPage() {
         </div>
       )}
 
-      {/* PLAYING — select action */}
-      {phase === "playing" && gameState && (
+      {pageMode === "pvp" && phase === "playing" && gameState && (
         <div className="w-full max-w-2xl space-y-6">
-          {/* Score + Ki */}
           <div className="text-center">
             <p className="text-xs text-gray-500 uppercase tracking-wider">
               Round {gameState.round_number} • Turn {gameState.turn}
@@ -193,8 +312,8 @@ export default function PvPPage() {
           </div>
 
           <KiAuraArena
-            playerCharacterId={PLAYER_CHAR_ID}
-            aiCharacterId={OPPONENT_CHAR_ID}
+            playerCharacterId={chars.player}
+            aiCharacterId={chars.opponent}
           />
 
           <div className="space-y-2">
@@ -206,7 +325,6 @@ export default function PvPPage() {
             />
           </div>
 
-          {/* Action cards */}
           <div className="grid grid-cols-5 gap-2 sm:gap-3">
             {ACTIONS.map((action) => (
               <ActionCard
@@ -226,12 +344,11 @@ export default function PvPPage() {
         </div>
       )}
 
-      {/* WAITING — submitted, waiting for opponent */}
-      {phase === "waiting" && (
+      {pageMode === "pvp" && phase === "waiting" && (
         <div className="text-center space-y-4">
           <KiAuraArena
-            playerCharacterId={PLAYER_CHAR_ID}
-            aiCharacterId={OPPONENT_CHAR_ID}
+            playerCharacterId={chars.player}
+            aiCharacterId={chars.opponent}
           />
           <p className="text-lg font-medium">Waiting for opponent...</p>
           <p className="text-sm text-gray-400">
@@ -240,12 +357,11 @@ export default function PvPPage() {
         </div>
       )}
 
-      {/* REVEALING — turn result */}
-      {phase === "revealing" && turnResult && (
+      {pageMode === "pvp" && phase === "revealing" && turnResult && (
         <div className="w-full max-w-md space-y-6">
           <KiAuraArena
-            playerCharacterId={PLAYER_CHAR_ID}
-            aiCharacterId={OPPONENT_CHAR_ID}
+            playerCharacterId={chars.player}
+            aiCharacterId={chars.opponent}
             playerAction={arenaAction}
             aiAction={opponentArenaAction}
             phase={arenaPhase}
@@ -293,12 +409,11 @@ export default function PvPPage() {
         </div>
       )}
 
-      {/* ROUND END */}
-      {phase === "round_end" && roundResult && (
+      {pageMode === "pvp" && phase === "round_end" && roundResult && (
         <div className="w-full max-w-md text-center space-y-6">
           <KiAuraArena
-            playerCharacterId={PLAYER_CHAR_ID}
-            aiCharacterId={OPPONENT_CHAR_ID}
+            playerCharacterId={chars.player}
+            aiCharacterId={chars.opponent}
             playerAction={arenaAction}
             aiAction={opponentArenaAction}
             phase={arenaPhase}
@@ -330,8 +445,7 @@ export default function PvPPage() {
         </div>
       )}
 
-      {/* MATCH END — cinematic finale */}
-      {phase === "match_end" && matchResult && (
+      {pageMode === "pvp" && phase === "match_end" && matchResult && (
         <MatchFinale
           result={
             matchResult.winner === "you"
@@ -345,7 +459,10 @@ export default function PvPPage() {
           playerCharacter={playerCharacter}
           opponentCharacter={opponentCharacter}
           opponentName={opponentName ?? undefined}
-          onPlayAgain={backToLobby}
+          onPlayAgain={() => {
+            backToLobby();
+            setPageMode("menu");
+          }}
         />
       )}
     </div>
