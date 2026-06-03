@@ -396,10 +396,16 @@ function LobbyScreen({
   return (
     <div className="text-center space-y-8 max-w-md">
       <div>
-        <h1 className="text-5xl font-black mb-2">Ki Clash</h1>
-        <p className="text-xl text-gray-400">기싸움</p>
+        <h1 className="text-6xl font-black mb-2 tracking-tighter"
+            style={{
+              textShadow: "0 0 24px #FACC1588, 0 2px 8px rgba(0,0,0,0.5)",
+              letterSpacing: "-0.04em",
+            }}>
+          JJAN<span className="text-yellow-300">!</span>
+        </h1>
+        <p className="text-xl text-gray-400">짠 · 기싸움</p>
         <p className="text-sm text-gray-500 mt-2">
-          Read your opponent. Charge your ki. Strike at the right moment.
+          1-second reveal duel. Read your opponent. Charge your ki. Strike at the right moment.
         </p>
       </div>
 

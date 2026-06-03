@@ -59,7 +59,7 @@ export default function ShopPage() {
       <div className="w-full max-w-md space-y-8 text-center">
         <div>
           <h1 className="text-3xl font-black mb-2">Shop</h1>
-          <p className="text-gray-400">Support Ki Clash</p>
+          <p className="text-gray-400">Support JJAN!</p>
         </div>
 
         {/* Ad-Free Pass Card */}

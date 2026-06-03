@@ -47,8 +47,8 @@ export default function InvitePage() {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: "Ki Clash Challenge",
-          text: "I challenge you to a Ki Clash battle!",
+          title: "JJAN! Challenge",
+          text: "Read me in JJAN! — 1-second 1v1 duel. JJAN!",
           url: challengeLink,
         });
       } catch {

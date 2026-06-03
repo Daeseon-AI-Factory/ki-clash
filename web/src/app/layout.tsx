@@ -13,8 +13,20 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Ki Clash — 기싸움",
-  description: "Real-time 1v1 strategy game. Read your opponent, charge your ki, strike!",
+  title: "JJAN! · 짠",
+  description:
+    "Read your opponent in a heartbeat. JJAN — the 1-second 1v1 reveal duel based on the Korean schoolyard ki-battle.",
+  openGraph: {
+    title: "JJAN! · 짠",
+    description: "1-second 1v1 reveal duel. JJAN — read, charge, strike.",
+    siteName: "JJAN!",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "JJAN! · 짠",
+    description: "1-second 1v1 reveal duel. Read, charge, strike.",
+  },
 };
 
 export default function RootLayout({
