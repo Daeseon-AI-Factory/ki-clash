@@ -79,24 +79,44 @@ func (s *Session) handleConnect(ctx context.Context, gameID, playerID string) {
 	}
 }
 
-// start is idempotent — fires the first waiting_for_action only on first call.
+// start fires the first waiting_for_action — but ONLY once BOTH players are
+// connected. This is the client-ready handshake: whoever connects second is
+// the one that actually kicks off turn 1, so the turn timer never runs while
+// a player is still loading their screen.
+//
+// Idempotent: `Started` guards against a double-fire, and the
+// len(connected)==2 gate means the first connector is a silent no-op here.
 func (s *Session) start(ctx context.Context, gameID string) {
-	var alreadyStarted bool
+	var (
+		shouldStart  bool
+		waitingFor   int
+	)
 	sess, err := s.store.watchAndUpdate(ctx, gameID, func(sess *PvPSession) error {
 		if sess.Started {
-			alreadyStarted = true
-			return nil
+			return nil // already kicked off — no-op
+		}
+		// Gate: both players must be present in connected_players.
+		// handleConnect (called just before start) adds the caller, so the
+		// SECOND connector satisfies this and triggers the match.
+		if len(sess.ConnectedPlayers) < 2 {
+			waitingFor = 2 - len(sess.ConnectedPlayers)
+			return nil // first connector waits for the opponent
 		}
 		sess.Started = true
+		shouldStart = true
 		return nil
 	})
 	if err != nil {
 		slog.Warn("start_failed", "err", err, "game_id", gameID)
 		return
 	}
-	if alreadyStarted {
+	if !shouldStart {
+		if waitingFor > 0 {
+			slog.Info("start_waiting_for_opponent", "game_id", gameID, "missing", waitingFor)
+		}
 		return
 	}
+	slog.Info("match_started_both_connected", "game_id", gameID)
 	s.sendWaitingForAction(ctx, sess)
 }
 

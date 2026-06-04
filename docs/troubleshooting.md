@@ -98,3 +98,18 @@ Format per entry: **Symptom / Cause / Fix / Commit / Pattern**.
 - **Fix** (*diagnostic*): Changed `railway.toml`'s `startCommand` to `alembic upgrade head; echo 'MIGRATIONS DONE'; uvicorn ...`. Two effects: (1) the `echo 'MIGRATIONS DONE'` marker makes the migration step visible in deploy logs; (2) swapping `&&` for `;` starts uvicorn regardless of the alembic exit code. This surfaces migration state during debugging — it is **not** a root-cause fix. `Note:` the `;` also means uvicorn now starts even if alembic fails, which can *mask* a real migration failure. File: `railway.toml`.
 - **Commit**: `76983bf`
 - **Pattern**: Add observability (a log/marker) to make state visible before guessing at the cause.
+
+## First turn starts before both players connect (timer fires on lone client)
+
+- **Symptom**: After both players hit Ready and the room spawned the game, the player whose browser finished loading first saw the 5-second turn timer running *before the opponent had even connected*. With slow asset loads (5-6s), the first turn could auto-resolve (auto-`charge`) before the screen finished rendering. Measured directly against the live Go server (`api.jjan.daeseon.ai`) with a two-client script that connected P1, waited, then connected P2:
+  ```
+  [0.60s] P1 WS connected → immediately receives waiting_for_action   ← bug
+  [5.60s] P1 5s timer expires → auto-charge → turn_result
+          (P2 has NOT connected yet; turn 1 already resolved solo)
+  [6.60s] P2 connects
+  [11.21s] second waiting_for_action ...
+  ```
+- **Cause**: In `go-server/session.go`, the WS handler calls `session.start()` on every connect. `start()` only checked the `Started` flag (idempotency) — it did **not** check whether *both* players were present in `connected_players`. So the first client to open its WebSocket triggered the first `waiting_for_action` + the turn-timeout goroutine, with no "wait for the opponent" gate. This is the classic missing **client-ready handshake** in real-time multiplayer: the server must hold the first turn until every participant has joined (cf. a LoL "waiting for players… 87%" loading screen).
+- **Fix**: Gate the first turn on both players being connected. `start()` now only fires `sendWaitingForAction` when `len(connected_players) == 2`; the WS handler calls it after `handleConnect` adds the player to the set, so whichever client connects *second* is the one that actually starts the match. `Started` flips to true only at that point (still idempotent against double-fire). Files: `go-server/session.go`, `go-server/handler.go`.
+- **Commit**: (this change)
+- **Pattern**: In real-time multiplayer, never start the clock on the first connection. Gate the first synchronized event (turn 1) on a readiness condition covering **all** participants — track presence in shared state (Redis `connected_players`) and let the last arrival trigger the start.
