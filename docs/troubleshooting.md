@@ -113,3 +113,43 @@ Format per entry: **Symptom / Cause / Fix / Commit / Pattern**.
 - **Fix**: Gate the first turn on both players being connected. `start()` now only fires `sendWaitingForAction` when `len(connected_players) == 2`; the WS handler calls it after `handleConnect` adds the player to the set, so whichever client connects *second* is the one that actually starts the match. `Started` flips to true only at that point (still idempotent against double-fire). Files: `go-server/session.go`, `go-server/handler.go`.
 - **Commit**: (this change)
 - **Pattern**: In real-time multiplayer, never start the clock on the first connection. Gate the first synchronized event (turn 1) on a readiness condition covering **all** participants — track presence in shared state (Redis `connected_players`) and let the last arrival trigger the start.
+
+## Mid-match disconnect: game does not pause, absent player auto-charged (FOUND, not yet fixed)
+
+- **Symptom**: When a player drops mid-match, the game does NOT pause for the 30-second grace window — the per-turn 5s timer keeps firing and the server auto-submits `charge` for the absent player, bleeding turns/rounds while they're gone. Measured (live, 8-dimension verification workflow, `disconnect-reconnect` agent): forfeit run played turns 1→5 with `opponent_action="charge"` across the 30s window before forfeit fired; a reconnect run saw a full turn cycle elapse in a 4s disconnect gap (P2 reached `p2_ki:5`). So the "30s reconnect window" is not a true grace period — a returning player comes back to a game that kept advancing without them.
+- **Cause**: The turn scheduler (5s `turnTimeout` goroutine + auto-charge) is independent of connection state. On disconnect the server starts a 30s forfeit timer but never pauses the per-turn timer, so timeout-auto-charge keeps resolving turns. Connection state and turn scheduling are decoupled mid-match (contrast DR-16, where they ARE coupled at match open).
+- **Fix**: Not yet applied. Intended direction: on disconnect, suspend the turn timer for that game (or extend the deadline) until either the player reconnects (resume) or the 30s forfeit fires (end). Requires the disconnect handler to cancel/pause `turnTimeout` and the reconnect handler to restart it.
+- **Commit**: (open — found by verification, fix pending)
+- **Pattern**: A "grace period" only works if the clock that can end the game is paused during it. Couple the turn scheduler to connection state mid-match, the same way DR-16 couples turn-start to presence at match open.
+
+## Reconnect: opponent_reconnected never broadcast to the surviving player (FOUND, not yet fixed)
+
+- **Symptom**: When a dropped player reconnects within the 30s window, they fully resume play (the reconnecting socket receives `action_confirmed`/`turn_result`/`waiting_for_action`), but the *surviving* player is NEVER told. Measured: across 2 reconnect runs P1 reconnected well inside the window (one run 4.0s after disconnect) and resumed, yet P2's complete captured message stream contained zero `opponent_reconnected` frames ("P2 opponent_reconnected: NONE"). A client showing an "opponent disconnected, waiting…" overlay would never clear.
+- **Cause**: `opponent_disconnected` fires correctly on ws close (~0.2–0.3s, with `reconnect_timeout:30`), but the reconnect handshake path (new ws, same token+game_id) re-attaches the returning player without broadcasting `opponent_reconnected` to the peer's outbound channel. The notification branch is missing/unwired on the reconnect side. (Go server; the Python game_session had this in DR-10/Phase 4 — the Go port dropped the peer-notify on reconnect.)
+- **Fix**: Not yet applied. Intended: in the reconnect branch of `handleConnect`, after re-marking the player connected, `sendToPlayer(opponent, opponentReconnectedMsg())`.
+- **Commit**: (open — found by verification, fix pending)
+- **Pattern**: Every state-change notification needs a symmetric counterpart — if you emit `opponent_disconnected`, you must emit `opponent_reconnected` on the inverse transition, or the peer's UI is stuck in the transient state forever.
+
+## Forfeit match_result carries zeroed stats (FOUND, low severity)
+
+- **Symptom**: A forfeit-win `match_result` reports `rounds_won_p1:0, rounds_won_p2:0, total_turns:0` even when turns were played (measured: 5 turns played, P2 ki reached 5, yet all counters 0). The `winner` field is correct ("you" for the survivor).
+- **Cause**: The forfeit branch constructs `match_result` from a fresh/empty result struct instead of copying the live `game_state` counters, so accumulated round/turn stats are lost.
+- **Fix**: Not yet applied. Intended: build the forfeit `match_result` from the current `game_state` (rounds_won_p1/p2, summed total_turns) rather than a zero struct.
+- **Commit**: (open — found by verification, fix pending)
+- **Pattern**: Terminal-state payloads should be derived from accumulated state, not constructed empty — a "you win" with a 0-0 scoreboard reads as a bug to the player.
+
+## /health responds 405 to HEAD (FOUND, low severity)
+
+- **Symptom**: `curl -sI https://api.jjan.daeseon.ai/health` (HEAD) → `HTTP/2 405, allow: GET`; a follow-up GET → 200 `{"status":"ok"}`. HEAD-based external uptime monitors / load balancers would misreport the API as down.
+- **Cause**: The FastAPI `/health` route is declared `@app.get` only, so HEAD isn't allowed.
+- **Fix**: Not yet applied. Intended: allow HEAD on the health route (`methods=["GET","HEAD"]`) if a HEAD-based monitor is used.
+- **Commit**: (open — found by verification, low priority)
+- **Pattern**: Liveness endpoints should answer the method your monitor actually uses; many default to HEAD.
+
+## Verification mission summary (2026-06-04, 8-dimension live workflow)
+
+- **What**: After deploying to AWS (DR-16 handshake fix included), ran an 8-agent verification workflow against the LIVE backend (`api.jjan.daeseon.ai`) — each agent wrote and ran a real python3 script (no fabricated results), covering: REST room lifecycle, WS auth edge cases, client-ready handshake timing, full match playthrough, turn-timeout auto-charge, disconnect/reconnect/forfeit, concurrency/atomicity, and static-assets/infra health.
+- **Result**: Overall **GREEN** — an uninterrupted 2-player match starts, plays to completion, and resolves with NO desync. 7/8 dimensions PASS; `disconnect-reconnect` PARTIAL (the 4 bugs above).
+- **Proven working (measured)**: REST lifecycle + all error codes (409/403/404/400); WS auth ordered before upgrade (401/404/403); handshake (lone player 0 frames for 6s, both get turn 1 ~8ms after 2nd connect); full best-of-3 (charge math, perspective-flip both sides, match_result rounds 2-0, no desync); 5s auto-charge anchored to turn start; concurrency (8 simultaneous submits + 10 parallel games, zero lost/dup/out-of-order, no cross-game leakage); infra (36/36 PNGs 200, bundle ships prod API URL with no localhost leak, JJAN title, valid TLS+HSTS, 5/5 containers healthy, separate /data EBS mounted, 2GB swap, alembic at b8f3c72e1a44).
+- **Residual risk / not-tested**: outcome-matrix rows other than charge/charge and attack-vs-charge unverified; disconnect path partially broken (above); single-run timing samples (no soak/load test); no token-expiry/refresh, Redis/DB-failure, or rate-limit abuse tests.
+- **Pattern**: Verify a live deployment by measurement across independent dimensions in parallel, force every claim to cite an observed value, and treat "expected-but-didn't-happen" as a logged bug — not a silent pass.

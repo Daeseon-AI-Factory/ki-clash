@@ -2089,6 +2089,106 @@ Redis-stored state. The class becomes a *façade* of methods that take
 
 ---
 
+## DR-16: Client-ready handshake — gate turn 1 on both WebSockets
+
+**Context:** The 5-second turn clock (with auto-`charge` on timeout) must
+not start until *both* players are actually connected over WebSocket.
+The room flow (REST) spawns the game and hands each browser a `game_id`;
+each browser then opens its own `wss://…/ws/game/{id}`. But browsers
+finish loading at different speeds — one player's arena (2× ~400KB
+fighter PNGs + arena) can take 5–6s to render. If the turn clock starts
+on the *first* connection, the early player burns turn 1 (and hits the
+5s auto-charge) before the opponent's socket is even open.
+
+**Symptom (measured, live, before fix):** A two-client probe connected
+P1, waited, then connected P2:
+```
+[0.60s] P1 connects → immediately receives waiting_for_action  ← clock started solo
+[5.60s] P1 5s timer expires → auto-charge → turn_result        ← turn 1 resolved with no P2
+[6.60s] P2 connects (turn 1 already gone)
+```
+
+**Decision:** Gate the first `waiting_for_action` on a **presence
+count** — emit it only when `len(connected_players) == 2`. The WS
+handler adds the connecting player to the Redis `connected_players` set
+(`handleConnect`) *before* calling `start()`, so the **second** socket to
+connect is the one that opens the gate and broadcasts turn 1 to both.
+The first connector is a logged no-op (`start_waiting_for_opponent`).
+
+**Options considered:**
+- A) **Presence gate** (`len(connected)==2` triggers turn 1) ← chosen
+- B) Server-side deadline only (start the 5s clock at game spawn / first connect)
+- C) Explicit client "loaded" ack (browser sends a `client_ready` frame after assets render)
+
+**Trade-off table:**
+
+| Dimension | A: Presence gate | B: Deadline only | C: Explicit ack |
+|---|---|---|---|
+| Fixes the ghost-opponent timer | **Yes** | No (the exact bug above) | Yes |
+| New protocol surface | None (connection *is* the signal) | None | New client→server msg + handling |
+| Extra round-trip | None | None | One (client must send ack) |
+| Handles slow asset load | Connection completes after load | No | **Most precise** (waits for render) |
+| Reconnect reuse | Same set drives reconnect detection | n/a | Separate path |
+| Complexity | Lowest correct option | Lowest but wrong | Highest |
+
+**Reasoning chain:**
+1. The bug is fundamentally *"started the clock against a player who
+   isn't there yet."* The fix must hold turn 1 until everyone is present.
+2. The WebSocket connection is already a readiness signal — by the time
+   the socket is open, the JS that opens it has run. Option C's extra
+   precision (wait for full asset render) wasn't worth a new protocol
+   message; the socket-open signal is good enough and the perceived
+   start latency is tiny (measured below).
+3. We already track presence in Redis `connected_players` (DR-13/DR-15
+   reuse it for cross-instance reconnect). The gate is one `len()==2`
+   check inside the same atomic `watchAndUpdate` that marks the player
+   connected — no new state, no new round-trip.
+4. "Second-arrival triggers" falls out naturally: `handleConnect` adds
+   the player, then `start()` checks the count. First socket → count 1
+   → no-op. Second socket → count 2 → fire. Idempotent via the
+   `Started` flag against a double-fire.
+
+**Verification (measured, live, after fix):** Same two-client probe:
+```
+[0.64s] P1 connects → ZERO frames for the full 6s solo window
+        (total_msgs=0, waiting_for_action=0, turn_result=0 — past the
+        5s limit, so NO phantom auto-charge fired)
+[6.60s] P2 connects
+[6.603s] P2 ← waiting_for_action      (turn=1, time_limit=5, ki 0/0)
+[6.607s] P1 ← waiting_for_action      (both within ~8ms of P2 connect)
+```
+A later 8-dimension verification workflow re-confirmed this independently
+under the `handshake-timing`, `ws-auth`, `full-match`, and `turn-timeout`
+agents (all PASS).
+
+**Trade-off / known limitation (honest):** The gate couples turn-start
+to connection state *at match open* but the scheduler is otherwise
+decoupled from connection state *mid-match*. The same verification found
+that on a mid-match disconnect the 5s timer keeps firing (auto-charging
+the absent player) and `opponent_reconnected` is never broadcast — i.e.
+"presence-aware scheduling" is correctly applied at start but missing
+during the disconnect grace window. Those are tracked as separate bugs
+(see `docs/troubleshooting.md`); they don't affect an uninterrupted
+2-player match.
+
+**Meta-pattern:** *Never start a synchronized clock on the first
+participant.* Gate the first synchronized event on a readiness condition
+covering **all** participants, tracked in shared state, and let the last
+arrival trigger it.
+
+**Interview framing:**
+> "I gated the first turn behind a two-player presence check so the
+> 5-second turn clock never starts against a ghost opponent. I verified
+> it by measurement: the lone player gets zero frames for 6 seconds —
+> past the timeout, so no phantom auto-charge — and then both players
+> get turn 1 within ~8ms of the second socket connecting. The presence
+> set was already in Redis for cross-instance reconnect, so the fix was
+> one `len(connected)==2` gate with no new protocol surface."
+
+**Commit:** `fix(game): client-ready handshake — hold turn 1 until BOTH connect`
+
+---
+
 ---
 
 ## Engineering Patterns & Principles Surfaced
