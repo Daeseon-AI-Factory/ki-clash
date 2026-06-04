@@ -106,6 +106,10 @@ services:
         condition: service_healthy
       game:
         condition: service_healthy
+    environment:
+      # Caddyfile reads {$API_DOMAIN} for the Let's Encrypt cert domain.
+      # Without this the container fell back to the hardcoded default.
+      API_DOMAIN: ${API_DOMAIN}
     ports:
       - "80:80"
       - "443:443"
