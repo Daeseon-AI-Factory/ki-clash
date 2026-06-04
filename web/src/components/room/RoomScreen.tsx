@@ -65,6 +65,7 @@ export default function RoomScreen({
   const [busy, setBusy] = useState(false);
   const initRanRef = useRef(false);
   const startCalledRef = useRef(false);
+  const gameHandedOffRef = useRef(false);
   const myIdRef = useRef<string | null>(null);
 
   // One-time initialisation: create or join.
@@ -126,10 +127,23 @@ export default function RoomScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room?.code]);
 
-  // When both players are ready, fire /start. Idempotent on the server.
+  // Two separate concerns, two separate guards:
+  //   gameHandedOffRef — fire onGameStart exactly once (navigate to gameplay)
+  //   startCalledRef   — call POST /start at most once (avoid duplicate spawn)
+  //
+  // BUG FIX: previously a single `startCalledRef` guard sat ABOVE the
+  // in_game check, so once the host called /start (setting the ref true),
+  // the next poll that saw status=in_game returned early and onGameStart
+  // never fired → stuck forever on "Match starting...". The handoff check
+  // must run regardless of whether THIS client called /start.
   useEffect(() => {
-    if (!room || startCalledRef.current) return;
+    if (!room) return;
+
+    // 1) Game is live → hand off to gameplay (once). Runs for BOTH players,
+    //    whether or not this client was the one that called /start.
     if (room.status === "in_game" && room.game_id) {
+      if (gameHandedOffRef.current) return;
+      gameHandedOffRef.current = true;
       const myId = myIdRef.current;
       const isHost = myId === room.host.id;
       const me = isHost ? room.host : room.guest;
@@ -142,7 +156,10 @@ export default function RoomScreen({
       );
       return;
     }
+
+    // 2) Both ready but game not spawned yet → trigger /start (once).
     if (
+      !startCalledRef.current &&
       room.status === "both_present" &&
       room.host.ready &&
       room.guest?.ready &&
