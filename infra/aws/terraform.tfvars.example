@@ -1,0 +1,14 @@
+# terraform.tfvars.example
+# 복사해서 실제 값 채우기:  cp terraform.tfvars.example terraform.tfvars
+# (terraform.tfvars 는 .gitignore — commit 안 됨)
+
+# 너 IP만 SSH 허용. 확인: curl -s https://checkip.amazonaws.com
+# 그 IP 뒤에 /32 붙임 (단일 IP라는 뜻)
+my_ip_cidr = "X.X.X.X/32"
+
+# 아래는 기본값 있어서 생략 가능. 바꾸고 싶으면 주석 해제.
+# region              = "ap-northeast-2"   # 서울
+# instance_type       = "t3.micro"         # 프리티어
+# data_volume_size_gb = 10
+# domain              = "api.jjan.daeseon.ai"
+# ssh_public_key_path = "~/.ssh/jjan_aws.pub"

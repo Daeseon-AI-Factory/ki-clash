@@ -1,0 +1,18 @@
+# Terraform state — 인프라의 "현재 실제 상태" 스냅샷. 절대 commit 금지.
+# 이유 1: 시크릿(생성된 비밀번호 등)이 평문으로 들어갈 수 있음.
+# 이유 2: 팀이면 충돌. 운영에서는 S3 remote backend로 옮긴다.
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# 실제 변수값 — my_ip 등 개인정보. example만 commit.
+terraform.tfvars
+*.auto.tfvars
+
+# provider 바이너리 (init 때 다시 받음, 수백 MB)
+.terraform/
+.terraform.lock.hcl
+
+# plan 출력 파일
+*.tfplan
+crash.log

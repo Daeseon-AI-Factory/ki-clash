@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# ─────────────────────────────────────────────────────────────────────────────
+# user_data.sh — EC2 첫 부팅 시 자동 실행 (cloud-init)
+#
+# 하는 일:
+#   1. Docker + Compose 설치
+#   2. 분리된 데이터 볼륨을 "처음이면 포맷, 아니면 그대로" 마운트
+#   3. /etc/fstab 등록 → 재부팅해도 자동 마운트
+#
+# 핵심 안전장치: blkid로 "이미 파일시스템 있나" 확인 후에만 포맷.
+#   이게 없으면 인스턴스 재생성 때마다 데이터 볼륨을 포맷 = 데이터 전멸.
+#   "포맷은 빈 볼륨일 때 딱 한 번만" — 이 한 줄이 데이터를 지킨다.
+# ─────────────────────────────────────────────────────────────────────────────
+set -euxo pipefail
+
+# 로그를 파일로 남김 (디버깅: ssh 후 cat /var/log/jjan-init.log)
+exec > >(tee /var/log/jjan-init.log) 2>&1
+
+echo "=== [1/3] Docker 설치 ==="
+apt-get update -y
+apt-get install -y ca-certificates curl gnupg
+
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+  | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+chmod a+r /etc/apt/keyrings/docker.gpg
+
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+  https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+  > /etc/apt/sources.list.d/docker.list
+
+apt-get update -y
+apt-get install -y docker-ce docker-ce-cli containerd.io \
+  docker-buildx-plugin docker-compose-plugin
+
+# ubuntu 유저가 sudo 없이 docker 쓰게
+usermod -aG docker ubuntu
+systemctl enable --now docker
+
+echo "=== [2/3] 데이터 볼륨 마운트 ==="
+# AWS가 /dev/sdf로 attach해도 Ubuntu 24(nitro)에서는 /dev/nvme1n1로 보임.
+# 둘 다 대비해서 실제 디바이스를 찾는다.
+DATA_DEV=""
+for candidate in /dev/sdf /dev/xvdf /dev/nvme1n1; do
+  if [ -b "$candidate" ]; then
+    DATA_DEV="$candidate"
+    break
+  fi
+done
+
+# nvme의 경우 루트(nvme0n1)가 아닌 두 번째 디스크를 찾음
+if [ -z "$DATA_DEV" ]; then
+  DATA_DEV=$(lsblk -dpno NAME,TYPE | awk '$2=="disk"{print $1}' | grep -v "$(findmnt -no SOURCE / | sed 's/p\?[0-9]*$//')" | head -1)
+fi
+
+echo "데이터 디바이스: $DATA_DEV"
+
+MOUNT_POINT="/data"
+mkdir -p "$MOUNT_POINT"
+
+# ★ 핵심: 파일시스템이 이미 있으면 포맷하지 않는다 (데이터 보존)
+if ! blkid "$DATA_DEV"; then
+  echo "빈 볼륨 — ext4로 포맷 (최초 1회)"
+  mkfs.ext4 -L jjandata "$DATA_DEV"
+else
+  echo "기존 파일시스템 발견 — 포맷 건너뜀 (데이터 보존)"
+fi
+
+# UUID로 fstab 등록 (디바이스 이름은 바뀔 수 있어도 UUID는 불변 → 안정적)
+UUID=$(blkid -s UUID -o value "$DATA_DEV")
+if ! grep -q "$UUID" /etc/fstab; then
+  echo "UUID=$UUID $MOUNT_POINT ext4 defaults,nofail 0 2" >> /etc/fstab
+fi
+mount -a
+chown -R ubuntu:ubuntu "$MOUNT_POINT"
+
+echo "=== [3/3] 완료 ==="
+echo "데이터 볼륨: $(df -h $MOUNT_POINT | tail -1)"
+echo "다음 단계는 SSH 후 수동: git clone → .env → docker compose up"
+echo "JJAN init 완료 $(date)"
