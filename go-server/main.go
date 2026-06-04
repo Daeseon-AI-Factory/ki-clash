@@ -25,6 +25,18 @@ import (
 )
 
 func main() {
+	// Self-healthcheck mode: `ki-clash-go -healthcheck` hits /health and exits
+	// 0/1. Lets the distroless image (no wget/curl/shell) run a Docker
+	// HEALTHCHECK without extra tooling. Used by docker-compose.prod.yml.
+	if len(os.Args) > 1 && os.Args[1] == "-healthcheck" {
+		port := envOrDefault("PORT", "8001")
+		resp, err := http.Get("http://localhost:" + port + "/health")
+		if err != nil || resp.StatusCode != http.StatusOK {
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
 
 	port := envOrDefault("PORT", "8001")

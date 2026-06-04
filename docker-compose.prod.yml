@@ -91,7 +91,8 @@ services:
     expose:
       - "8001"
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8001/health"]
+      # distroless image has no wget/curl/shell — the Go binary self-checks.
+      test: ["CMD", "/ki-clash-go", "-healthcheck"]
       interval: 15s
       timeout: 3s
       retries: 5
