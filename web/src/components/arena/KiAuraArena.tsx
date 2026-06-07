@@ -31,6 +31,10 @@ interface KiAuraArenaProps {
   phase?: ActionPhase;
   /** When set during impact, the losing fighter recoils (hit pose). */
   outcome?: TurnOutcome | null;
+  /** Fill the parent's height (h-full) instead of a fixed h-44/sm:h-64 box —
+      used by the viewport-locked gameplay layout so the arena flexes to any
+      phone with no page scroll. */
+  fill?: boolean;
 }
 
 export default function KiAuraArena({
@@ -40,6 +44,7 @@ export default function KiAuraArena({
   aiAction = null,
   phase = "idle",
   outcome = null,
+  fill = false,
 }: KiAuraArenaProps) {
   const player = useMemo(() => getCharacter(playerCharacterId), [playerCharacterId]);
   const ai = useMemo(() => getCharacter(aiCharacterId), [aiCharacterId]);
@@ -47,7 +52,11 @@ export default function KiAuraArena({
   if (!player || !ai) return null;
 
   return (
-    <div className="relative w-full max-w-2xl mx-auto h-44 sm:h-64 rounded-2xl overflow-hidden border border-gray-700/60 shadow-2xl">
+    <div
+      className={`relative w-full max-w-2xl mx-auto rounded-2xl overflow-hidden border border-gray-700/60 shadow-2xl ${
+        fill ? "h-full" : "h-44 sm:h-64"
+      }`}
+    >
       <ArenaBackground />
 
       {/* Fighters — humanoid silhouettes with auras */}

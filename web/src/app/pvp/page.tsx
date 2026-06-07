@@ -323,8 +323,8 @@ export default function PvPPage() {
       )}
 
       {pageMode === "pvp" && phase === "playing" && gameState && (
-        <div className="w-full max-w-2xl space-y-3">
-          <div className="text-center">
+        <div className="w-full max-w-2xl flex flex-col gap-2 overflow-hidden h-[calc(100svh-2rem)]">
+          <div className="shrink-0 text-center">
             <p className="text-xs text-gray-500 uppercase tracking-wider">
               Round {gameState.round_number} • Turn {gameState.turn}
             </p>
@@ -333,12 +333,15 @@ export default function PvPPage() {
             </p>
           </div>
 
-          <KiAuraArena
-            playerCharacterId={chars.player}
-            aiCharacterId={chars.opponent}
-          />
+          <div className="relative flex-1 min-h-0">
+            <KiAuraArena
+              playerCharacterId={chars.player}
+              aiCharacterId={chars.opponent}
+              fill
+            />
+          </div>
 
-          <div className="space-y-2">
+          <div className="shrink-0 space-y-2">
             <KiMeter ki={gameState.your_ki} label="You" isPlayer={true} />
             <KiMeter
               ki={gameState.opponent_ki}
@@ -347,7 +350,7 @@ export default function PvPPage() {
             />
           </div>
 
-          <div className="grid grid-cols-5 gap-2 sm:gap-3">
+          <div className="shrink-0 grid grid-cols-5 gap-2 sm:gap-3">
             {ACTIONS.map((action) => (
               <ActionCard
                 key={action}
@@ -360,7 +363,7 @@ export default function PvPPage() {
             ))}
           </div>
 
-          <p className="text-center text-xs text-gray-500">
+          <p className="shrink-0 text-center text-xs text-gray-500">
             {gameState.time_limit}s to choose — auto-Charge if you don&apos;t pick
           </p>
         </div>
@@ -380,9 +383,9 @@ export default function PvPPage() {
       )}
 
       {pageMode === "pvp" && phase === "revealing" && turnResult && (
-        <div className="w-full max-w-md space-y-6">
+        <div className="w-full max-w-2xl flex flex-col gap-2 overflow-hidden h-[calc(100svh-2rem)]">
           {/* KiAuraArena (DOM motion) UNTOUCHED + WebGL effect overlay (DR-18) */}
-          <div className="relative w-full max-w-2xl mx-auto">
+          <div className="relative flex-1 min-h-0">
             <KiAuraArena
               playerCharacterId={chars.player}
               aiCharacterId={chars.opponent}
@@ -390,6 +393,7 @@ export default function PvPPage() {
               aiAction={opponentArenaAction}
               phase={arenaPhase}
               outcome={arenaOutcome}
+              fill
             />
             <PixiFxOverlay
               className="absolute inset-0 pointer-events-none"
@@ -399,7 +403,7 @@ export default function PvPPage() {
             />
           </div>
 
-          <div className="flex items-center justify-center gap-8 py-6">
+          <div className="shrink-0 flex items-center justify-center gap-8 py-3">
             <div className="flex flex-col items-center">
               <span className="text-4xl">
                 {ACTION_EMOJI[turnResult.your_action] || "❓"}
@@ -427,13 +431,13 @@ export default function PvPPage() {
             const display =
               OUTCOME_DISPLAY[turnResult.outcome] || OUTCOME_DISPLAY.neutral;
             return (
-              <p className={`text-3xl font-black text-center ${display.color}`}>
+              <p className={`shrink-0 text-3xl font-black text-center ${display.color}`}>
                 {display.text}
               </p>
             );
           })()}
 
-          <div className="flex justify-between text-sm text-gray-400 px-4">
+          <div className="shrink-0 flex justify-between text-sm text-gray-400 px-4">
             <span>Your Ki: {turnResult.your_ki}</span>
             <span>Opponent Ki: {turnResult.opponent_ki}</span>
           </div>
@@ -441,16 +445,19 @@ export default function PvPPage() {
       )}
 
       {pageMode === "pvp" && phase === "round_end" && roundResult && (
-        <div className="w-full max-w-md text-center space-y-6">
-          <KiAuraArena
-            playerCharacterId={chars.player}
-            aiCharacterId={chars.opponent}
-            playerAction={arenaAction}
-            aiAction={opponentArenaAction}
-            phase={arenaPhase}
-            outcome={arenaOutcome}
-          />
-          <div className="py-6 bg-gray-800 rounded-xl">
+        <div className="w-full max-w-2xl flex flex-col gap-2 overflow-hidden h-[calc(100svh-2rem)] text-center">
+          <div className="relative flex-1 min-h-0">
+            <KiAuraArena
+              playerCharacterId={chars.player}
+              aiCharacterId={chars.opponent}
+              playerAction={arenaAction}
+              aiAction={opponentArenaAction}
+              phase={arenaPhase}
+              outcome={arenaOutcome}
+              fill
+            />
+          </div>
+          <div className="shrink-0 py-3 bg-gray-800 rounded-xl">
             <p className="text-sm text-gray-400 uppercase tracking-wider">
               Round {roundResult.round_number} Complete
             </p>

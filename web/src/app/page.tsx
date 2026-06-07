@@ -207,52 +207,64 @@ export default function Home() {
         </div>
       )}
 
-      {/* PLAYING — Main game with inline selection timer */}
+      {/* PLAYING — viewport-locked: HUD + flexing arena + pinned action cards.
+          Always fits one screen on any phone, no scroll. */}
       {phase === "playing" && gameState && (
-        <div className="w-full max-w-2xl space-y-3">
-          <MatchHUD
-            gameState={gameState}
-            playerName={playerName}
-            showAIThinking
-            playerCharacter={playerCharacter}
-            aiCharacter={aiCharacter}
-          />
-          {playerCharacterId && aiCharacterId && (
-            <KiAuraArena
-              playerCharacterId={playerCharacterId}
-              aiCharacterId={aiCharacterId}
-            />
-          )}
-          {aiCharacter && (
-            <AITrashTalk
-              character={aiCharacter}
-              turnNumber={gameState.current_round?.turn_number ?? 0}
-            />
-          )}
-          <GameBoard
-            playerKi={gameState.current_round?.p1_ki ?? 0}
-            disabled={false}
-            onSubmit={playAction}
-            onCountdownBeat={handleCountdownBeat}
-          />
-        </div>
-      )}
-
-      {/* REVEALING — Turn result */}
-      {phase === "revealing" && (
-        <div className="w-full max-w-2xl space-y-3">
-          {gameState && (
+        <div className="w-full max-w-2xl flex flex-col gap-2 overflow-hidden h-[calc(100svh-2rem)]">
+          <div className="shrink-0">
             <MatchHUD
               gameState={gameState}
               playerName={playerName}
+              showAIThinking
               playerCharacter={playerCharacter}
               aiCharacter={aiCharacter}
             />
+          </div>
+          {playerCharacterId && aiCharacterId && (
+            <div className="relative flex-1 min-h-0">
+              <KiAuraArena
+                playerCharacterId={playerCharacterId}
+                aiCharacterId={aiCharacterId}
+                fill
+              />
+            </div>
+          )}
+          {aiCharacter && (
+            // Flavor — hidden on short screens so the essentials always fit.
+            <div className="shrink-0 hidden min-[700px]:block">
+              <AITrashTalk
+                character={aiCharacter}
+                turnNumber={gameState.current_round?.turn_number ?? 0}
+              />
+            </div>
+          )}
+          <div className="shrink-0">
+            <GameBoard
+              playerKi={gameState.current_round?.p1_ki ?? 0}
+              disabled={false}
+              onSubmit={playAction}
+              onCountdownBeat={handleCountdownBeat}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* REVEALING — viewport-locked (HUD + flexing arena+FX + result + skip) */}
+      {phase === "revealing" && (
+        <div className="w-full max-w-2xl flex flex-col gap-2 overflow-hidden h-[calc(100svh-2rem)]">
+          {gameState && (
+            <div className="shrink-0">
+              <MatchHUD
+                gameState={gameState}
+                playerName={playerName}
+                playerCharacter={playerCharacter}
+                aiCharacter={aiCharacter}
+              />
+            </div>
           )}
           {playerCharacterId && aiCharacterId && (
-            // KiAuraArena (DOM motion) UNTOUCHED + transparent WebGL effect
-            // overlay on top (additive — see DR-18).
-            <div className="relative w-full max-w-2xl mx-auto">
+            // KiAuraArena (DOM motion) UNTOUCHED + transparent WebGL FX overlay (DR-18).
+            <div className="relative flex-1 min-h-0">
               <KiAuraArena
                 playerCharacterId={playerCharacterId}
                 aiCharacterId={aiCharacterId}
@@ -260,6 +272,7 @@ export default function Home() {
                 aiAction={aiArenaAction}
                 phase={arenaPhase}
                 outcome={lastTurn?.outcome ?? null}
+                fill
               />
               <PixiFxOverlay
                 className="absolute inset-0 pointer-events-none"
@@ -269,16 +282,18 @@ export default function Home() {
               />
             </div>
           )}
-          <TurnReveal
-            turnResult={lastTurn}
-            visible={true}
-            onOutcomeRevealed={handleOutcomeRevealed}
-            playerName={playerDisplayName}
-            aiName={aiDisplayName}
-          />
+          <div className="shrink-0">
+            <TurnReveal
+              turnResult={lastTurn}
+              visible={true}
+              onOutcomeRevealed={handleOutcomeRevealed}
+              playerName={playerDisplayName}
+              aiName={aiDisplayName}
+            />
+          </div>
           <button
             onClick={continueFromReveal}
-            className="w-full max-w-2xl py-2 bg-gray-700/60 hover:bg-gray-600 rounded-xl
+            className="shrink-0 w-full py-2 bg-gray-700/60 hover:bg-gray-600 rounded-xl
                        text-sm font-medium text-gray-300 transition-colors"
           >
             Skip →
@@ -286,35 +301,33 @@ export default function Home() {
         </div>
       )}
 
-      {/* ROUND END */}
+      {/* ROUND END — viewport-locked */}
       {phase === "round_end" && lastRound && (
-        <div className="w-full max-w-2xl space-y-3">
+        <div className="w-full max-w-2xl flex flex-col gap-2 overflow-hidden h-[calc(100svh-2rem)]">
           {gameState && (
-            <MatchHUD
-              gameState={gameState}
-              playerName={playerName}
-              playerCharacter={playerCharacter}
-              aiCharacter={aiCharacter}
-            />
+            <div className="shrink-0">
+              <MatchHUD
+                gameState={gameState}
+                playerName={playerName}
+                playerCharacter={playerCharacter}
+                aiCharacter={aiCharacter}
+              />
+            </div>
           )}
           {playerCharacterId && aiCharacterId && (
-            <KiAuraArena
-              playerCharacterId={playerCharacterId}
-              aiCharacterId={aiCharacterId}
-              playerAction={arenaAction}
-              aiAction={aiArenaAction}
-              phase={arenaPhase}
-              outcome={lastTurn?.outcome ?? null}
-            />
+            <div className="relative flex-1 min-h-0">
+              <KiAuraArena
+                playerCharacterId={playerCharacterId}
+                aiCharacterId={aiCharacterId}
+                playerAction={arenaAction}
+                aiAction={aiArenaAction}
+                phase={arenaPhase}
+                outcome={lastTurn?.outcome ?? null}
+                fill
+              />
+            </div>
           )}
-          <TurnReveal
-            turnResult={lastTurn}
-            visible={true}
-            onOutcomeRevealed={handleOutcomeRevealed}
-            playerName={playerDisplayName}
-            aiName={aiDisplayName}
-          />
-          <div className="text-center py-6 bg-gray-800 rounded-xl">
+          <div className="shrink-0 text-center py-3 bg-gray-800 rounded-xl">
             <p className="text-sm text-gray-400 uppercase tracking-wider">
               Round {lastRound.round_number} Complete
             </p>
