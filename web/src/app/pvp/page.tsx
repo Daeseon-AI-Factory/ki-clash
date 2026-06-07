@@ -336,7 +336,7 @@ export default function PvPPage() {
           phase === "round_end") && (
           <div
             className="w-full max-w-2xl rounded-xl overflow-hidden bg-gray-950/60 mb-2"
-            style={{ height: "32vh", minHeight: 200 }}
+            style={{ height: "40vh", minHeight: 240 }}
           >
             <PixiBattleArena
               playerSrc={`/fighters/${chars.player}/idle.png`}

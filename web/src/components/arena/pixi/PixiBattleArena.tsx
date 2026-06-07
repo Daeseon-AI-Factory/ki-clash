@@ -88,9 +88,11 @@ export default function PixiBattleArena({
       ]);
       if (destroyed || !app) return;
 
-      const groundY = app.screen.height * 0.92;
+      const groundY = app.screen.height * 0.95;
+      // Fill ~78% of the canvas height so fighters read big and present
+      // (was 0.5 — looked tiny in the 32vh arena box).
       const fit = (tex: { height: number }) =>
-        (app!.screen.height * 0.5) / tex.height;
+        (app!.screen.height * 0.78) / tex.height;
 
       const player = new Sprite(playerTex);
       const ps = fit(playerTex);
