@@ -4,7 +4,7 @@
 
 **실시간 1v1 기싸움 게임 — 상대의 수를 읽고, 기를 모으고, 결정타를 친다**
 
-<sub>FastAPI + **두 개 병렬 런타임** (Python + Go) 가 같은 Redis 상태 공유 · Next.js 16 PWA · Tekken식 4-letter 코드 룸 PvP · 6 캐릭터 시그니처 필살기 · AI 스프라이트 파이프라인</sub>
+<sub>FastAPI + **두 개 병렬 런타임** (Python + Go) 가 같은 Redis 상태 공유 · Next.js 16 PWA · Tekken식 4-character 코드 룸 PvP · 6 캐릭터 시그니처 필살기 · AI 스프라이트 파이프라인</sub>
 
 [**🌐 라이브 프런트엔드 → kiclash.daeseon.ai**](https://kiclash.daeseon.ai) · [GitHub](https://github.com/Daeseon-AI-Factory/ki-clash)
 
@@ -14,7 +14,7 @@
 
 ---
 
-> **요약.** 한국 학교에서 하는 "기싸움"을 실시간 1v1 PvP로 재해석한 게임. **백엔드가 두 런타임으로 같은 Redis 게임 상태를 공유함** — Python (auth / matchmaking / 룸 / REST + WebSocket) 이 현재 권한자고, Go WebSocket 게이트웨이 (게임 루프 풀 포팅 + E2E 검증 완료) 는 Caddy 라우트 한 줄로 hot path 인계 받을 준비 완료. **Tekken식 룸 PvP**: 호스트가 룸 생성 → 4-letter 코드 → 친구 조인 → 양쪽 캐릭터 선택 → ready → 게임 시작. 매치 끝 시네마틱은 **6명 캐릭터별 시그니처 필살기**로 분기 (윈드 보텍스 / 루나 슬래시 / 솔라 플레어 / 아이스 셰터 / 메테오 / 핑크 크리스털 폭풍). 6명 캐릭터 스프라이트는 모두 진짜 PNG — **Pollinations/flux → rembg 투명 BG → image-first fallback chain** 파이프라인으로 생성 (총 36장: 6 캐릭 × 6 포즈).
+> **요약.** 한국 학교에서 하는 "기싸움"을 실시간 1v1 PvP로 재해석한 게임. **백엔드가 두 런타임으로 같은 Redis 게임 상태를 공유함** — Python (auth / matchmaking / 룸 / REST + WebSocket) 이 현재 권한자고, Go WebSocket 게이트웨이 (게임 루프 풀 포팅 + E2E 검증 완료) 는 Caddy 라우트 한 줄로 hot path 인계 받을 준비 완료. **Tekken식 룸 PvP**: 호스트가 룸 생성 → 4-character 코드 → 친구 조인 → 양쪽 캐릭터 선택 → ready → 게임 시작. 매치 끝 시네마틱은 **6명 캐릭터별 시그니처 필살기**로 분기 (윈드 보텍스 / 루나 슬래시 / 솔라 플레어 / 아이스 셰터 / 메테오 / 핑크 크리스털 폭풍). 6명 캐릭터 스프라이트는 모두 진짜 PNG — **Pollinations/flux → rembg 투명 BG → image-first fallback chain** 파이프라인으로 생성 (총 36장: 6 캐릭 × 6 포즈).
 
 ## 목차
 
@@ -40,7 +40,7 @@
 플레이 방식 2가지:
 
 1. **Quick Match** — 로비에서 자동 매칭, 다음 들어온 사람과 페어링.
-2. **Create / Join Room** — 호스트 4-letter 코드 받아서 (Slack / iMessage / 구두로) 공유, 친구 조인, 양쪽 캐릭터 선택, ready, 게임 시작. "인터뷰어가 30초만에 같이 플레이" 경로.
+2. **Create / Join Room** — 호스트 4-character 코드 받아서 (Slack / iMessage / 구두로) 공유, 친구 조인, 양쪽 캐릭터 선택, ready, 게임 시작. "인터뷰어가 30초만에 같이 플레이" 경로.
 
 6명 캐릭터, 매치 마지막 결정타에 캐릭터별 시그니처 필살기 발동.
 
@@ -63,9 +63,9 @@
 
 | 흐름 | 동작 |
 |---|---|
-| **로비** | 3 카드: **Quick Match** · **Create Room** · **Join Room** (inline 4-letter 코드 입력). |
+| **로비** | 3 카드: **Quick Match** · **Create Room** · **Join Room** (inline 4-character 코드 입력). |
 | **Quick Match** | 글로벌 Redis matchmaking 큐 조인. FIFO 페어링 — 다음 조인하는 사람과 매칭. |
-| **Create Room** | `POST /api/v1/rooms` 가 4-letter 코드 발행 (32자 알파벳, 모호한 글자 제외 — `1`/`I`/`L`/`0`/`O`). 호스트가 코드 + copy 버튼 보임. |
+| **Create Room** | `POST /api/v1/rooms` 가 4-character 코드 발행 (32자 알파벳, 모호한 글자 제외 — `1`/`I`/`L`/`0`/`O`). 호스트가 코드 + copy 버튼 보임. |
 | **Join Room** | 게스트가 코드 입력, `POST /api/v1/rooms/{code}/join` 으로 페어링. 양쪽이 서로 보임. |
 | **선택 + ready** | 양쪽 6명 중 캐릭 선택 (`PUT /rooms/{code}/character`), ready 토글 (`PUT /rooms/{code}/ready`). 양쪽 ready 되면 룸 자동 게임 생성 (`POST /rooms/{code}/start`, idempotent — 어느 client 든 호출 가능). |
 | **게임플레이** | 매 턴: 줄어드는 바 위 5초 카운트다운, 5개 액션 중 선택 (Charge / Block / Attack / Energy Wave / Teleport). 타임아웃 시 `charge` 자동 제출. 양쪽 액션 들어오면 서버 resolve, personalized turn results 브로드캐스트. |
@@ -126,7 +126,7 @@
                                │     │               │
                        Postgres │     │ Redis ───────┘ (공유 진실)
                        (users,  │     │   ki_clash:game:{id}    JSON 세션
-                       matches) │     │   ki_clash:room:{code}  4-letter 룸
+                       matches) │     │   ki_clash:room:{code}  4-character 룸
                                 │     │   ki_clash:matchmaking:queue  ZSET
                                 │     │   ki_clash:player:{id}  pub/sub 채널
 ```
@@ -184,7 +184,7 @@ Games (vs AI) POST  /api/v1/games/ai                   AI 매치 시작
               GET   /api/v1/games/{id}
               POST  /api/v1/games/{id}/action          액션 제출
 
-Rooms (PvP)   POST  /api/v1/rooms                      생성 — 4-letter 코드 반환
+Rooms (PvP)   POST  /api/v1/rooms                      생성 — 4-character 코드 반환
               GET   /api/v1/rooms/{code}               state 폴링 (멤버 게이트)
               POST  /api/v1/rooms/{code}/join
               PUT   /api/v1/rooms/{code}/character
@@ -229,7 +229,7 @@ curl http://localhost:8000/health    # → {"status":"ok"}
 open http://localhost:3000           # AI 매치 플레이
 ```
 
-**PvP 로컬 시도**: 두 브라우저 열어 (하나 일반, 하나 incognito) → 둘 다 `/pvp` → 하나가 **Create Room** 탭 + 4-letter 코드 복사 → 다른 쪽 **Join Room** 탭 + 코드 입력 → 양쪽 캐릭 선택 → 양쪽 ready → 매치 시작.
+**PvP 로컬 시도**: 두 브라우저 열어 (하나 일반, 하나 incognito) → 둘 다 `/pvp` → 하나가 **Create Room** 탭 + 4-character 코드 복사 → 다른 쪽 **Join Room** 탭 + 코드 입력 → 양쪽 캐릭 선택 → 양쪽 ready → 매치 시작.
 
 **Go 게임 서버 시도 (옵션)** — `:8001` 에서 같은 Redis 공유:
 
@@ -330,7 +330,7 @@ app/                                FastAPI 백엔드 (Python 3.11, async)
     game_engine/                    pure engine: types, outcome_matrix, engine
     ai_opponent/                    easy / medium / hard deterministic 전략
     game_store.py                   Redis 기반 PvP 세션 — WATCH/MULTI/EXEC
-    room_store.py                   4-letter 코드 Tekken식 룸
+    room_store.py                   4-character 코드 Tekken식 룸
     ws_manager/                     per-player pub/sub (DR-13)
     logging.py  observability.py    JSON logs + Prometheus + Sentry init
   modules/ki_clash/game_session.py  stateless PvP 세션 orchestration (DR-15)

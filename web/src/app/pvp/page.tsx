@@ -204,7 +204,7 @@ export default function PvPPage() {
             {/* Join Room — inline code input */}
             <div className="p-4 bg-gray-800/80 border border-gray-700 rounded-xl space-y-3">
               <p className="text-sm font-medium text-gray-300">
-                🚪 Join Room — enter the 4-letter code
+                🚪 Join Room — enter the 4-character code
               </p>
               <div className="flex gap-2">
                 <input

@@ -4,7 +4,7 @@
 
 **A real-time 1v1 ki-battle game — read your opponent, charge your ki, strike at the right moment**
 
-<sub>FastAPI + **two parallel runtimes** (Python + Go) sharing the same Redis state · Next.js 16 PWA · room-based PvP with Tekken-style 4-letter codes · 6 character ultimates · AI sprite pipeline</sub>
+<sub>FastAPI + **two parallel runtimes** (Python + Go) sharing the same Redis state · Next.js 16 PWA · room-based PvP with Tekken-style 4-character codes · 6 character ultimates · AI sprite pipeline</sub>
 
 [**🌐 Live frontend → kiclash.daeseon.ai**](https://kiclash.daeseon.ai) · [GitHub](https://github.com/Daeseon-AI-Factory/ki-clash)
 
@@ -24,7 +24,7 @@
 
 ---
 
-> **TL;DR.** Real-time 1v1 PvP game based on the Korean schoolyard "기싸움" hand game. **Two backend runtimes share the same Redis-backed game state** — Python (auth / matchmaking / rooms / REST + WebSocket) is currently authoritative; a Go WebSocket gateway (full game loop ported, end-to-end tested) is wired to take over the hot path via a one-line Caddy route swap. **Tekken-style room PvP**: host creates a room → 4-letter code → friend joins → both pick a character → both ready → game spawns. The match-end finale dispatches to **6 character-specific ultimates** (wind vortex / lunar slash / solar flare / ice shatter / meteor strike / pink crystal storm). All 6 fighter sprites are real PNGs generated through a **Pollinations/flux → rembg transparent-BG → image-first fallback chain** pipeline (36 PNGs total: 6 characters × 6 poses).
+> **TL;DR.** Real-time 1v1 PvP game based on the Korean schoolyard "기싸움" hand game. **Two backend runtimes share the same Redis-backed game state** — Python (auth / matchmaking / rooms / REST + WebSocket) is currently authoritative; a Go WebSocket gateway (full game loop ported, end-to-end tested) is wired to take over the hot path via a one-line Caddy route swap. **Tekken-style room PvP**: host creates a room → 4-character code → friend joins → both pick a character → both ready → game spawns. The match-end finale dispatches to **6 character-specific ultimates** (wind vortex / lunar slash / solar flare / ice shatter / meteor strike / pink crystal storm). All 6 fighter sprites are real PNGs generated through a **Pollinations/flux → rembg transparent-BG → image-first fallback chain** pipeline (36 PNGs total: 6 characters × 6 poses).
 
 ## Table of contents
 
@@ -50,7 +50,7 @@
 Two ways to play:
 
 1. **Quick Match** — open the lobby, get auto-matched with the next available opponent in the global queue.
-2. **Create / Join Room** — host gets a 4-letter code, shares it (Slack / iMessage / verbally), friend joins, both pick a character, both ready up, game spawns. This is the "interviewer can play with me in 30 seconds" path.
+2. **Create / Join Room** — host gets a 4-character code, shares it (Slack / iMessage / verbally), friend joins, both pick a character, both ready up, game spawns. This is the "interviewer can play with me in 30 seconds" path.
 
 Six characters, each with their own signature ultimate that fires on the final blow of the match.
 
@@ -73,9 +73,9 @@ Six characters, each with their own signature ultimate that fires on the final b
 
 | Flow | What happens |
 |---|---|
-| **Lobby** | 3 cards: **Quick Match** · **Create Room** · **Join Room** (with inline 4-letter code input). |
+| **Lobby** | 3 cards: **Quick Match** · **Create Room** · **Join Room** (with inline 4-character code input). |
 | **Quick Match** | Joins the global Redis matchmaking queue. FIFO pairing — matched with the next person who joins. |
-| **Create Room** | `POST /api/v1/rooms` issues a 4-letter code (32-char alphabet, ambiguous chars excluded — `1`/`I`/`L`/`0`/`O`). Host sees the code prominently with a copy button. |
+| **Create Room** | `POST /api/v1/rooms` issues a 4-character code (32-char alphabet, ambiguous chars excluded — `1`/`I`/`L`/`0`/`O`). Host sees the code prominently with a copy button. |
 | **Join Room** | Guest types the code, `POST /api/v1/rooms/{code}/join` pairs them in. Both players now see each other in the room. |
 | **Pick + ready** | Each player picks one of 6 characters (`PUT /rooms/{code}/character`), then toggles ready (`PUT /rooms/{code}/ready`). When both are ready, the room auto-spawns the game (`POST /rooms/{code}/start`, idempotent — either client can call). |
 | **Gameplay** | Each turn: 5-second countdown on a shrinking bar, pick one of 5 actions (Charge / Block / Attack / Energy Wave / Teleport). Auto-submit `charge` on timeout. Server resolves once both actions land, broadcasts personalized turn results. |
@@ -136,7 +136,7 @@ The single-player flow uses the same game engine against a deterministic AI (`ap
                                │     │               │
                        Postgres │     │ Redis ───────┘ (shared truth)
                        (users,  │     │   ki_clash:game:{id}    JSON sessions
-                       matches) │     │   ki_clash:room:{code}  4-letter lobbies
+                       matches) │     │   ki_clash:room:{code}  4-character lobbies
                                 │     │   ki_clash:matchmaking:queue  ZSET
                                 │     │   ki_clash:player:{id}  pub/sub channels
 ```
@@ -194,7 +194,7 @@ Games (vs AI) POST  /api/v1/games/ai                   start an AI match
               GET   /api/v1/games/{id}
               POST  /api/v1/games/{id}/action          submit an action
 
-Rooms (PvP)   POST  /api/v1/rooms                      create — returns 4-letter code
+Rooms (PvP)   POST  /api/v1/rooms                      create — returns 4-character code
               GET   /api/v1/rooms/{code}               poll state (member-gated)
               POST  /api/v1/rooms/{code}/join
               PUT   /api/v1/rooms/{code}/character
@@ -239,7 +239,7 @@ curl http://localhost:8000/health    # → {"status":"ok"}
 open http://localhost:3000           # play an AI match
 ```
 
-**Try PvP locally**: open the app in two browsers (one regular, one incognito) → both go to `/pvp` → one taps **Create Room**, copies the 4-letter code → the other taps **Join Room**, types the code → both pick a character → both ready → match starts.
+**Try PvP locally**: open the app in two browsers (one regular, one incognito) → both go to `/pvp` → one taps **Create Room**, copies the 4-character code → the other taps **Join Room**, types the code → both pick a character → both ready → match starts.
 
 **Try the Go game server (optional)** — runs on `:8001`, shares the same Redis:
 
@@ -340,7 +340,7 @@ app/                                FastAPI backend (Python 3.11, async)
     game_engine/                    pure engine: types, outcome_matrix, engine
     ai_opponent/                    easy / medium / hard deterministic strategies
     game_store.py                   Redis-backed PvP session — WATCH/MULTI/EXEC
-    room_store.py                   Tekken-style rooms with 4-letter codes
+    room_store.py                   Tekken-style rooms with 4-character codes
     ws_manager/                     per-player pub/sub (DR-13)
     logging.py  observability.py    JSON logs + Prometheus + Sentry init
   modules/ki_clash/game_session.py  stateless PvP session orchestration (DR-15)

@@ -115,7 +115,9 @@ app.include_router(v1_router)
 app.include_router(ws_router, prefix="/api/v1")
 
 
-@app.get("/health")
+# Allow HEAD as well as GET (bug #4): many uptime monitors / load
+# balancers probe with HEAD, and a GET-only route answered 405 to HEAD.
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health_check() -> dict[str, str]:
     """Health check endpoint."""
     return {"status": "ok"}

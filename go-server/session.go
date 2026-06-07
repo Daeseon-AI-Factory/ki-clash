@@ -49,15 +49,26 @@ func (s *Session) handleConnect(ctx context.Context, gameID, playerID string) {
 		if !sess.IsPlayer(playerID) {
 			return fmt.Errorf("not a player in this game")
 		}
-		if sess.HasConnected(playerID) {
-			isReconnect = true
-			if playerID == sess.Player1ID {
-				opponent = sess.Player2ID
-			} else {
-				opponent = sess.Player1ID
-			}
-		} else {
+		// Reconnect detection FIX (bug #2): a disconnect REMOVES the player
+		// from connected_players, so on return HasConnected() is false. The
+		// old code keyed reconnect on HasConnected(), which therefore
+		// misclassified every reconnect as a fresh first-connect and never
+		// fired opponent_reconnected. Correct signal: the game has already
+		// Started (both connected once) AND this player isn't currently live
+		// → they dropped and came back.
+		wasLive := sess.HasConnected(playerID)
+		isReconnect = sess.Started && !wasLive
+		if !wasLive {
+			// Re-add to the live set on EVERY (re)connect. Critical: the
+			// forfeit timer aborts when HasConnected(disconnected) is true
+			// (session.go forfeitAfterTimeout), so a reconnect must restore
+			// presence or the player still gets forfeited after 30s.
 			sess.MarkConnected(playerID)
+		}
+		if playerID == sess.Player1ID {
+			opponent = sess.Player2ID
+		} else {
+			opponent = sess.Player1ID
 		}
 		return nil
 	})
@@ -69,9 +80,14 @@ func (s *Session) handleConnect(ctx context.Context, gameID, playerID string) {
 	}
 
 	if isReconnect {
-		// Cancel any local disconnect timer for this player.
+		// Cancel the 30s forfeit timer — they made it back in time.
 		s.cancelDisconnectTimer(gameID, playerID)
+		// Tell the survivor their opponent is back (clears the
+		// "opponent disconnected, waiting…" overlay). Symmetric counterpart
+		// to opponent_disconnected (bug #2).
 		_ = s.pubsub.sendToPlayer(ctx, opponent, opponentReconnectedMsg())
+		// Resume the turn: re-send the current prompt to BOTH and restart
+		// the turn clock that handleDisconnect paused (bug #1 resume side).
 		if sess.GameState.Status == MatchInProgress {
 			s.sendWaitingForAction(ctx, sess)
 		}
@@ -232,6 +248,16 @@ func (s *Session) handleDisconnect(ctx context.Context, gameID, playerID string)
 	if err != nil {
 		return
 	}
+
+	// PAUSE THE GAME (bug #1): cancel the per-turn 5s timer so the absent
+	// player is NOT auto-charged turn after turn during the grace window.
+	// Previously the turn loop was independent of connection state, so a
+	// dropped player bled turns/rounds until the 30s forfeit. Now the clock
+	// stops on disconnect and resumes in handleConnect's reconnect branch
+	// (which re-sends waiting_for_action → startTurnTimeout). If they never
+	// return, forfeitAfterTimeout ends the match — the only terminal path
+	// while paused.
+	s.cancelTurnTimeout(gameID)
 
 	_ = s.pubsub.sendToPlayer(ctx, opponent, opponentDisconnectedMsg(DisconnectTimeoutSec))
 
@@ -424,9 +450,15 @@ func (s *Session) forfeitAfterTimeout(ctx context.Context, gameID, disconnected,
 	})
 
 	// Notify opponent with a match_result envelope.
+	// total_turns must include the IN-PROGRESS round (bug #3): summing only
+	// completed RoundResults reported 0 when a player forfeited mid-round-1,
+	// even after several turns were played. Add the current round's turns.
 	totalTurns := 0
 	for _, rr := range sess.GameState.RoundResults {
 		totalTurns += rr.TotalTurns
+	}
+	if sess.GameState.CurrentRound != nil {
+		totalTurns += sess.GameState.CurrentRound.TurnNumber
 	}
 	_ = s.pubsub.sendToPlayer(loadCtx, opponent, matchResultMsg(
 		winnerLabelFor(forfeitWinner, opponent, sess.Player1ID),
