@@ -60,7 +60,15 @@ services:
       STRIPE_AD_FREE_PRICE_ID: ${STRIPE_AD_FREE_PRICE_ID:-}
     command: >
       sh -c "alembic upgrade head &&
-             uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1"
+    # --workers 1 is REQUIRED on a single instance: single-player (vs AI)
+    # games live in a per-process in-memory dict (app/services/game_service.py
+    # _active_games), so 2 workers round-robin requests to a worker that
+    # doesn't have the game -> "Game '<id>' not found" ~50% of the time. One
+    # async worker handles many concurrent connections on the event loop and
+    # also eases memory on this t3.micro. PvP is Redis-backed (DR-15) and
+    # worker-count-agnostic. Before scaling to multiple API INSTANCES, migrate
+    # single-player state to Redis too (see docs/troubleshooting.md).
     expose:
       - "8000"
     healthcheck:
