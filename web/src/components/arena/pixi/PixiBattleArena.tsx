@@ -106,19 +106,21 @@ export default function PixiBattleArena({
       // layout shift, hydration) — if we positioned/scaled once, fighters
       // would drift off or shrink. groundY is mutable so the idle-bob ticker
       // always reads the current ground.
-      let groundY = app.screen.height * 0.95;
+      let groundY = app.screen.height * 0.93;
       const layout = () => {
         if (!app) return;
         const W = app.screen.width;
         const H = app.screen.height;
-        groundY = H * 0.95;
-        // Fill ~74% of canvas height; spread fighters to the outer fifths.
-        const ps = (H * 0.74) / playerTex.height;
+        groundY = H * 0.93;
+        // Match the original KiAuraArena arrangement: fighters near the edges
+        // at ~66% of the box height (orig was 176px in a 256-288px box, set
+        // to the left/right with px-12 padding).
+        const ps = (H * 0.66) / playerTex.height;
         player.scale.set(ps);
-        player.position.set(W * 0.2, groundY);
-        const es = (H * 0.74) / enemyTex.height;
+        player.position.set(W * 0.16, groundY);
+        const es = (H * 0.66) / enemyTex.height;
         enemy.scale.set(-es, es); // mirror to face the player
-        enemy.position.set(W * 0.8, groundY);
+        enemy.position.set(W * 0.84, groundY);
       };
       layout();
       const ro = new ResizeObserver(() => layout());

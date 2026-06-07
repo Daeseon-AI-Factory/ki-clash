@@ -334,7 +334,7 @@ export default function PvPPage() {
           phase === "revealing" ||
           phase === "waiting" ||
           phase === "round_end") && (
-          <div className="w-full max-w-2xl h-[40vh] min-h-[240px] rounded-xl overflow-hidden bg-gray-950/60 mb-2">
+          <div className="w-full max-w-2xl mx-auto h-64 sm:h-72 rounded-2xl overflow-hidden border border-gray-700/60 shadow-2xl mb-2">
             <PixiBattleArena
               playerSrc={`/fighters/${chars.player}/idle.png`}
               enemySrc={`/fighters/${chars.opponent}/idle.png`}
