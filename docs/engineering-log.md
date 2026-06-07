@@ -2278,6 +2278,71 @@ one-codebase-everywhere constraint.
 
 ---
 
+## DR-18: Retrospective — "enhance" means ADD a layer, not REPLACE the working thing
+
+**What happened (the mistake):** Asked to make the battle effects "진짜
+화려하게" (truly spectacular) and explicitly to add "이펙트만" (effects
+ONLY), I instead **replaced the entire dynamic DOM arena** (`KiAuraArena`)
+with a static-PNG PixiJS arena (`PixiBattleArena`) on both the AI and PvP
+pages. KiAuraArena was not just an effects container — it owned the
+**character motion** (windup / impact / recoil / pose changes via
+`useActionAnimation` + `FighterSprite` transforms). Replacing it silently
+deleted all that motion and made fighters look blurry (upscaled PNG + glow).
+The user noticed immediately: "동작이랑 다 삭제했냐 … 이펙트만 넣어야지."
+
+**Root cause:** I treated "enhance the effects" as "rewrite the arena."
+Replacement throws away the value you didn't inventory. KiAuraArena's
+*motion* was invisible-to-me value — I was focused on effects and never
+catalogued what else the component did before swapping it out.
+
+**Compounding errors (symptom-chasing on a wrong foundation):** Once the
+arena was wrong, every follow-up "fix" tuned the wrong base —
+fighter scale 0.5→0.78, a wide-desktop layout, fighter spread — and one of
+them (positioning computed once at init) introduced a resize bug
+(troubleshooting: "fighters mispositioned after resize"). I also misread
+"초창기 배치" as just the CSS box size and fixed dimensions while the real
+loss (motion) stayed gone because the *component* had been replaced.
+
+**Whose fault:** Mine, not the user's. "이펙트만" was an unambiguous,
+correct directive. Terse user directives are usually precise — "only
+effects" meant *do not touch the motion*, and I violated it from the first
+step.
+
+**The fix:** Reverted both pages to the pre-Pixi dynamic `KiAuraArena`
+verbatim (from commit `e44850d`). The correct way to add the WebGL effects
+is a **transparent Pixi overlay layered on top** of KiAuraArena — additive,
+motion untouched — not a replacement.
+
+**Trade-off table (the decision I should have made up front):**
+
+| Dimension | Replace component | ADD overlay layer ← right call |
+|---|---|---|
+| Preserves existing motion/behavior | **No — silently lost** | Yes (untouched) |
+| Matches an "only add X" request | No | **Yes** |
+| Blast radius if X is wrong | Whole arena | Just the overlay |
+| Rollback cost | Rewrite | Delete one layer |
+| Risk of re-introducing solved bugs | High (rebuild from scratch) | Low |
+
+**Meta-pattern:** *Enhancement is composition, not substitution.* When a
+request is to ADD a capability, default to layering/overlay/decoration over
+the working thing. Before replacing any component, **inventory everything it
+does that is NOT the thing you're changing** — that list is the value
+replacement destroys. Keep enhancements behind a thin, deletable layer so a
+"no, revert" is one line, not a rewrite.
+
+**Interview framing:**
+> "I learned this the hard way on my own game: asked to *add* spectacular
+> effects, I rewrote the whole battle arena in WebGL and silently deleted the
+> character animation the old component owned. The lesson — enhancement is
+> composition, not substitution. Now when a request is additive I default to
+> an overlay layer and inventory what the existing component does beyond the
+> part I'm touching, so I don't throw away invisible value or blow up the
+> blast radius."
+
+**Commit:** `revert(arena): restore original dynamic KiAuraArena on both pages`
+
+---
+
 ---
 
 ## Engineering Patterns & Principles Surfaced
