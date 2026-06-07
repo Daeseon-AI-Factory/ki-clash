@@ -47,7 +47,7 @@ export default function KiAuraArena({
   if (!player || !ai) return null;
 
   return (
-    <div className="relative w-full max-w-2xl mx-auto h-64 sm:h-72 rounded-2xl overflow-hidden border border-gray-700/60 shadow-2xl">
+    <div className="relative w-full max-w-2xl mx-auto h-44 sm:h-64 rounded-2xl overflow-hidden border border-gray-700/60 shadow-2xl">
       <ArenaBackground />
 
       {/* Fighters — humanoid silhouettes with auras */}

@@ -181,7 +181,7 @@ export default function PvPPage() {
   // ── Render ──────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4">
+    <div className="min-h-[100svh] bg-gray-900 text-white flex flex-col items-center justify-center p-4">
       <InterstitialAd show={showInterstitial} onDismiss={dismissInterstitial} />
 
       {error && pageMode !== "room" && (
@@ -323,7 +323,7 @@ export default function PvPPage() {
       )}
 
       {pageMode === "pvp" && phase === "playing" && gameState && (
-        <div className="w-full max-w-2xl space-y-6">
+        <div className="w-full max-w-2xl space-y-3">
           <div className="text-center">
             <p className="text-xs text-gray-500 uppercase tracking-wider">
               Round {gameState.round_number} • Turn {gameState.turn}

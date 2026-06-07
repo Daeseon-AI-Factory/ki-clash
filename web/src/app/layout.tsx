@@ -48,6 +48,9 @@ export const viewport: Viewport = {
   // Prevent double-tap zoom / pinch on the game UI so it feels app-like.
   maximumScale: 1,
   userScalable: false,
+  // Extend under the notch / home indicator so 100svh maps to the real
+  // screen; pages keep content clear of unsafe areas via padding.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

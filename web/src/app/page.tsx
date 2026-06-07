@@ -168,7 +168,7 @@ export default function Home() {
 
   return (
     <div
-      className={`min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4 ${shakeClass}`}
+      className={`min-h-[100svh] bg-gray-900 text-white flex flex-col items-center justify-center p-4 ${shakeClass}`}
     >
       {/* Mute toggle */}
       <MuteButton muted={muted} onToggle={toggleMute} />
@@ -209,7 +209,7 @@ export default function Home() {
 
       {/* PLAYING — Main game with inline selection timer */}
       {phase === "playing" && gameState && (
-        <div className="w-full max-w-2xl space-y-6">
+        <div className="w-full max-w-2xl space-y-3">
           <MatchHUD
             gameState={gameState}
             playerName={playerName}
@@ -240,7 +240,7 @@ export default function Home() {
 
       {/* REVEALING — Turn result */}
       {phase === "revealing" && (
-        <div className="w-full max-w-2xl space-y-6">
+        <div className="w-full max-w-2xl space-y-3">
           {gameState && (
             <MatchHUD
               gameState={gameState}
@@ -288,7 +288,7 @@ export default function Home() {
 
       {/* ROUND END */}
       {phase === "round_end" && lastRound && (
-        <div className="w-full max-w-2xl space-y-6">
+        <div className="w-full max-w-2xl space-y-3">
           {gameState && (
             <MatchHUD
               gameState={gameState}
