@@ -221,7 +221,7 @@ export default function Home() {
       {playerCharacterId &&
         aiCharacterId &&
         (phase === "playing" || phase === "revealing" || phase === "round_end") && (
-          <div className="w-full max-w-2xl lg:max-w-6xl h-[40vh] lg:h-[62vh] min-h-[240px] rounded-xl overflow-hidden bg-gray-950/60">
+          <div className="w-full max-w-2xl h-[40vh] min-h-[240px] rounded-xl overflow-hidden bg-gray-950/60">
             <PixiBattleArena
               playerSrc={`/fighters/${playerCharacterId}/idle.png`}
               enemySrc={`/fighters/${aiCharacterId}/idle.png`}
