@@ -322,166 +322,147 @@ export default function PvPPage() {
         </div>
       )}
 
-      {pageMode === "pvp" && phase === "playing" && gameState && (
-        <div className="w-full max-w-2xl flex flex-col gap-2 overflow-hidden h-[calc(100svh-2rem)]">
-          <div className="shrink-0 text-center">
-            <p className="text-xs text-gray-500 uppercase tracking-wider">
-              Round {gameState.round_number} • Turn {gameState.turn}
-            </p>
-            <p className="text-lg font-bold mt-1">
-              You {roundsWonYou} — {roundsWonOpponent} {opponentName || "Opponent"}
-            </p>
-          </div>
-
-          <div className="relative flex-1 min-h-0">
-            <KiAuraArena
-              playerCharacterId={chars.player}
-              aiCharacterId={chars.opponent}
-              fill
-            />
-          </div>
-
-          <div className="shrink-0 space-y-2">
-            <KiMeter ki={gameState.your_ki} label="You" isPlayer={true} />
-            <KiMeter
-              ki={gameState.opponent_ki}
-              label={opponentName || "Opponent"}
-              isPlayer={false}
-            />
-          </div>
-
-          <div className="shrink-0 grid grid-cols-5 gap-2 sm:gap-3">
-            {ACTIONS.map((action) => (
-              <ActionCard
-                key={action}
-                action={action}
-                playerKi={gameState.your_ki}
-                isSelected={false}
-                disabled={false}
-                onSelect={submitAction}
-              />
-            ))}
-          </div>
-
-          <p className="shrink-0 text-center text-xs text-gray-500">
-            {gameState.time_limit}s to choose — auto-Charge if you don&apos;t pick
-          </p>
-        </div>
-      )}
-
-      {pageMode === "pvp" && phase === "waiting" && (
-        <div className="text-center space-y-4">
-          <KiAuraArena
-            playerCharacterId={chars.player}
-            aiCharacterId={chars.opponent}
-          />
-          <p className="text-lg font-medium">Waiting for opponent...</p>
-          <p className="text-sm text-gray-400">
-            You&apos;ve locked in your action
-          </p>
-        </div>
-      )}
-
-      {pageMode === "pvp" && phase === "revealing" && turnResult && (
-        <div className="w-full max-w-2xl flex flex-col gap-2 overflow-hidden h-[calc(100svh-2rem)]">
-          {/* KiAuraArena (DOM motion) UNTOUCHED + WebGL effect overlay (DR-18) */}
-          <div className="relative flex-1 min-h-0">
-            <KiAuraArena
-              playerCharacterId={chars.player}
-              aiCharacterId={chars.opponent}
-              playerAction={arenaAction}
-              aiAction={opponentArenaAction}
-              phase={arenaPhase}
-              outcome={arenaOutcome}
-              fill
-            />
-            <PixiFxOverlay
-              className="absolute inset-0 pointer-events-none"
-              playerColor={playerColorNum}
-              enemyColor={enemyColorNum}
-              effect={arenaEffect}
-            />
-          </div>
-
-          <div className="shrink-0 flex items-center justify-center gap-8 py-3">
-            <div className="flex flex-col items-center">
-              <span className="text-4xl">
-                {ACTION_EMOJI[turnResult.your_action] || "❓"}
-              </span>
-              <span className="text-sm text-gray-400 mt-1">
-                {turnResult.your_action.replace("_", " ")}
-              </span>
-              <span className="text-xs text-green-400">You</span>
-            </div>
-            <span className="text-2xl font-bold text-gray-500">VS</span>
-            <div className="flex flex-col items-center">
-              <span className="text-4xl">
-                {ACTION_EMOJI[turnResult.opponent_action] || "❓"}
-              </span>
-              <span className="text-sm text-gray-400 mt-1">
-                {turnResult.opponent_action.replace("_", " ")}
-              </span>
-              <span className="text-xs text-red-400">
-                {opponentName || "Opponent"}
-              </span>
-            </div>
-          </div>
-
-          {(() => {
-            const display =
-              OUTCOME_DISPLAY[turnResult.outcome] || OUTCOME_DISPLAY.neutral;
-            return (
-              <p className={`shrink-0 text-3xl font-black text-center ${display.color}`}>
-                {display.text}
+      {/* UNIFIED PVP GAMEPLAY — one fixed skeleton across playing/waiting/
+          revealing/round_end. Header + arena stay put; only the bottom slot's
+          content swaps. No reflow, one screen, any phone (mirrors AI page). */}
+      {pageMode === "pvp" &&
+        (phase === "playing" ||
+          phase === "waiting" ||
+          phase === "revealing" ||
+          phase === "round_end") && (
+          <div className="w-full max-w-2xl flex flex-col justify-center gap-2 overflow-hidden h-[calc(100svh-2rem)]">
+            {/* Header — round + score, always */}
+            <div className="shrink-0 text-center leading-tight">
+              <p className="text-sm font-black text-yellow-400 uppercase tracking-widest">
+                Round{" "}
+                {gameState?.round_number ??
+                  roundResult?.round_number ??
+                  1}
               </p>
-            );
-          })()}
+              <p className="text-2xl font-black text-white">
+                {roundsWonYou} — {roundsWonOpponent}
+              </p>
+              <p className="text-[10px] text-gray-500">
+                You vs {opponentName || "Opponent"}
+                {gameState ? ` · Turn ${gameState.turn}` : ""}
+              </p>
+            </div>
 
-          <div className="shrink-0 flex justify-between text-sm text-gray-400 px-4">
-            <span>Your Ki: {turnResult.your_ki}</span>
-            <span>Opponent Ki: {turnResult.opponent_ki}</span>
-          </div>
-        </div>
-      )}
+            {/* Arena — always, capped height; overlay always mounted */}
+            <div className="relative flex-1 min-h-0 max-h-[34svh]">
+              <KiAuraArena
+                playerCharacterId={chars.player}
+                aiCharacterId={chars.opponent}
+                playerAction={
+                  phase === "revealing" || phase === "round_end" ? arenaAction : null
+                }
+                aiAction={
+                  phase === "revealing" || phase === "round_end"
+                    ? opponentArenaAction
+                    : null
+                }
+                phase={
+                  phase === "revealing" || phase === "round_end" ? arenaPhase : "idle"
+                }
+                outcome={
+                  phase === "revealing" || phase === "round_end" ? arenaOutcome : null
+                }
+                fill
+              />
+              <PixiFxOverlay
+                className="absolute inset-0 pointer-events-none"
+                playerColor={playerColorNum}
+                enemyColor={enemyColorNum}
+                effect={arenaEffect}
+              />
+            </div>
 
-      {pageMode === "pvp" && phase === "round_end" && roundResult && (
-        <div className="w-full max-w-2xl flex flex-col gap-2 overflow-hidden h-[calc(100svh-2rem)] text-center">
-          <div className="relative flex-1 min-h-0">
-            <KiAuraArena
-              playerCharacterId={chars.player}
-              aiCharacterId={chars.opponent}
-              playerAction={arenaAction}
-              aiAction={opponentArenaAction}
-              phase={arenaPhase}
-              outcome={arenaOutcome}
-              fill
-            />
+            {/* BOTTOM SLOT — min-h, content swaps by phase, never clips */}
+            <div className="shrink-0 min-h-[12rem] flex flex-col justify-center gap-2">
+              {phase === "playing" && gameState && (
+                <>
+                  <div className="space-y-1">
+                    <KiMeter ki={gameState.your_ki} label="You" isPlayer={true} />
+                    <KiMeter
+                      ki={gameState.opponent_ki}
+                      label={opponentName || "Opponent"}
+                      isPlayer={false}
+                    />
+                  </div>
+                  <div className="grid grid-cols-5 gap-2 sm:gap-3">
+                    {ACTIONS.map((action) => (
+                      <ActionCard
+                        key={action}
+                        action={action}
+                        playerKi={gameState.your_ki}
+                        isSelected={false}
+                        disabled={false}
+                        onSelect={submitAction}
+                      />
+                    ))}
+                  </div>
+                  <p className="text-center text-xs text-gray-500">
+                    {gameState.time_limit}s to choose — auto-Charge if you don&apos;t pick
+                  </p>
+                </>
+              )}
+
+              {phase === "waiting" && (
+                <div className="text-center">
+                  <p className="text-lg font-medium">Waiting for opponent...</p>
+                  <p className="text-sm text-gray-400">You&apos;ve locked in your action</p>
+                </div>
+              )}
+
+              {phase === "revealing" && turnResult && (
+                <>
+                  <div className="flex items-center justify-center gap-8">
+                    <div className="flex flex-col items-center">
+                      <span className="text-4xl">{ACTION_EMOJI[turnResult.your_action] || "❓"}</span>
+                      <span className="text-xs text-green-400">You</span>
+                    </div>
+                    <span className="text-2xl font-bold text-gray-500">VS</span>
+                    <div className="flex flex-col items-center">
+                      <span className="text-4xl">{ACTION_EMOJI[turnResult.opponent_action] || "❓"}</span>
+                      <span className="text-xs text-red-400">{opponentName || "Opponent"}</span>
+                    </div>
+                  </div>
+                  {(() => {
+                    const display = OUTCOME_DISPLAY[turnResult.outcome] || OUTCOME_DISPLAY.neutral;
+                    return <p className={`text-3xl font-black text-center ${display.color}`}>{display.text}</p>;
+                  })()}
+                  <div className="flex justify-between text-sm text-gray-400 px-4">
+                    <span>Your Ki: {turnResult.your_ki}</span>
+                    <span>Opp Ki: {turnResult.opponent_ki}</span>
+                  </div>
+                </>
+              )}
+
+              {phase === "round_end" && roundResult && (
+                <div className="text-center py-3 bg-gray-800 rounded-xl">
+                  <p className="text-sm text-gray-400 uppercase tracking-wider">
+                    Round {roundResult.round_number} Complete
+                  </p>
+                  <p
+                    className={`text-3xl font-black mt-1 ${
+                      roundResult.winner === "you"
+                        ? "text-green-400"
+                        : roundResult.winner === "opponent"
+                          ? "text-red-400"
+                          : "text-yellow-400"
+                    }`}
+                  >
+                    {roundResult.winner === "you"
+                      ? "YOU WIN!"
+                      : roundResult.winner === "opponent"
+                        ? "OPPONENT WINS!"
+                        : "DRAW!"}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
-          <div className="shrink-0 py-3 bg-gray-800 rounded-xl">
-            <p className="text-sm text-gray-400 uppercase tracking-wider">
-              Round {roundResult.round_number} Complete
-            </p>
-            <p
-              className={`text-3xl font-black mt-2 ${
-                roundResult.winner === "you"
-                  ? "text-green-400"
-                  : roundResult.winner === "opponent"
-                    ? "text-red-400"
-                    : "text-yellow-400"
-              }`}
-            >
-              {roundResult.winner === "you"
-                ? "YOU WIN!"
-                : roundResult.winner === "opponent"
-                  ? "OPPONENT WINS!"
-                  : "DRAW!"}
-            </p>
-            <p className="text-sm text-gray-400 mt-1">
-              {roundResult.total_turns} turns
-            </p>
-          </div>
-        </div>
-      )}
+        )}
 
       {pageMode === "pvp" && phase === "match_end" && matchResult && (
         <MatchFinale
