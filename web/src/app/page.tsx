@@ -207,158 +207,93 @@ export default function Home() {
         </div>
       )}
 
-      {/* PLAYING — viewport-locked: HUD + flexing arena + pinned action cards.
-          Always fits one screen on any phone, no scroll. */}
-      {phase === "playing" && gameState && (
-        <div className="w-full max-w-2xl flex flex-col gap-2 overflow-hidden h-[calc(100svh-2rem)]">
-          <div className="shrink-0">
-            <MatchHUD
-              gameState={gameState}
-              playerName={playerName}
-              showAIThinking
-              playerCharacter={playerCharacter}
-              aiCharacter={aiCharacter}
-            />
-          </div>
-          {playerCharacterId && aiCharacterId && (
-            <div className="relative flex-1 min-h-0">
-              <KiAuraArena
-                playerCharacterId={playerCharacterId}
-                aiCharacterId={aiCharacterId}
-                fill
-              />
-            </div>
-          )}
-          {aiCharacter && (
-            // Flavor — hidden on short screens so the essentials always fit.
-            <div className="shrink-0 hidden min-[700px]:block">
-              <AITrashTalk
-                character={aiCharacter}
-                turnNumber={gameState.current_round?.turn_number ?? 0}
-              />
-            </div>
-          )}
-          <div className="shrink-0">
-            <GameBoard
-              playerKi={gameState.current_round?.p1_ki ?? 0}
-              disabled={false}
-              onSubmit={playAction}
-              onCountdownBeat={handleCountdownBeat}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* REVEALING — viewport-locked (HUD + flexing arena+FX + result + skip) */}
-      {phase === "revealing" && (
-        <div className="w-full max-w-2xl flex flex-col gap-2 overflow-hidden h-[calc(100svh-2rem)]">
-          {gameState && (
+      {/* UNIFIED GAMEPLAY — one fixed skeleton across playing/revealing/round_end.
+          HUD + arena stay in the SAME place/size every phase; only the
+          fixed-height bottom slot's CONTENT swaps. Nothing reflows → the screen
+          never jumps between phases. One screen, any phone, no scroll. */}
+      {(phase === "playing" || phase === "revealing" || phase === "round_end") &&
+        gameState && (
+          <div className="w-full max-w-2xl flex flex-col gap-2 overflow-hidden h-[calc(100svh-2rem)]">
+            {/* HUD — always present, same spot */}
             <div className="shrink-0">
               <MatchHUD
                 gameState={gameState}
                 playerName={playerName}
+                showAIThinking={phase === "playing"}
                 playerCharacter={playerCharacter}
                 aiCharacter={aiCharacter}
               />
             </div>
-          )}
-          {playerCharacterId && aiCharacterId && (
-            // KiAuraArena (DOM motion) UNTOUCHED + transparent WebGL FX overlay (DR-18).
-            <div className="relative flex-1 min-h-0">
-              <KiAuraArena
-                playerCharacterId={playerCharacterId}
-                aiCharacterId={aiCharacterId}
-                playerAction={arenaAction}
-                aiAction={aiArenaAction}
-                phase={arenaPhase}
-                outcome={lastTurn?.outcome ?? null}
-                fill
-              />
-              <PixiFxOverlay
-                className="absolute inset-0 pointer-events-none"
-                playerColor={playerColorNum}
-                enemyColor={aiColorNum}
-                effect={arenaEffect}
-              />
-            </div>
-          )}
-          <div className="shrink-0">
-            <TurnReveal
-              turnResult={lastTurn}
-              visible={true}
-              onOutcomeRevealed={handleOutcomeRevealed}
-              playerName={playerDisplayName}
-              aiName={aiDisplayName}
-            />
-          </div>
-          <button
-            onClick={continueFromReveal}
-            className="shrink-0 w-full py-2 bg-gray-700/60 hover:bg-gray-600 rounded-xl
-                       text-sm font-medium text-gray-300 transition-colors"
-          >
-            Skip →
-          </button>
-        </div>
-      )}
 
-      {/* ROUND END — viewport-locked */}
-      {phase === "round_end" && lastRound && (
-        <div className="w-full max-w-2xl flex flex-col gap-2 overflow-hidden h-[calc(100svh-2rem)]">
-          {gameState && (
-            <div className="shrink-0">
-              <MatchHUD
-                gameState={gameState}
-                playerName={playerName}
-                playerCharacter={playerCharacter}
-                aiCharacter={aiCharacter}
-              />
+            {/* Arena — always present, same size; props change per phase but the
+                component (and its WebGL overlay) never remounts. */}
+            {playerCharacterId && aiCharacterId && (
+              <div className="relative flex-1 min-h-0">
+                <KiAuraArena
+                  playerCharacterId={playerCharacterId}
+                  aiCharacterId={aiCharacterId}
+                  playerAction={phase === "playing" ? null : arenaAction}
+                  aiAction={phase === "playing" ? null : aiArenaAction}
+                  phase={phase === "playing" ? "idle" : arenaPhase}
+                  outcome={phase === "playing" ? null : lastTurn?.outcome ?? null}
+                  fill
+                />
+                <PixiFxOverlay
+                  className="absolute inset-0 pointer-events-none"
+                  playerColor={playerColorNum}
+                  enemyColor={aiColorNum}
+                  effect={arenaEffect}
+                />
+              </div>
+            )}
+
+            {/* BOTTOM SLOT — FIXED height; content swaps by phase, no reflow. */}
+            <div className="shrink-0 h-[224px] flex flex-col justify-center">
+              {phase === "playing" && (
+                <GameBoard
+                  playerKi={gameState.current_round?.p1_ki ?? 0}
+                  disabled={false}
+                  onSubmit={playAction}
+                  onCountdownBeat={handleCountdownBeat}
+                />
+              )}
+              {phase === "revealing" && (
+                <TurnReveal
+                  turnResult={lastTurn}
+                  visible={true}
+                  onOutcomeRevealed={handleOutcomeRevealed}
+                  playerName={playerDisplayName}
+                  aiName={aiDisplayName}
+                />
+              )}
+              {phase === "round_end" && lastRound && (
+                <div className="text-center py-4 bg-gray-800 rounded-xl">
+                  <p className="text-sm text-gray-400 uppercase tracking-wider">
+                    Round {lastRound.round_number} Complete
+                  </p>
+                  <p
+                    className={`text-3xl font-black mt-2 ${
+                      lastRound.winner === "p1"
+                        ? "text-green-400"
+                        : lastRound.winner === "p2"
+                          ? "text-red-400"
+                          : "text-yellow-400"
+                    }`}
+                  >
+                    {lastRound.winner === "p1"
+                      ? "YOU WIN!"
+                      : lastRound.winner === "p2"
+                        ? "AI WINS!"
+                        : "DRAW!"}
+                  </p>
+                  <p className="text-sm text-gray-400 mt-1">
+                    {lastRound.total_turns} turns played
+                  </p>
+                </div>
+              )}
             </div>
-          )}
-          {playerCharacterId && aiCharacterId && (
-            <div className="relative flex-1 min-h-0">
-              <KiAuraArena
-                playerCharacterId={playerCharacterId}
-                aiCharacterId={aiCharacterId}
-                playerAction={arenaAction}
-                aiAction={aiArenaAction}
-                phase={arenaPhase}
-                outcome={lastTurn?.outcome ?? null}
-                fill
-              />
-            </div>
-          )}
-          <div className="shrink-0 text-center py-3 bg-gray-800 rounded-xl">
-            <p className="text-sm text-gray-400 uppercase tracking-wider">
-              Round {lastRound.round_number} Complete
-            </p>
-            <p
-              className={`text-3xl font-black mt-2 ${
-                lastRound.winner === "p1"
-                  ? "text-green-400"
-                  : lastRound.winner === "p2"
-                    ? "text-red-400"
-                    : "text-yellow-400"
-              }`}
-            >
-              {lastRound.winner === "p1"
-                ? "YOU WIN!"
-                : lastRound.winner === "p2"
-                  ? "AI WINS!"
-                  : "DRAW!"}
-            </p>
-            <p className="text-sm text-gray-400 mt-1">
-              {lastRound.total_turns} turns played
-            </p>
           </div>
-          <button
-            onClick={continueFromRound}
-            className="w-full py-2 bg-gray-700/60 hover:bg-gray-600 rounded-xl
-                       text-sm font-medium text-gray-300 transition-colors"
-          >
-            Skip →
-          </button>
-        </div>
-      )}
+        )}
 
       {/* MATCH END — cinematic finale owns the entire screen */}
       {phase === "match_end" && matchResult && (

@@ -82,16 +82,19 @@ export default function GameBoard({
         ))}
       </div>
 
-      {/* Confirm button */}
-      {selected && !disabled && (
-        <button
-          onClick={handleConfirm}
-          className="w-full py-3 bg-green-600 hover:bg-green-500 text-white font-bold
-                     rounded-xl text-lg transition-colors animate-pulse"
-        >
-          Confirm {selected.replace("_", " ").toUpperCase()}
-        </button>
-      )}
+      {/* Confirm button — ALWAYS rendered (reserves its space) so selecting an
+          action never shifts the layout. Disabled/dimmed until a pick is made. */}
+      <button
+        onClick={handleConfirm}
+        disabled={!selected || disabled}
+        className={`w-full py-3 font-bold rounded-xl text-lg transition-colors ${
+          selected && !disabled
+            ? "bg-green-600 hover:bg-green-500 text-white animate-pulse"
+            : "bg-gray-700/50 text-gray-500 cursor-default"
+        }`}
+      >
+        {selected ? `Confirm ${selected.replace("_", " ").toUpperCase()}` : "Pick an action"}
+      </button>
     </div>
   );
 }
