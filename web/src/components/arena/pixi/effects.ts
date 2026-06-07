@@ -139,7 +139,8 @@ function fxAttack(ctx: FxContext, side: Side): void {
   });
 }
 
-// ── ENERGY WAVE: charging orb → plasma beam across the screen ─────────────
+// ── ENERGY WAVE: kamehameha-class beam — charge orb → 3-layer plasma beam
+//    → screen-white flash → impact shockwave. The signature "ult". ─────────
 function fxEnergyWave(ctx: FxContext, side: Side): void {
   const attacker = ctx.fighters[side];
   const target = ctx.fighters[side === "player" ? "enemy" : "player"];
@@ -147,45 +148,114 @@ function fxEnergyWave(ctx: FxContext, side: Side): void {
   const origin = centerOf(attacker);
   const dest = centerOf(target);
   const dir = Math.sign(dest.x - origin.x) || 1;
+  const H = ctx.app.screen.height;
+  const fullLen = Math.abs(dest.x - origin.x) + 90;
 
-  // build the beam from a stretched glow sprite
-  const beamSprite = new Sprite(ctx.glowTex);
-  beamSprite.anchor.set(0, 0.5);
-  beamSprite.tint = color;
-  beamSprite.blendMode = "add";
-  beamSprite.position.set(origin.x, origin.y);
-  beamSprite.height = 4;
-  beamSprite.width = 0;
-  beamSprite.filters = [
-    new GlowFilter({ distance: 22, outerStrength: 5, color, quality: 0.5 }),
-  ];
-  ctx.fxLayer.addChild(beamSprite);
+  // 3 stacked additive beam layers: outer halo → colored mid → white-hot core.
+  const mkLayer = (h: number, tint: number, glow?: GlowFilter): Sprite => {
+    const s = new Sprite(ctx.glowTex);
+    s.anchor.set(0, 0.5);
+    s.tint = tint;
+    s.blendMode = "add";
+    s.position.set(origin.x, origin.y);
+    s.width = 0;
+    s.height = h;
+    s.visible = false;
+    if (glow) s.filters = [glow];
+    ctx.fxLayer.addChild(s);
+    return s;
+  };
+  const halo = mkLayer(H * 0.17, color, new GlowFilter({ distance: 40, outerStrength: 8, color, quality: 0.4 }));
+  const mid = mkLayer(H * 0.09, color);
+  const core = mkLayer(H * 0.035, 0xffffff);
+  const layers = [halo, mid, core];
 
-  const fullLen = Math.abs(dest.x - origin.x) + 80;
+  // charge-up muzzle orb
+  const orb = new Sprite(ctx.glowTex);
+  orb.anchor.set(0.5);
+  orb.tint = color;
+  orb.blendMode = "add";
+  orb.position.set(origin.x, origin.y);
+  orb.scale.set(0.4);
+  const orbGlow = new GlowFilter({ distance: 16, outerStrength: 2, color, quality: 0.4 });
+  orb.filters = [orbGlow];
+  ctx.fxLayer.addChild(orb);
 
-  animate(ctx.app, 950, (p) => {
-    // phase 1 (0-0.35): charge orb at origin; phase 2 (0.35-0.75): beam fires; phase 3: fade
-    if (p < 0.35) {
-      const cp = p / 0.35;
-      ctx.emitter.burst(3, () => vortexSpawn(origin.x, origin.y, 70 * (1 - cp), color));
-      beamSprite.width = 0;
-      beamSprite.scale.y = 1 + cp * 6;
-    } else if (p < 0.78) {
-      const fp = (p - 0.35) / 0.43;
-      beamSprite.width = fullLen * Math.min(1, fp * 1.4) * dir;
-      beamSprite.scale.y = 6 + Math.sin(p * 40) * 2; // crackle thickness
-      // motes streaming along the beam
-      ctx.emitter.burst(4, () =>
-        risingSpawn(origin.x + fullLen * fp * dir * Math.random(), origin.y, color, 30),
+  // full-screen white-out flash (added at release)
+  const flash = new Sprite(ctx.glowTex);
+  flash.anchor.set(0.5);
+  flash.blendMode = "add";
+  flash.position.set(ctx.app.screen.width / 2, H / 2);
+  flash.width = ctx.app.screen.width * 1.4;
+  flash.height = H * 1.4;
+  flash.alpha = 0;
+  ctx.fxLayer.addChild(flash);
+
+  let impacted = false;
+  let shock: ShockwaveFilter | null = null;
+  const tx0 = target.x;
+
+  animate(ctx.app, 1500, (p) => {
+    if (p < 0.3) {
+      // CHARGE: orb inhales energy
+      const cp = p / 0.3;
+      ctx.emitter.burst(8, () => vortexSpawn(origin.x, origin.y, 95 * (1 - cp), color));
+      orb.scale.set(0.4 + cp * 1.8);
+      orbGlow.outerStrength = 2 + cp * 12;
+      if (p > 0.27) ctx.onShake?.(0.3);
+    } else if (p < 0.82) {
+      // FIRE: beam extends, crackles, streams motes
+      const fp = (p - 0.3) / 0.52;
+      const reach = Math.min(1, fp * 1.5);
+      orb.scale.set(2.2 * (1 - fp * 0.4));
+      // release flash
+      if (p < 0.42) flash.alpha = Math.max(0, 0.85 * (1 - (p - 0.3) / 0.12));
+      for (let i = 0; i < layers.length; i++) {
+        const s = layers[i];
+        s.visible = true;
+        s.width = fullLen * reach * dir;
+        const baseH = [H * 0.17, H * 0.09, H * 0.035][i];
+        const wob = 1 + Math.sin(p * 60 + i * 2) * 0.35; // electric crackle
+        s.height = baseH * wob;
+      }
+      // dense streaming motes along the live beam
+      ctx.emitter.burst(14, () =>
+        risingSpawn(
+          origin.x + fullLen * Math.random() * reach * dir,
+          origin.y + (Math.random() - 0.5) * H * 0.12,
+          color,
+          24,
+        ),
       );
-      if (fp > 0.5) ctx.onShake?.(0.6);
+      // impact when the head lands
+      if (reach >= 0.98 && !impacted) {
+        impacted = true;
+        ctx.emitter.burst(48, () => burstSpawn(dest.x, dest.y, color, 1.6));
+        ctx.emitter.burst(24, () => burstSpawn(dest.x, dest.y, 0xffffff, 1.2));
+        shock = new ShockwaveFilter({
+          center: { x: dest.x, y: dest.y },
+          amplitude: 30, wavelength: 120, speed: 900, radius: 460, time: 0,
+        });
+        ctx.fxLayer.filters = [shock];
+        ctx.onShake?.(1.0);
+      }
+      if (impacted) {
+        const sp = Math.min(1, (p - 0.5) / 0.32);
+        if (shock) shock.time = sp * 0.6;
+        target.x = tx0 + Math.sin(sp * Math.PI) * 30 * dir;
+      }
     } else {
-      const ep = (p - 0.78) / 0.22;
-      beamSprite.alpha = 1 - ep;
-      if (ep < 0.3) ctx.emitter.burst(20, () => burstSpawn(dest.x, dest.y, color, 1.3));
+      // FADE
+      const ep = (p - 0.82) / 0.18;
+      for (const s of layers) s.alpha = 1 - ep;
+      orb.alpha = 1 - ep;
     }
   }, () => {
-    beamSprite.destroy();
+    for (const s of layers) s.destroy();
+    orb.destroy();
+    flash.destroy();
+    ctx.fxLayer.filters = [];
+    target.x = tx0;
   });
 }
 
