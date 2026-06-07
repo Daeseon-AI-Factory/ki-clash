@@ -89,16 +89,17 @@ export default function PixiBattleArena({
       if (destroyed || !app) return;
 
       const groundY = app.screen.height * 0.95;
-      // Fill ~78% of the canvas height so fighters read big and present
-      // (was 0.5 — looked tiny in the 32vh arena box).
+      // Fill ~74% of the canvas height so fighters read big and present.
       const fit = (tex: { height: number }) =>
-        (app!.screen.height * 0.78) / tex.height;
+        (app!.screen.height * 0.74) / tex.height;
 
       const player = new Sprite(playerTex);
       const ps = fit(playerTex);
       player.anchor.set(0.5, 1);
       player.scale.set(ps);
-      player.position.set(app.screen.width * 0.27, groundY);
+      // Spread fighters to the outer thirds so big sprites don't crowd
+      // (was 0.27/0.73 — looked cramped once fighters got larger).
+      player.position.set(app.screen.width * 0.2, groundY);
       player.filters = [];
       fighterLayer.addChild(player);
 
@@ -106,7 +107,7 @@ export default function PixiBattleArena({
       const es = fit(enemyTex);
       enemy.anchor.set(0.5, 1);
       enemy.scale.set(-es, es); // mirror to face the player
-      enemy.position.set(app.screen.width * 0.73, groundY);
+      enemy.position.set(app.screen.width * 0.8, groundY);
       fighterLayer.addChild(enemy);
 
       // Persistent gentle aura so the fighters always feel "charged".
