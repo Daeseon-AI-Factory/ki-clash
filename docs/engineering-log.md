@@ -2193,6 +2193,91 @@ arrival trigger it.
 
 ---
 
+## DR-17: WebGL effects via PixiJS — not a game engine, not staying on DOM
+
+**Context:** The battle arena's visual ceiling was the problem. The DOM/CSS
+arena (`KiAuraArena`, framer-motion + a few dozen divs) tops out at tens of
+animated elements; CSS `blur` glow is expensive and there's no way to do
+thousands of additive particles, screen-warp shockwaves, chromatic
+aberration, or bloom. The goal was "진짜 화려하게" — spectacular,
+particle-heavy effects — while keeping the product shippable to **web + PWA +
+iOS/Android app store from one codebase**.
+
+**Decision:** Render only the battle arena with **PixiJS v8 (WebGL)**, keep
+React for all UI. A game engine (Unity/Godot) was rejected.
+
+**Options considered:**
+- A) **PixiJS WebGL arena, React for UI** ← chosen
+- B) Stay on DOM/CSS + framer-motion
+- C) Canvas 2D (hand-drawn, no GPU shaders)
+- D) Game engine (Unity / Godot WebGL export)
+
+**Trade-off table:**
+
+| Dimension | A: PixiJS WebGL | B: DOM/CSS | C: Canvas2D | D: Unity/Godot |
+|---|---|---|---|---|
+| Effect ceiling (particles/shaders) | **Thousands + GPU filters** | ~dozens, no shaders | thousands, no shaders | Highest |
+| Runs on web + PWA + Capacitor app | **Yes, same code** | Yes | Yes | iOS WKWebView: no WebGPU, heavy |
+| Bundle size | mid (tree-shaken) | tiny | tiny | 20–50MB (load hell) |
+| Reuse existing React/TS + PNG assets | **All of it** | All | Most | **Discarded** |
+| Fit for a turn-based 1v1 | Great | weak visuals | ok | overkill (physics/3D unused) |
+| Learning cost | medium (Pixi v8) | none | medium | high |
+
+**Reasoning chain:**
+1. The two axes are independent: **how you draw** (DOM < Canvas < WebGL <
+   native engine) vs **how you ship** (web < PWA < Capacitor < native). The
+   user's instinct conflated them — "install / app store" is packaging and
+   doesn't change graphics. The graphics ceiling is the draw axis, and that's
+   where WebGL is the jump.
+2. **WebGL runs identically on web, PWA, and Capacitor (WKWebView).** This is
+   the load-bearing fact for "one codebase → everywhere." Unity WebGL is the
+   opposite — WKWebView has **no WebGPU** and Unity's WASM bundle is a
+   mobile-load liability. So the spectacular-effects goal and the
+   one-codebase goal both point at PixiJS, not an engine.
+3. A turn-based duel needs **no** physics/3D/scene-graph engine — Unity's
+   value is wasted, and its 0% asset reuse is a pure cost.
+4. **Readability beats per-character effect shapes for a fast RPS-style
+   game.** Action effects keep a *unified shape* so players read "that was an
+   attack" in 0.1s; identity comes from a per-character *color tint*
+   (`character.color`). The bespoke spectacle lives in the match-end
+   **finisher** (6 DOM finishers) where readability doesn't matter — the
+   격겜 norm: normals read clean, only the super is bespoke.
+
+**Implementation (verified against installed Pixi 8.19 / pixi-filters 6.1
+source before writing):**
+- `particles.ts`: pooled additive `GlowEmitter` (recycle, no GC stutter),
+  runtime soft-glow texture (2D-canvas radial gradient → `Texture.from`,
+  sidestepping the version-sensitive `FillGradient`), 3 emission patterns.
+- `effects.ts`: 6 self-cleaning ticker effects + pixi-filters (Glow,
+  Shockwave, RGBSplit, AdvancedBloom, ColorMatrix). Energy wave is
+  kamehameha-class: 3-layer beam + muzzle orb + screen flash + impact shock.
+- `PixiBattleArena.tsx`: v8 async init with unmount-race guard, clean
+  `destroy({removeView},{children,texture,textureSource})`, `preference:
+  'webgl'` (no WebGPU on WKWebView), DPR cap 2, ticker pause on background.
+- Integration: **one persistent arena** across gameplay phases (single WebGL
+  context per match), effects fired at reveal via a **ref-tracked nonce**
+  (ref not state → two fires per turn get distinct nonces, neither lost to
+  React batching).
+
+**Meta-pattern:** *Separate "how you draw" from "how you ship"* — and when you
+need a higher graphics ceiling, reach for the lightest tool that clears it
+(WebGL via Pixi) before a heavyweight engine, especially under a
+one-codebase-everywhere constraint.
+
+**Interview framing:**
+> "I needed a much higher effects ceiling than DOM/CSS but had to keep one
+> codebase shipping to web, PWA, and the app stores. A game engine like Unity
+> breaks that — WKWebView has no WebGPU and the bundle is a mobile-load
+> liability — so I went WebGL via PixiJS for just the arena and kept React for
+> UI; WebGL runs identically across all those targets. I also kept action
+> effects unified-shape-but-color-tinted for readability in a fast
+> rock-paper-scissors game and put the bespoke character spectacle in the
+> match-end finisher — the fighting-game convention."
+
+**Commit:** `feat(arena): PixiJS v8 WebGL effect engine` + `feat(pvp): wire PixiBattleArena into live match`
+
+---
+
 ---
 
 ## Engineering Patterns & Principles Surfaced
