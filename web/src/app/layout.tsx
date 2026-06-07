@@ -1,6 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,6 +28,26 @@ export const metadata: Metadata = {
     title: "JJAN! · 짠",
     description: "1-second 1v1 reveal duel. Read, charge, strike.",
   },
+  // PWA: installable on a phone home screen, behaves like a native app.
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "JJAN!",
+  },
+  icons: {
+    icon: "/icons/icon-192.png",
+    apple: "/icons/apple-touch-icon.png",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0b0b14",
+  width: "device-width",
+  initialScale: 1,
+  // Prevent double-tap zoom / pinch on the game UI so it feels app-like.
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({
@@ -50,6 +71,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <ServiceWorkerRegister />
         {children}
       </body>
     </html>
