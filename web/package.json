@@ -14,6 +14,8 @@
     "framer-motion": "^12.40.0",
     "lottie-react": "^2.4.1",
     "next": "16.1.6",
+    "pixi-filters": "^6.1.5",
+    "pixi.js": "^8.19.0",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },
