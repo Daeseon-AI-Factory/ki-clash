@@ -167,3 +167,25 @@ Format per entry: **Symptom / Cause / Fix / Commit / Pattern**.
 - **Commit**: `d3ef61f`
 - **Known follow-up (Scale Later)**: with >1 API **instance** behind a load balancer, in-memory `_active_games` breaks again. Before multi-instance scale, migrate single-player game state to Redis (mirror DR-15 / the PvP `GameStore`). Documented, not yet done — per CLAUDE.md "Scale Later, Ship Now" (single t3.micro today).
 - **Pattern**: In-memory per-process state + >1 worker = intermittent "not found". Either pin to one worker (single instance) or move state to a shared store (multi-instance). The error being ~50% (not 100%) is the tell-tale sign of round-robin across workers.
+
+## PixiJS arena: fighters mispositioned/mis-scaled after canvas resize (FIXED, commit `321ab15`)
+
+- **Symptom**: After adding a responsive wide-desktop arena box (`lg:max-w-6xl` / `lg:62vh`), the WebGL graphics looked "broken" (병신됨) — fighters drifted off-center, wrong size, or bunched in a corner.
+- **Cause**: `PixiBattleArena` computed `groundY`, fighter scale, and X positions **once at init** from `app.screen`. But `resizeTo: host` makes the renderer track the host box, which changes size on responsive breakpoints / layout shift / hydration. The sprites kept their stale init-time pixel positions+scale while the canvas grew → visual breakage. The wide-layout change altered the box size after init and exposed the latent bug.
+- **Fix**: Extracted a `layout()` that recomputes `groundY` + scale + positions from the CURRENT `app.screen`, called at init AND on every `ResizeObserver` fire (observer on the host div). `groundY` is mutable so the idle-bob ticker tracks the live ground. Observer disconnected on cleanup. Robust at any size now. File: `web/src/components/arena/pixi/PixiBattleArena.tsx`.
+- **Commit**: `321ab15`
+- **Pattern**: Any canvas/WebGL view with `resizeTo` (or a responsive container) must RE-LAYOUT on resize — never position/scale once at init. Drive it from a `ResizeObserver` on the host, not a one-shot init read.
+
+## Wide-desktop arena layout rolled back to narrow mobile-first (commit after `321ab15`)
+
+- **What**: A wide-desktop arena (`lg:max-w-6xl`, `lg:h-[62vh]`) was tried so the stage filled large screens. Rolled back per user preference to the consistent narrow `max-w-2xl` / `40vh` column on all viewports.
+- **Why**: The wider stage didn't read better for this game and (combined with the resize bug above) made the arena feel off. Mobile-first narrow column is the app's baseline; kept it everywhere.
+- **Note**: This was a layout/preference rollback only — the PixiJS arena and the resize-robust `layout()` fix were retained. The fighter spread (outer fifths, 0.2/0.8) and ~0.74 height fit stay (they prevent the "따닥 붙음" crowding without needing the wide box).
+- **Pattern**: Ship layout experiments behind cheap, reversible changes (Tailwind responsive classes) so a preference rollback is a one-line revert, not a rewrite.
+
+## Vercel preview deployment URLs return 401 (auth wall) — not an app bug
+
+- **Symptom**: Old version URLs from `vercel ls` (e.g. `kiclash-<hash>-<team>.vercel.app`) returned **HTTP 401** and showed a login/SSO page; opening them surfaced "fetch 에러" because the protected shell couldn't call the API. Looked like the old version was "broken."
+- **Cause**: Vercel **Deployment Protection (Vercel Authentication)** is enabled on the project, so per-deployment preview URLs require being logged into the Vercel account. Only the **production domain** (`jjan.daeseon.ai`) is public. The production site itself was verified healthy throughout (`/health` 200, guest auth 200, AI game create 200, CORS OK).
+- **Fix / options**: (a) To make old version URLs publicly viewable for A/B comparison: Vercel dashboard → project → Settings → Deployment Protection → Vercel Authentication → Disable. (b) Or add an in-app arena toggle (e.g. `?arena=dom`) so both versions render from the public production deployment with no auth. Neither applied yet — documented for when version comparison is needed.
+- **Pattern**: Vercel preview URLs are private by default. For stakeholder/version comparison, either disable deployment protection or expose the variants behind a flag on the public production URL — don't hand out raw preview URLs expecting them to load.
