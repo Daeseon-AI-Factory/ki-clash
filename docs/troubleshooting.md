@@ -114,36 +114,40 @@ Format per entry: **Symptom / Cause / Fix / Commit / Pattern**.
 - **Commit**: (this change)
 - **Pattern**: In real-time multiplayer, never start the clock on the first connection. Gate the first synchronized event (turn 1) on a readiness condition covering **all** participants — track presence in shared state (Redis `connected_players`) and let the last arrival trigger the start.
 
-## Mid-match disconnect: game does not pause, absent player auto-charged (FOUND, not yet fixed)
+## Mid-match disconnect: game does not pause, absent player auto-charged (FIXED, commit `9d7ad2d`)
 
-- **Symptom**: When a player drops mid-match, the game does NOT pause for the 30-second grace window — the per-turn 5s timer keeps firing and the server auto-submits `charge` for the absent player, bleeding turns/rounds while they're gone. Measured (live, 8-dimension verification workflow, `disconnect-reconnect` agent): forfeit run played turns 1→5 with `opponent_action="charge"` across the 30s window before forfeit fired; a reconnect run saw a full turn cycle elapse in a 4s disconnect gap (P2 reached `p2_ki:5`). So the "30s reconnect window" is not a true grace period — a returning player comes back to a game that kept advancing without them.
-- **Cause**: The turn scheduler (5s `turnTimeout` goroutine + auto-charge) is independent of connection state. On disconnect the server starts a 30s forfeit timer but never pauses the per-turn timer, so timeout-auto-charge keeps resolving turns. Connection state and turn scheduling are decoupled mid-match (contrast DR-16, where they ARE coupled at match open).
-- **Fix**: Not yet applied. Intended direction: on disconnect, suspend the turn timer for that game (or extend the deadline) until either the player reconnects (resume) or the 30s forfeit fires (end). Requires the disconnect handler to cancel/pause `turnTimeout` and the reconnect handler to restart it.
-- **Commit**: (open — found by verification, fix pending)
+- **Symptom**: When a player dropped mid-match, the game did NOT pause for the 30-second grace window — the per-turn 5s timer kept firing and the server auto-submitted `charge` for the absent player, bleeding turns/rounds while they were gone. Measured (live, 8-dimension verification workflow, `disconnect-reconnect` agent): forfeit run played turns 1→5 with `opponent_action="charge"` across the 30s window before forfeit fired; a reconnect run saw a full turn cycle elapse in a 4s disconnect gap (P2 reached `p2_ki:5`).
+- **Cause**: The turn scheduler (5s `turnTimeout` goroutine + auto-charge) was independent of connection state. On disconnect the server started a 30s forfeit timer but never paused the per-turn timer (contrast DR-16, where scheduling IS coupled to presence at match open — it was missing mid-match).
+- **Fix**: `handleDisconnect` now calls `s.cancelTurnTimeout(gameID)` — the per-turn clock stops the moment a player drops, so the game truly pauses. It resumes in `handleConnect`'s reconnect branch (`sendWaitingForAction` restarts `startTurnTimeout`); if the player never returns, `forfeitAfterTimeout` is the only terminal path. File: `go-server/session.go`.
+- **Verification (live, after fix)**: disconnected P1, observed P2 for 8s → received only `opponent_disconnected` and **zero `turn_result`** (game stayed paused — before the fix turns kept resolving). On reconnect the flow resumed. RESULT: pause=PASS.
+- **Commit**: `9d7ad2d`
 - **Pattern**: A "grace period" only works if the clock that can end the game is paused during it. Couple the turn scheduler to connection state mid-match, the same way DR-16 couples turn-start to presence at match open.
 
-## Reconnect: opponent_reconnected never broadcast to the surviving player (FOUND, not yet fixed)
+## Reconnect: opponent_reconnected never broadcast to the surviving player (FIXED, commit `9d7ad2d`)
 
-- **Symptom**: When a dropped player reconnects within the 30s window, they fully resume play (the reconnecting socket receives `action_confirmed`/`turn_result`/`waiting_for_action`), but the *surviving* player is NEVER told. Measured: across 2 reconnect runs P1 reconnected well inside the window (one run 4.0s after disconnect) and resumed, yet P2's complete captured message stream contained zero `opponent_reconnected` frames ("P2 opponent_reconnected: NONE"). A client showing an "opponent disconnected, waiting…" overlay would never clear.
-- **Cause**: `opponent_disconnected` fires correctly on ws close (~0.2–0.3s, with `reconnect_timeout:30`), but the reconnect handshake path (new ws, same token+game_id) re-attaches the returning player without broadcasting `opponent_reconnected` to the peer's outbound channel. The notification branch is missing/unwired on the reconnect side. (Go server; the Python game_session had this in DR-10/Phase 4 — the Go port dropped the peer-notify on reconnect.)
-- **Fix**: Not yet applied. Intended: in the reconnect branch of `handleConnect`, after re-marking the player connected, `sendToPlayer(opponent, opponentReconnectedMsg())`.
-- **Commit**: (open — found by verification, fix pending)
-- **Pattern**: Every state-change notification needs a symmetric counterpart — if you emit `opponent_disconnected`, you must emit `opponent_reconnected` on the inverse transition, or the peer's UI is stuck in the transient state forever.
+- **Symptom**: When a dropped player reconnected within the 30s window they fully resumed play, but the *surviving* player was NEVER told. Measured: across 2 reconnect runs P1 reconnected well inside the window (one run 4.0s after disconnect) and resumed, yet P2's captured stream had zero `opponent_reconnected` frames. A client showing an "opponent disconnected, waiting…" overlay would never clear.
+- **Cause**: `handleConnect` keyed reconnect detection on `HasConnected(playerID)` — but `handleDisconnect` REMOVES the player from `connected_players`, so on return `HasConnected()` was always false → every reconnect was misclassified as a fresh first-connect → the `opponent_reconnected` branch never ran.
+- **Fix**: Changed the reconnect signal to `isReconnect = sess.Started && !wasLive` (game already started + this player not currently live = they dropped and came back). Reconnecting players are re-added to `connected_players` (also required so `forfeitAfterTimeout`'s `HasConnected` abort works), and the survivor receives `opponent_reconnected`. File: `go-server/session.go`.
+- **Verification (live, after fix)**: P1 reconnect → P2's captured stream = `['opponent_reconnected', 'waiting_for_action']`. RESULT: reconnect_notify=PASS.
+- **Commit**: `9d7ad2d`
+- **Pattern**: Every state-change notification needs a symmetric counterpart — emit `opponent_reconnected` on the inverse of `opponent_disconnected`, or the peer's UI sticks forever. And: don't reuse a "currently connected" set to answer "has this player ever connected" — different questions.
 
-## Forfeit match_result carries zeroed stats (FOUND, low severity)
+## Forfeit match_result carries zeroed stats (FIXED, commit `9d7ad2d`)
 
-- **Symptom**: A forfeit-win `match_result` reports `rounds_won_p1:0, rounds_won_p2:0, total_turns:0` even when turns were played (measured: 5 turns played, P2 ki reached 5, yet all counters 0). The `winner` field is correct ("you" for the survivor).
-- **Cause**: The forfeit branch constructs `match_result` from a fresh/empty result struct instead of copying the live `game_state` counters, so accumulated round/turn stats are lost.
-- **Fix**: Not yet applied. Intended: build the forfeit `match_result` from the current `game_state` (rounds_won_p1/p2, summed total_turns) rather than a zero struct.
-- **Commit**: (open — found by verification, fix pending)
-- **Pattern**: Terminal-state payloads should be derived from accumulated state, not constructed empty — a "you win" with a 0-0 scoreboard reads as a bug to the player.
+- **Symptom**: A forfeit-win `match_result` reported `rounds_won_p1:0, rounds_won_p2:0, total_turns:0` even when turns were played (measured: 5 turns played, P2 ki reached 5, yet all counters 0). The `winner` field was correct.
+- **Cause**: `total_turns` was summed only from completed `RoundResults`. On a mid-round-1 forfeit no round had completed, so the sum was 0 — the in-progress `CurrentRound.TurnNumber` was never added. (`rounds_won` 0-0 was actually correct — no round won yet.)
+- **Fix**: `forfeitAfterTimeout` now adds `sess.GameState.CurrentRound.TurnNumber` to the completed-round sum. File: `go-server/session.go`.
+- **Verification (live, after fix)**: played 2 turns, P1 forfeited → `{rounds_won_p1:0, rounds_won_p2:0, total_turns:4, winner:'you'}`. `total_turns:4` (was 0). RESULT: PASS.
+- **Commit**: `9d7ad2d`
+- **Pattern**: Terminal-state payloads should be derived from accumulated state including in-flight progress, not just finalized sub-results.
 
-## /health responds 405 to HEAD (FOUND, low severity)
+## /health responds 405 to HEAD (FIXED, commit `9d7ad2d`)
 
-- **Symptom**: `curl -sI https://api.jjan.daeseon.ai/health` (HEAD) → `HTTP/2 405, allow: GET`; a follow-up GET → 200 `{"status":"ok"}`. HEAD-based external uptime monitors / load balancers would misreport the API as down.
-- **Cause**: The FastAPI `/health` route is declared `@app.get` only, so HEAD isn't allowed.
-- **Fix**: Not yet applied. Intended: allow HEAD on the health route (`methods=["GET","HEAD"]`) if a HEAD-based monitor is used.
-- **Commit**: (open — found by verification, low priority)
+- **Symptom**: `curl -sI https://api.jjan.daeseon.ai/health` (HEAD) → `HTTP/2 405, allow: GET`; a follow-up GET → 200. HEAD-based uptime monitors / load balancers would misreport the API as down.
+- **Cause**: The FastAPI `/health` route was declared `@app.get` only, so HEAD wasn't allowed.
+- **Fix**: Changed to `@app.api_route("/health", methods=["GET","HEAD"])`. File: `app/main.py`.
+- **Verification (live, after fix)**: `curl -sI` (HEAD) → `HTTP/2 200`; GET → `{"status":"ok"}`.
+- **Commit**: `9d7ad2d`
 - **Pattern**: Liveness endpoints should answer the method your monitor actually uses; many default to HEAD.
 
 ## Verification mission summary (2026-06-04, 8-dimension live workflow)

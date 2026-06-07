@@ -2161,15 +2161,19 @@ A later 8-dimension verification workflow re-confirmed this independently
 under the `handshake-timing`, `ws-auth`, `full-match`, and `turn-timeout`
 agents (all PASS).
 
-**Trade-off / known limitation (honest):** The gate couples turn-start
-to connection state *at match open* but the scheduler is otherwise
-decoupled from connection state *mid-match*. The same verification found
-that on a mid-match disconnect the 5s timer keeps firing (auto-charging
-the absent player) and `opponent_reconnected` is never broadcast — i.e.
-"presence-aware scheduling" is correctly applied at start but missing
-during the disconnect grace window. Those are tracked as separate bugs
-(see `docs/troubleshooting.md`); they don't affect an uninterrupted
-2-player match.
+**Trade-off / follow-on (resolved):** The gate couples turn-start to
+connection state *at match open*. The verification workflow then found
+that the same coupling was missing *mid-match*: on disconnect the 5s
+timer kept firing (auto-charging the absent player) and
+`opponent_reconnected` was never broadcast. Those were fixed in commit
+`9d7ad2d` by applying the same "presence-aware scheduling" idea during
+the disconnect grace window — `handleDisconnect` now pauses the turn
+timer (`cancelTurnTimeout`), reconnect resumes it, and reconnect is
+correctly detected via `Started && !wasLive` (the disconnect had removed
+the player from `connected_players`, so the old `HasConnected()` test
+misfired). Re-verified live: a dropped player's game stays paused (zero
+`turn_result` for 8s while gone), and the survivor receives
+`opponent_reconnected` on return. See `docs/troubleshooting.md`.
 
 **Meta-pattern:** *Never start a synchronized clock on the first
 participant.* Gate the first synchronized event on a readiness condition
