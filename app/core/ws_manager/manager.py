@@ -267,8 +267,20 @@ class WSManager:
             pubsub = self._redis.pubsub()
             try:
                 await pubsub.subscribe(channel)
-                async for raw in pubsub.listen():
-                    if raw.get("type") != "message":
+                # Poll with a short timeout instead of `pubsub.listen()`. listen()
+                # blocks on a raw socket read that raises (and gets mis-wrapped as
+                # a TimeoutError) whenever the connection has a read timeout or the
+                # task is cancelled — which spammed ERROR "pubsub_listener_crashed"
+                # on every normal disconnect/idle. get_message returns None on
+                # idle, so we just loop and re-check the WS state. No crash.
+                while True:
+                    ws = self._connections.get(player_id)
+                    if ws is None or ws.client_state != WebSocketState.CONNECTED:
+                        break  # player gone — stop quietly
+                    raw = await pubsub.get_message(
+                        ignore_subscribe_messages=True, timeout=1.0
+                    )
+                    if raw is None or raw.get("type") != "message":
                         continue
                     try:
                         payload = json.loads(raw["data"])
@@ -281,9 +293,6 @@ class WSManager:
 
                     ws = self._connections.get(player_id)
                     if ws is None or ws.client_state != WebSocketState.CONNECTED:
-                        # Player disconnected between publish and receive;
-                        # drop silently (next subscriber on whichever worker
-                        # they reconnect to will catch future messages).
                         continue
                     try:
                         await ws.send_json(payload)
