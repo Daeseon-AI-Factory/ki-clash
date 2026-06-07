@@ -41,8 +41,8 @@ export default function MatchHUD({
   const aiLabel = aiCharacter ? aiCharacter.name : "AI";
 
   return (
-    <div className="w-full max-w-2xl mx-auto space-y-4">
-      {/* Round score */}
+    <div className="w-full max-w-2xl mx-auto space-y-2">
+      {/* Round score — round shown prominently */}
       <div className="flex justify-center items-center gap-4">
         <ScoreDots
           label={playerLabel}
@@ -50,28 +50,24 @@ export default function MatchHUD({
           color="green"
           characterId={playerCharacter?.id}
         />
-        <div className="text-center">
-          <p className="text-xs text-gray-500 uppercase tracking-wider">
+        <div className="text-center leading-tight">
+          <p className="text-sm font-black text-yellow-400 uppercase tracking-widest">
             Round {roundNumber}
           </p>
-          <p className="text-lg font-bold text-white">
+          <p className="text-2xl font-black text-white">
             {gameState.rounds_won_p1} — {gameState.rounds_won_p2}
           </p>
+          <p className="text-[10px] text-gray-500">Turn {turnNumber} / 20</p>
         </div>
         <ScoreDots label={aiLabel} wins={gameState.rounds_won_p2} color="red" characterId={aiCharacter?.id} />
       </div>
 
       {/* Ki meters */}
-      <div className="space-y-2">
+      <div className="space-y-1">
         <KiMeter ki={playerKi} label={playerLabel} isPlayer={true} />
         <KiMeter ki={aiKi} label={aiLabel} isPlayer={false} />
         {showAIThinking && <AIThinking />}
       </div>
-
-      {/* Turn counter */}
-      <p className="text-center text-xs text-gray-500">
-        Turn {turnNumber} / 20
-      </p>
     </div>
   );
 }

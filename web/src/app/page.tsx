@@ -213,7 +213,7 @@ export default function Home() {
           never jumps between phases. One screen, any phone, no scroll. */}
       {(phase === "playing" || phase === "revealing" || phase === "round_end") &&
         gameState && (
-          <div className="w-full max-w-2xl flex flex-col gap-2 overflow-hidden h-[calc(100svh-2rem)]">
+          <div className="w-full max-w-2xl flex flex-col justify-center gap-2 overflow-hidden h-[calc(100svh-2rem)]">
             {/* HUD — always present, same spot */}
             <div className="shrink-0">
               <MatchHUD
@@ -225,10 +225,10 @@ export default function Home() {
               />
             </div>
 
-            {/* Arena — always present, same size; props change per phase but the
-                component (and its WebGL overlay) never remounts. */}
+            {/* Arena — always present, capped height (shorter, per request) so
+                the action cards always fit; never remounts between phases. */}
             {playerCharacterId && aiCharacterId && (
-              <div className="relative flex-1 min-h-0">
+              <div className="relative flex-1 min-h-0 max-h-[34svh]">
                 <KiAuraArena
                   playerCharacterId={playerCharacterId}
                   aiCharacterId={aiCharacterId}
@@ -247,8 +247,9 @@ export default function Home() {
               </div>
             )}
 
-            {/* BOTTOM SLOT — FIXED height; content swaps by phase, no reflow. */}
-            <div className="shrink-0 h-[224px] flex flex-col justify-center">
+            {/* BOTTOM SLOT — natural height (never clips), min-h keeps it steady
+                across phases so the layout doesn't jump. */}
+            <div className="shrink-0 min-h-[12rem] flex flex-col justify-center">
               {phase === "playing" && (
                 <GameBoard
                   playerKi={gameState.current_round?.p1_ki ?? 0}

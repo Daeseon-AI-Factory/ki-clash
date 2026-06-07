@@ -95,7 +95,7 @@ export default function ActionCard({
       disabled={isDisabled}
       className={`
         relative flex flex-col items-center justify-center
-        w-full p-3 sm:p-4 rounded-xl border-2 transition-all duration-200
+        w-full p-2 sm:p-4 rounded-xl border-2 transition-all duration-200
         ${
           isSelected
             ? `${config.color} ring-2 scale-105 ${config.bgColor}`
@@ -121,15 +121,16 @@ export default function ActionCard({
       <ActionIcon action={action} emoji={config.emoji} />
 
       {/* Action name */}
-      <span className="text-sm sm:text-base font-bold text-white">
+      <span className="text-xs sm:text-base font-bold text-white">
         {config.label}
       </span>
 
-      {/* Korean name */}
-      <span className="text-xs text-gray-400">{config.korean}</span>
-
-      {/* Description */}
-      <span className="text-xs text-gray-500 mt-1">{config.description}</span>
+      {/* Korean name + description — larger screens only, keeps phone cards
+          compact so the whole game fits one screen at a glance. */}
+      <span className="hidden sm:block text-xs text-gray-400">{config.korean}</span>
+      <span className="hidden sm:block text-xs text-gray-500 mt-1">
+        {config.description}
+      </span>
     </button>
   );
 }
