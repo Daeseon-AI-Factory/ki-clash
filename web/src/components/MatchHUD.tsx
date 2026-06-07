@@ -72,32 +72,6 @@ export default function MatchHUD({
       <p className="text-center text-xs text-gray-500">
         Turn {turnNumber} / 20
       </p>
-
-      {/* Recent turn history */}
-      {round && round.turn_history.length > 0 && (
-        <div className="bg-gray-800/50 rounded-lg p-3 max-h-32 overflow-y-auto">
-          <p className="text-xs text-gray-500 mb-2 uppercase tracking-wider">
-            History
-          </p>
-          <div className="space-y-1">
-            {[...round.turn_history].reverse().slice(0, 5).map((turn) => (
-              <div
-                key={turn.turn_number}
-                className="flex justify-between text-xs text-gray-400"
-              >
-                <span>T{turn.turn_number}</span>
-                <span>
-                  {playerCharacter?.name ?? "You"}: {turn.p1_action.replace("_", " ")} vs{" "}
-                  {aiCharacter?.name ?? "AI"}: {turn.p2_action.replace("_", " ")}
-                </span>
-                <span className="font-medium">
-                  {turn.outcome.replace("_", " ")}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
