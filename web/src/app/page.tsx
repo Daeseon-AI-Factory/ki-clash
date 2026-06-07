@@ -13,6 +13,9 @@ import CharacterSelect from "@/components/CharacterSelect";
 import AITrashTalk from "@/components/AITrashTalk";
 import MuteButton from "@/components/MuteButton";
 import KiAuraArena from "@/components/arena/KiAuraArena";
+import PixiFxOverlay, {
+  type OverlayEffect,
+} from "@/components/arena/pixi/PixiFxOverlayClient";
 import MatchFinale from "@/components/finale/MatchFinale";
 import { AdBanner, InterstitialAd } from "@/components/ads";
 import { useActionAnimation } from "@/hooks/useActionAnimation";
@@ -72,6 +75,20 @@ export default function Home() {
   const playerDisplayName = playerCharacter ? playerCharacter.name : playerName;
   const aiDisplayName = aiCharacter ? aiCharacter.name : "AI";
 
+  // ── WebGL effect overlay (additive — layered over KiAuraArena, DR-18) ────
+  const hexToNum = (hex?: string): number =>
+    parseInt((hex ?? "").replace("#", ""), 16) || 0xffffff;
+  const playerColorNum = hexToNum(playerCharacter?.color);
+  const aiColorNum = hexToNum(aiCharacter?.color);
+  const [arenaEffect, setArenaEffect] = useState<OverlayEffect | null>(null);
+  const effectNonce = useRef(0);
+  const enemyFxTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fireEffect = useCallback((kind: OverlayEffect["kind"], side: OverlayEffect["side"]) => {
+    effectNonce.current += 1;
+    setArenaEffect({ kind, side, nonce: effectNonce.current });
+  }, []);
+  useEffect(() => () => { if (enemyFxTimer.current) clearTimeout(enemyFxTimer.current); }, []);
+
   // Track previous phase to detect transitions
   const prevPhaseRef = useRef(phase);
 
@@ -108,8 +125,13 @@ export default function Home() {
       // Outcome sound after a short delay (let reveal sweep finish)
       if (lastTurn) {
         setTimeout(() => play(OUTCOME_SOUND[lastTurn.outcome]), 300);
-        // Drive the arena's action animation lifecycle.
+        // Drive KiAuraArena's action animation lifecycle (motion — untouched).
         triggerArenaAction(API_TO_ACTION[lastTurn.p1_action]);
+        // ADD WebGL particle effects on top: player now, AI staggered ~140ms.
+        fireEffect(lastTurn.p1_action, "player");
+        if (enemyFxTimer.current) clearTimeout(enemyFxTimer.current);
+        const aiAct = lastTurn.p2_action;
+        enemyFxTimer.current = setTimeout(() => fireEffect(aiAct, "enemy"), 140);
       }
     }
 
@@ -127,7 +149,7 @@ export default function Home() {
       }, 1500); // delay until after vignette + zoom — lands with the title slam
       onMatchEnd();
     }
-  }, [phase, lastTurn, lastRound, matchResult, play, onMatchEnd, triggerArenaAction]);
+  }, [phase, lastTurn, lastRound, matchResult, play, onMatchEnd, triggerArenaAction, fireEffect]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Countdown beat handler — plays click sound on each tick */
   const handleCountdownBeat = useCallback(() => {
@@ -228,14 +250,24 @@ export default function Home() {
             />
           )}
           {playerCharacterId && aiCharacterId && (
-            <KiAuraArena
-              playerCharacterId={playerCharacterId}
-              aiCharacterId={aiCharacterId}
-              playerAction={arenaAction}
-              aiAction={aiArenaAction}
-              phase={arenaPhase}
-              outcome={lastTurn?.outcome ?? null}
-            />
+            // KiAuraArena (DOM motion) UNTOUCHED + transparent WebGL effect
+            // overlay on top (additive — see DR-18).
+            <div className="relative w-full max-w-2xl mx-auto">
+              <KiAuraArena
+                playerCharacterId={playerCharacterId}
+                aiCharacterId={aiCharacterId}
+                playerAction={arenaAction}
+                aiAction={aiArenaAction}
+                phase={arenaPhase}
+                outcome={lastTurn?.outcome ?? null}
+              />
+              <PixiFxOverlay
+                className="absolute inset-0 pointer-events-none"
+                playerColor={playerColorNum}
+                enemyColor={aiColorNum}
+                effect={arenaEffect}
+              />
+            </div>
           )}
           <TurnReveal
             turnResult={lastTurn}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePvP } from "@/hooks/usePvP";
 import ActionCard from "@/components/ActionCard";
 import KiMeter from "@/components/KiMeter";
@@ -9,6 +9,9 @@ import { API_TO_ACTION, type ActionKind } from "@/lib/actions";
 import type { TurnOutcome } from "@/lib/api";
 import Link from "next/link";
 import KiAuraArena from "@/components/arena/KiAuraArena";
+import PixiFxOverlay, {
+  type OverlayEffect,
+} from "@/components/arena/pixi/PixiFxOverlayClient";
 import MatchFinale from "@/components/finale/MatchFinale";
 import RoomScreen from "@/components/room/RoomScreen";
 import { AdBanner, InterstitialAd } from "@/components/ads";
@@ -101,17 +104,36 @@ export default function PvPPage() {
   const playerCharacter = getCharacter(chars.player);
   const opponentCharacter = getCharacter(chars.opponent);
 
+  // ── WebGL effect overlay (additive — layered over KiAuraArena, DR-18) ────
+  const hexToNum = (hex?: string): number =>
+    parseInt((hex ?? "").replace("#", ""), 16) || 0xffffff;
+  const playerColorNum = hexToNum(playerCharacter?.color);
+  const enemyColorNum = hexToNum(opponentCharacter?.color);
+  const [arenaEffect, setArenaEffect] = useState<OverlayEffect | null>(null);
+  const effectNonce = useRef(0);
+  const enemyFxTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fireEffect = useCallback((kind: OverlayEffect["kind"], side: OverlayEffect["side"]) => {
+    effectNonce.current += 1;
+    setArenaEffect({ kind, side, nonce: effectNonce.current });
+  }, []);
+  useEffect(() => () => { if (enemyFxTimer.current) clearTimeout(enemyFxTimer.current); }, []);
+
   const prevPhase = useRef(phase);
   useEffect(() => {
     const prev = prevPhase.current;
     prevPhase.current = phase;
     if (phase === "revealing" && prev !== "revealing" && turnResult) {
       triggerArenaAction(API_TO_ACTION[turnResult.your_action as Action]);
+      // ADD WebGL particle effects on top: player now, opponent staggered.
+      fireEffect(turnResult.your_action as OverlayEffect["kind"], "player");
+      if (enemyFxTimer.current) clearTimeout(enemyFxTimer.current);
+      const oppAct = turnResult.opponent_action as OverlayEffect["kind"];
+      enemyFxTimer.current = setTimeout(() => fireEffect(oppAct, "enemy"), 140);
     }
     if (phase === "match_end" && prev !== "match_end") {
       onMatchEnd();
     }
-  }, [phase, turnResult, triggerArenaAction, onMatchEnd]);
+  }, [phase, turnResult, triggerArenaAction, onMatchEnd, fireEffect]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // When usePvP returns to its own "lobby" phase (after match end + Play Again),
   // bring the page mode back to the menu too.
@@ -359,14 +381,23 @@ export default function PvPPage() {
 
       {pageMode === "pvp" && phase === "revealing" && turnResult && (
         <div className="w-full max-w-md space-y-6">
-          <KiAuraArena
-            playerCharacterId={chars.player}
-            aiCharacterId={chars.opponent}
-            playerAction={arenaAction}
-            aiAction={opponentArenaAction}
-            phase={arenaPhase}
-            outcome={arenaOutcome}
-          />
+          {/* KiAuraArena (DOM motion) UNTOUCHED + WebGL effect overlay (DR-18) */}
+          <div className="relative w-full max-w-2xl mx-auto">
+            <KiAuraArena
+              playerCharacterId={chars.player}
+              aiCharacterId={chars.opponent}
+              playerAction={arenaAction}
+              aiAction={opponentArenaAction}
+              phase={arenaPhase}
+              outcome={arenaOutcome}
+            />
+            <PixiFxOverlay
+              className="absolute inset-0 pointer-events-none"
+              playerColor={playerColorNum}
+              enemyColor={enemyColorNum}
+              effect={arenaEffect}
+            />
+          </div>
 
           <div className="flex items-center justify-center gap-8 py-6">
             <div className="flex flex-col items-center">
