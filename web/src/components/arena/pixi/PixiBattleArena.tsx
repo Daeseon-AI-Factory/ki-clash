@@ -47,6 +47,7 @@ export default function PixiBattleArena({
 
     let destroyed = false;
     let app: Application | null = null;
+    let resizeObserver: ResizeObserver | null = null;
 
     (async () => {
       const instance = new Application();
@@ -88,31 +89,41 @@ export default function PixiBattleArena({
       ]);
       if (destroyed || !app) return;
 
-      const groundY = app.screen.height * 0.95;
-      // Fill ~74% of the canvas height so fighters read big and present.
-      const fit = (tex: { height: number }) =>
-        (app!.screen.height * 0.74) / tex.height;
-
       const player = new Sprite(playerTex);
-      const ps = fit(playerTex);
       player.anchor.set(0.5, 1);
-      player.scale.set(ps);
-      // Spread fighters to the outer thirds so big sprites don't crowd
-      // (was 0.27/0.73 — looked cramped once fighters got larger).
-      player.position.set(app.screen.width * 0.2, groundY);
-      player.filters = [];
       fighterLayer.addChild(player);
 
       const enemy = new Sprite(enemyTex);
-      const es = fit(enemyTex);
       enemy.anchor.set(0.5, 1);
-      enemy.scale.set(-es, es); // mirror to face the player
-      enemy.position.set(app.screen.width * 0.8, groundY);
       fighterLayer.addChild(enemy);
 
       // Persistent gentle aura so the fighters always feel "charged".
       player.filters = [new GlowFilter({ distance: 8, outerStrength: 1.2, color: playerColor, quality: 0.4 })];
       enemy.filters = [new GlowFilter({ distance: 8, outerStrength: 1.2, color: enemyColor, quality: 0.4 })];
+
+      // Layout is RECOMPUTED on every resize, not just at init. With
+      // resizeTo:host the canvas changes size (responsive breakpoints,
+      // layout shift, hydration) — if we positioned/scaled once, fighters
+      // would drift off or shrink. groundY is mutable so the idle-bob ticker
+      // always reads the current ground.
+      let groundY = app.screen.height * 0.95;
+      const layout = () => {
+        if (!app) return;
+        const W = app.screen.width;
+        const H = app.screen.height;
+        groundY = H * 0.95;
+        // Fill ~74% of canvas height; spread fighters to the outer fifths.
+        const ps = (H * 0.74) / playerTex.height;
+        player.scale.set(ps);
+        player.position.set(W * 0.2, groundY);
+        const es = (H * 0.74) / enemyTex.height;
+        enemy.scale.set(-es, es); // mirror to face the player
+        enemy.position.set(W * 0.8, groundY);
+      };
+      layout();
+      const ro = new ResizeObserver(() => layout());
+      ro.observe(host);
+      resizeObserver = ro;
 
       const ctx: FxContext = {
         app,
@@ -175,6 +186,10 @@ export default function PixiBattleArena({
       destroyed = true;
       triggerRef.current = null;
       document.removeEventListener("visibilitychange", onVis);
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+        resizeObserver = null;
+      }
       if (app) {
         app.ticker.stop();
         app.destroy({ removeView: true }, { children: true, texture: true, textureSource: true });
