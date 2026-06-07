@@ -12,14 +12,12 @@ import TurnReveal, { getShakeClass } from "@/components/TurnReveal";
 import CharacterSelect from "@/components/CharacterSelect";
 import AITrashTalk from "@/components/AITrashTalk";
 import MuteButton from "@/components/MuteButton";
+import KiAuraArena from "@/components/arena/KiAuraArena";
 import MatchFinale from "@/components/finale/MatchFinale";
 import { AdBanner, InterstitialAd } from "@/components/ads";
+import { useActionAnimation } from "@/hooks/useActionAnimation";
 import { useAdTiming } from "@/hooks/useAdTiming";
-import PixiBattleArena, {
-  type ArenaEffect,
-} from "@/components/arena/pixi/PixiBattleArenaClient";
-import type { EffectKind, Side } from "@/components/arena/pixi/effects";
-import type { Action } from "@/lib/api";
+import { API_TO_ACTION, type ActionKind } from "@/lib/actions";
 
 /** Map turn outcomes to sound names */
 const OUTCOME_SOUND: Record<TurnOutcome, "hit" | "clash" | "block" | "dodge" | "charge"> = {
@@ -52,29 +50,13 @@ export default function Home() {
 
   const { play, muted, toggleMute } = useSoundEffects();
   const [shakeClass, setShakeClass] = useState("");
+  const { action: arenaAction, phase: arenaPhase, triggerAction: triggerArenaAction } =
+    useActionAnimation();
   const { showInterstitial, showAds, onMatchEnd, dismissInterstitial } = useAdTiming();
 
-  // ── WebGL arena effect firing (same mechanism as PvP, see DR-17) ────────
-  const ACTION_TO_EFFECT: Record<Action, EffectKind> = {
-    charge: "charge",
-    block: "block",
-    attack: "attack",
-    energy_wave: "energy_wave",
-    teleport: "teleport",
-  };
-  const [arenaEffect, setArenaEffect] = useState<ArenaEffect | null>(null);
-  const effectNonce = useRef(0);
-  const enemyFxTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const fireEffect = useCallback((kind: EffectKind, side: Side) => {
-    effectNonce.current += 1;
-    setArenaEffect({ kind, side, nonce: effectNonce.current });
-  }, []);
-  useEffect(
-    () => () => {
-      if (enemyFxTimer.current) clearTimeout(enemyFxTimer.current);
-    },
-    [],
-  );
+  // Derive AI's animated action from lastTurn — synced to the same phase as the player.
+  const aiArenaAction: ActionKind | null =
+    arenaAction && lastTurn ? API_TO_ACTION[lastTurn.p2_action] : null;
 
   // Derive character objects from IDs (memoized to avoid re-lookups)
   const playerCharacter = useMemo(
@@ -89,12 +71,6 @@ export default function Home() {
   // Display names — use character name if chosen, else fall back to player/AI label.
   const playerDisplayName = playerCharacter ? playerCharacter.name : playerName;
   const aiDisplayName = aiCharacter ? aiCharacter.name : "AI";
-
-  // Pixi wants 0xRRGGBB numbers; Character.color is a hex STRING ("#60A5FA").
-  const hexToNum = (hex?: string): number =>
-    parseInt((hex ?? "").replace("#", ""), 16) || 0xffffff;
-  const playerColorNum = hexToNum(playerCharacter?.color);
-  const aiColorNum = hexToNum(aiCharacter?.color);
 
   // Track previous phase to detect transitions
   const prevPhaseRef = useRef(phase);
@@ -132,15 +108,8 @@ export default function Home() {
       // Outcome sound after a short delay (let reveal sweep finish)
       if (lastTurn) {
         setTimeout(() => play(OUTCOME_SOUND[lastTurn.outcome]), 300);
-        // Fire both fighters' WebGL effects: player now, AI staggered ~140ms
-        // (ref-tracked nonce so two fires per turn don't collapse in batching).
-        fireEffect(ACTION_TO_EFFECT[lastTurn.p1_action], "player");
-        if (enemyFxTimer.current) clearTimeout(enemyFxTimer.current);
-        const aiAction = lastTurn.p2_action;
-        enemyFxTimer.current = setTimeout(
-          () => fireEffect(ACTION_TO_EFFECT[aiAction], "enemy"),
-          140,
-        );
+        // Drive the arena's action animation lifecycle.
+        triggerArenaAction(API_TO_ACTION[lastTurn.p1_action]);
       }
     }
 
@@ -158,7 +127,7 @@ export default function Home() {
       }, 1500); // delay until after vignette + zoom — lands with the title slam
       onMatchEnd();
     }
-  }, [phase, lastTurn, lastRound, matchResult, play, onMatchEnd, fireEffect]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [phase, lastTurn, lastRound, matchResult, play, onMatchEnd, triggerArenaAction]);
 
   /** Countdown beat handler — plays click sound on each tick */
   const handleCountdownBeat = useCallback(() => {
@@ -216,22 +185,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Persistent WebGL arena — one Pixi context across playing/revealing/
-          round_end (no per-phase churn); effects fire via arenaEffect nonce. */}
-      {playerCharacterId &&
-        aiCharacterId &&
-        (phase === "playing" || phase === "revealing" || phase === "round_end") && (
-          <div className="w-full max-w-2xl mx-auto h-64 sm:h-72 rounded-2xl overflow-hidden border border-gray-700/60 shadow-2xl">
-            <PixiBattleArena
-              playerSrc={`/fighters/${playerCharacterId}/idle.png`}
-              enemySrc={`/fighters/${aiCharacterId}/idle.png`}
-              playerColor={playerColorNum}
-              enemyColor={aiColorNum}
-              effect={arenaEffect}
-            />
-          </div>
-        )}
-
       {/* PLAYING — Main game with inline selection timer */}
       {phase === "playing" && gameState && (
         <div className="w-full max-w-2xl space-y-6">
@@ -242,6 +195,12 @@ export default function Home() {
             playerCharacter={playerCharacter}
             aiCharacter={aiCharacter}
           />
+          {playerCharacterId && aiCharacterId && (
+            <KiAuraArena
+              playerCharacterId={playerCharacterId}
+              aiCharacterId={aiCharacterId}
+            />
+          )}
           {aiCharacter && (
             <AITrashTalk
               character={aiCharacter}
@@ -266,6 +225,16 @@ export default function Home() {
               playerName={playerName}
               playerCharacter={playerCharacter}
               aiCharacter={aiCharacter}
+            />
+          )}
+          {playerCharacterId && aiCharacterId && (
+            <KiAuraArena
+              playerCharacterId={playerCharacterId}
+              aiCharacterId={aiCharacterId}
+              playerAction={arenaAction}
+              aiAction={aiArenaAction}
+              phase={arenaPhase}
+              outcome={lastTurn?.outcome ?? null}
             />
           )}
           <TurnReveal
@@ -294,6 +263,16 @@ export default function Home() {
               playerName={playerName}
               playerCharacter={playerCharacter}
               aiCharacter={aiCharacter}
+            />
+          )}
+          {playerCharacterId && aiCharacterId && (
+            <KiAuraArena
+              playerCharacterId={playerCharacterId}
+              aiCharacterId={aiCharacterId}
+              playerAction={arenaAction}
+              aiAction={aiArenaAction}
+              phase={arenaPhase}
+              outcome={lastTurn?.outcome ?? null}
             />
           )}
           <TurnReveal
