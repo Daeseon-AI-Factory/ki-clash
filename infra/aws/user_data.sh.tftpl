@@ -38,6 +38,22 @@ apt-get install -y docker-ce docker-ce-cli containerd.io \
 usermod -aG docker ubuntu
 systemctl enable --now docker
 
+echo "=== [1.5/3] swap 2GB 생성 ==="
+# 운영 교훈: t3.micro는 RAM 1GB뿐. Go 컴파일/Docker 빌드가 이걸 초과해서
+# OOM/스왑 thrashing → SSH까지 먹통. swap 2GB로 메모리 압박 완화.
+# (정석은 빌드를 CI/큰 머신에서 하고 서버는 pull만 — swap은 차선책.)
+if [ ! -f /swapfile ]; then
+  fallocate -l 2G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  echo "/swapfile none swap sw 0 0" >> /etc/fstab
+  # 빌드 부하용으로 swappiness 약간 올림
+  sysctl vm.swappiness=20
+  echo "vm.swappiness=20" >> /etc/sysctl.conf
+fi
+echo "swap: $(free -h | grep -i swap)"
+
 echo "=== [2/3] 데이터 볼륨 마운트 ==="
 # AWS가 /dev/sdf로 attach해도 Ubuntu 24(nitro)에서는 /dev/nvme1n1로 보임.
 # 둘 다 대비해서 실제 디바이스를 찾는다.
