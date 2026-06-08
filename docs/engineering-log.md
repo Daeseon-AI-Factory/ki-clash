@@ -22,32 +22,67 @@
 
 ---
 
-# Part 0 — RESUME HERE (last updated 2026-06-01, deploy-night session)
+# Part 0 — RESUME HERE (last updated 2026-06-07, mobile/effects session)
 
 > Read this first when picking the project back up. Single
 > "where are we / what's next" snapshot. Parts 1-2 below are full history.
 
-## Current state at a glance
+## 🟢 IT IS LIVE — current state at a glance
 
 ```
-Phase 1-4 (backend foundation)              ✅ DONE
-Phase 7 (Visual overhaul, multi-pass)        ✅ DONE — anime arena + cinematic
-                                              + 6 real PNG fighter sprites
-Phase 8 (Tekken-style Room PvP)              ✅ DONE — create code, share,
-                                              both ready, auto-start
-Phase 9 (Deploy to AWS EC2 + Vercel)        ⏳ Waiting on Jason — code ready,
-                                              QUICKSTART.md in place
-Phase 10 (Go game server, full port)         ✅ DONE — engine + session +
-                                              pub/sub + WATCH/MULTI/EXEC, E2E
-                                              tested vs Python contract
+Frontend (Vercel):   https://jjan.daeseon.ai          (also /pvp, /pixi-test)
+Backend  (AWS EC2):  https://api.jjan.daeseon.ai       (Seoul ap-northeast-2)
+Brand:               JJAN! · 짠   (renamed from "Ki Clash")
+PWA:                 installable to phone home screen (manifest + sw.js)
 ```
 
-**Git:** clean, pushed. Latest commits on `main` (origin/main synced).
+```
+Phase 1-10 (backend, Go port, visuals, Room PvP)   ✅ DONE
+Phase 14 (AWS deploy via Terraform IaC)            ✅ DONE — LIVE
+PixiJS WebGL effects (DR-17/18)                    ✅ DONE — additive overlay
+Mobile responsive single-screen layout             ✅ DONE — AI + PvP
+Capacitor (real App Store / Play Store app)        ⏳ NOT STARTED (next)
+```
 
-## What's deployed / running
+**Git:** clean, pushed, `main` == `origin/main`. **Infra:** `infra/aws/` is
+Terraform (state local; `terraform output` for IP/SSH). EC2 = single t3.micro,
+`docker compose -f docker-compose.prod.yml` (api **--workers 1**, game, db,
+redis, caddy). SSH: `ssh -i ~/.ssh/jjan_aws ubuntu@$(cd infra/aws && terraform output -raw public_ip)`.
 
-- **Nothing is live yet.** All deploy code is committed; provisioning is
-  Jason's next move (AWS console clicks, Vercel auth, DNS).
+## What this session (2026-06-07) shipped
+
+- **AWS deploy** (Terraform IaC, EBS-separated data vol, 2GB swap, Caddy SSL).
+- **Fixed (live-verified):** PvP client-ready handshake (DR-16); mid-match
+  disconnect pause + reconnect notify + forfeit stats; `/health` HEAD;
+  single-player "Game not found" (was 2 uvicorn workers + in-memory state →
+  `--workers 1`); pubsub listener crash (`listen()` → `get_message` poll).
+- **PixiJS WebGL effects** (DR-17). ⚠️ **LESSON (DR-18, memory
+  `feedback-additive-not-replace`):** first wrongly REPLACED the dynamic
+  KiAuraArena (deleted its motion) — reverted, then re-added effects as a
+  transparent `PixiFxOverlay` ON TOP. Enhance = compose, never replace.
+- **Mobile:** unified each page's gameplay phases into ONE fixed skeleton
+  (HUD + capped arena `max-h-[34svh]` + `min-h` bottom slot that swaps
+  content) so the layout never reflows/clips/scrolls; `100svh`; dark body
+  (no white band); compact ActionCards; bold ROUND; in-game history removed.
+- **Version tags:** `v-dom-arena` / `v-pixi-arena` / `v-pixi-wide` (on GitHub).
+
+## Next steps (pick up here)
+
+1. **Capacitor = real app** (user opted "scaffold only, store later"). Tooling
+   READY on this Mac: Xcode 26.5 + CocoaPods installed; static-export is
+   feasible (0 server routes/actions/next-image/dynamic-routes). Keep the
+   Vercel web build intact — use a SEPARATE capacitor build (don't globally
+   set `output:'export'`). Store submission needs Apple $99/yr (+ Google $25).
+2. **Room PvP real test** — needs 2 devices (Quick Match solo just times out
+   after 30s = "no opponent found", which is EXPECTED, not a bug).
+3. Effects/content polish; later: multi-instance → move single-player game
+   state to Redis (see troubleshooting "Game not found" follow-up).
+
+## What's deployed / running (also: local dev)
+
+- **LIVE** at the URLs above. To redeploy backend: SSH in, `cd ~/app`,
+  `git pull`, `docker compose -f docker-compose.prod.yml build <svc> && up -d <svc>`.
+  Frontend auto-deploys from `main` push (Vercel).
 - Local dev:
   - Docker stack (Postgres + Redis + Python API on :8000) — `docker compose up -d`
   - Web dev server (Next.js on :3000) — `cd web && npm run dev`
@@ -82,7 +117,7 @@ python3 -m pytest    # → 149+ passed
 cd go-server && python3 test_e2e.py
 ```
 
-## Phase 9 — exact next steps for Jason (deploy)
+## Phase 9 — exact next steps for Jason (deploy) — ✅ SUPERSEDED (deploy DONE 2026-06-07; now on `jjan.daeseon.ai` / `api.jjan.daeseon.ai`, kept below for history)
 
 Domain plan locked in: **`kiclash.daeseon.ai`** (Vercel apex)
 + **`api.kiclash.daeseon.ai`** (AWS EC2 backend).
