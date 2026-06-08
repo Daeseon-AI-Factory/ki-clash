@@ -92,17 +92,16 @@ export default function Home() {
   // Track previous phase to detect transitions
   const prevPhaseRef = useRef(phase);
 
-  // Auto-advance — user explicitly wanted faster pacing ("3초후에 다음턴으로").
-  // TurnReveal's outcome lands ~2.1s after entering the revealing phase;
-  // a further 3s holds the result, then we advance automatically. The
-  // "Next Turn" / "Next Round" buttons stay around as a skip-ahead option.
+  // Auto-advance — total reveal hold ~3s per request (was 5.1s, felt too long).
+  // TurnReveal's outcome lands ~2.1s in, so this leaves a brief beat to read
+  // the result before the next turn.
   useEffect(() => {
     if (phase === "revealing") {
-      const t = setTimeout(continueFromReveal, 5100);
+      const t = setTimeout(continueFromReveal, 3000);
       return () => clearTimeout(t);
     }
     if (phase === "round_end") {
-      const t = setTimeout(continueFromRound, 4500);
+      const t = setTimeout(continueFromRound, 3000);
       return () => clearTimeout(t);
     }
   }, [phase, continueFromReveal, continueFromRound]);
