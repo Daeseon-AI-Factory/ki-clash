@@ -1,0 +1,88 @@
+name: CI
+
+# Runs on every push to main and every PR. Each job is a merge gate —
+# a red X here means the change broke tests/build (the safety net that the
+# manual + Vercel-auto-deploy flow was missing).
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Python: engine, services, schemas (unit). Integration tests auto-skip
+  #    when the live stack isn't running (tests/integration/conftest.py). ──
+  python-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ki_clash
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/ki_clash
+      REDIS_URL: redis://localhost:6379/0
+      JWT_SECRET_KEY: test-secret-not-for-production
+      ENVIRONMENT: development
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Migrate
+        run: alembic upgrade head
+      - name: Test
+        run: pytest -q
+
+  # ── Go: game engine + session unit tests (no external deps). ──
+  go-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache-dependency-path: go-server/go.sum
+      - name: Test
+        working-directory: go-server
+        run: go test ./...
+
+  # ── Web: typecheck + production build (catches the TS/build breakage that
+  #    bit us repeatedly during the PixiJS work). ──
+  web-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install
+        working-directory: web
+        run: npm ci
+      - name: Typecheck
+        working-directory: web
+        run: npx tsc --noEmit
+      - name: Build
+        working-directory: web
+        run: npm run build
