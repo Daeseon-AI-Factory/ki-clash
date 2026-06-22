@@ -1,0 +1,116 @@
+---
+title: "Go-live night — real AWS deploy + the bugs only prod surfaced"
+date: "2026-06-07"
+project: ki-clash
+kind: troubleshoot
+visibility: public
+language: en
+summary: "Go-live on AWS EC2 (t3.micro) exposed bugs no local run had: a single-player 'Game not found' from 2 uvicorn workers over in-memory state, a broken disconnect/reconnect + forfeit-stats + /health HEAD path, a pubsub listener that crashed on idle, and OOM during builds — fixed with --workers 1, a session repair, get_message polling, and 2GB swap baked into user_data."
+tags: ["deploy", "aws", "production", "troubleshoot"]
+---
+
+This is the go-live post. The stack went up on AWS EC2 and started serving real
+traffic, and a handful of bugs surfaced that nothing local had ever shown — the
+classic prod tax: multi-worker state, real disconnects, idle WebSockets, and a
+RAM-tight instance. Each one got fixed and live re-verified the same day.
+
+## What
+
+The backend went live on a single AWS EC2 `t3.micro` running the full
+`docker-compose.prod.yml` stack. Five issues only real production surfaced, then
+got fixed and re-verified against the live instance. Per `docs/engineering-log.md`
+Part 0, the deploy is LIVE behind `api.jjan.daeseon.ai` (Seoul `ap-northeast-2`),
+brand renamed to "JJAN! · 짠" (internal slug stays `ki-clash`).
+
+## Changes
+
+- **Single-player "Game not found" → `--workers 1`** (`d3ef61f`,
+  `docker-compose.prod.yml`). The API ran 2 uvicorn workers, but single-player
+  (vs AI) games live in a per-process in-memory dict (`_active_games` in
+  `app/services/game_service.py`). Create landed in worker A's dict; the next
+  GET/action round-robined to worker B, which didn't have the game →
+  `NotFoundError` roughly half the time. The fix drops to one async worker so all
+  requests hit the same process; the commit documents the Redis-migration
+  follow-up needed before scaling to multiple API instances.
+- **Disconnect/reconnect + forfeit stats + /health HEAD** (`9d7ad2d`;
+  `app/main.py`, `go-server/session.go`, `web/src/app/pvp/page.tsx`). Four bugs
+  in one repair:
+  - Mid-match disconnect now PAUSES the game — `handleDisconnect` calls
+    `cancelTurnTimeout(gameID)` so the absent player isn't auto-charged turn after
+    turn during the 30s grace window; the clock resumes on reconnect.
+  - `opponent_reconnected` is now broadcast. Root cause: a disconnect removes the
+    player from `connected_players`, so the old `HasConnected()` reconnect test
+    was always false on return and misclassified every reconnect as a fresh
+    connect. New signal: `isReconnect = Started && !wasLive`.
+  - Forfeit `match_result` `total_turns` now adds the in-progress round
+    (`CurrentRound.TurnNumber`) — it previously summed only completed
+    `RoundResults`, reporting 0 when a player forfeited mid-round-1.
+  - `/health` now answers HEAD as well as GET via `app.api_route(..., methods=["GET", "HEAD"])`
+    — it had returned 405 to HEAD, which HEAD-based uptime monitors read as down.
+- **2GB swap baked into EC2 user_data** (`4aaff13`, `infra/aws/user_data.sh.tftpl`).
+  Swap had been added by hand on the live box; this persists it in the Terraform
+  bootstrap so any future instance gets it automatically. It's idempotent (skips
+  if `/swapfile` exists) and bumps `vm.swappiness=20` for the build load.
+- **Pubsub listener crash on idle/cancel** (`9fcc629`,
+  `app/core/ws_manager/manager.py`). The per-player Redis pubsub listener used
+  `pubsub.listen()`, whose blocking socket read raised a mis-wrapped
+  `TimeoutError` on every idle period / normal disconnect — flooding logs with
+  `ERROR "pubsub_listener_crashed"`. Switched to a
+  `get_message(ignore_subscribe_messages=True, timeout=1.0)` poll loop that
+  returns `None` on idle, re-checks the WS state each tick, and exits quietly when
+  the player is gone.
+- **Docs** (`b5ade58`, `e44850d`). `b5ade58` logged the single-player
+  Game-not-found fix (2 workers + in-memory state) in `docs/troubleshooting.md`;
+  `e44850d` marked all 4 disconnect/forfeit/HEAD bugs FIXED with live
+  re-verification across `docs/engineering-log.md` and `docs/troubleshooting.md`.
+
+## Why
+
+These are all "only prod surfaces it" failures:
+
+- **Multi-worker over in-memory state** is invisible locally with one worker, but
+  fatal once two workers round-robin requests against state that lives in just
+  one of them. One async worker handles many concurrent connections on the event
+  loop and also eases memory on the `t3.micro`.
+- **Disconnect/reconnect** only exercises under a real network: a dropped player
+  bled turns/rounds until the 30s forfeit, and the survivor never got told the
+  opponent had returned. The forfeit `total_turns=0` was a reporting artifact of
+  the same path.
+- **Idle WebSockets** only spam errors after the listener has been parked long
+  enough to hit a read timeout — exactly what a live server with real waits does,
+  not a fast local test.
+- **OOM during builds**: `t3.micro` has 1GB RAM, and Go compilation / Docker
+  builds exceed it, thrashing the box (the user_data comment notes SSH itself
+  going unresponsive). Swap is the stopgap; the comment itself flags that the
+  proper fix is building on CI / a bigger machine and having the server only pull.
+
+## Decisions
+
+- **DR-15 (stateless workers, Redis as truth)** is why PvP was never affected by
+  the worker count: PvP loads game state from Redis every operation, so it's
+  worker-count-agnostic. The `d3ef61f` commit message explicitly notes PvP is
+  Redis-backed (DR-15) and the follow-up is to migrate single-player state to
+  Redis before scaling to multiple API instances. Trade-off: `--workers 1`
+  ships today on one instance; the Redis migration is deferred until horizontal
+  scaling actually demands it.
+
+## Notes
+
+- All four disconnect/forfeit/HEAD bugs were live re-verified per the `e44850d`
+  doc commit; the `9d7ad2d` message notes Go build + 13 unit tests pass and Python
+  syntax verified, with live re-verification to follow.
+- "No opponent found" in Quick Match is EXPECTED when solo in the queue (30s
+  matchmaking timeout) — that's not a bug; use Room PvP or a 2nd device to pair
+  (`9fcc629` message).
+- Follow-up (per Part 0 and `d3ef61f`): before going multi-instance, move
+  single-player game state to Redis (see `docs/troubleshooting.md` "Game not
+  found" follow-up).
+
+## Commits
+
+- `d3ef61f` — fix(deploy): uvicorn --workers 2->1 — single-player 'Game not found' bug
+- `b5ade58` — docs: log single-player Game-not-found fix (2 workers + in-memory state)
+- `9d7ad2d` — fix(game): repair disconnect/reconnect path + forfeit stats + health HEAD
+- `e44850d` — docs: mark all 4 disconnect/forfeit/HEAD bugs FIXED with live re-verification
+- `4aaff13` — infra(aws): bake 2GB swap into EC2 user_data
+- `9fcc629` — fix(ws): pubsub listener crashed on idle/cancel (Redis read timeout spam)

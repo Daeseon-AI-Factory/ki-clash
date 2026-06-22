@@ -5,7 +5,7 @@ history and `docs/engineering-log.md`. Every commit hash, date, and file
 reference in these entries was verified against git (`git cat-file`,
 `git show`) — no fabricated hashes, dates, or metrics.
 
-The history splits into three eras (the git timezone offset, shown below,
+The history splits into four eras (the git timezone offset, shown below,
 shifts with each):
 
 ## Era 1 — Korea prototype (TZ `+09:00`)
@@ -49,3 +49,18 @@ shifts with each):
 | 2026-06-01 | update | public | [Phase 8 — Tekken-style room PvP](2026-06-01-room-pvp-tekken-style.mdx) |
 | 2026-06-01 | tech-retro | public | [Phase 10 — standalone Go WebSocket game server](2026-06-01-go-game-server.mdx) |
 | 2026-06-01 | update | public | [Deploy-night checkpoint — Phase 9 (live deploy) still pending](2026-06-01-deploy-night-state.mdx) |
+
+## Era 4 — Hardening + live launch (TZ `-04:00`)
+
+| Date | Kind | Vis | Entry |
+|---|---|---|---|
+| 2026-06-02 | ux-retro | public | [Phase 11 — in-house FX overhaul (Lottie-quality, no external assets)](2026-06-02-phase11-inhouse-fx.mdx) |
+| 2026-06-02 | ux-retro | public | [Character-specific ultimate finishers + real fighter PNGs on select](2026-06-02-finishers-real-pngs.mdx) |
+| 2026-06-02 | update | public | [Rebrand to JJAN! · 짠 + recruiter-ready bilingual README](2026-06-02-brand-jjan-readme.mdx) |
+| 2026-06-03 | troubleshoot | public | [Vercel monorepo routing + canonical-domain redirects](2026-06-03-vercel-monorepo-routing.mdx) |
+| 2026-06-04 | tech-retro | public | [AWS infra as Terraform IaC — VPC + EC2 + separated EBS + EIP](2026-06-04-aws-terraform-iac.mdx) |
+| 2026-06-04 | troubleshoot | public | [DR-16 — client-ready handshake + 8-dimension live verification](2026-06-04-pvp-handshake-dr16.mdx) |
+| 2026-06-07 | troubleshoot | public | [Go-live night — real AWS deploy + the bugs only prod surfaced](2026-06-07-live-deploy-night.mdx) |
+| 2026-06-07 | tech-retro | public | [PixiJS v8 WebGL effects (DR-17) and the additive-overlay lesson (DR-18)](2026-06-07-pixijs-webgl-dr17-dr18.mdx) |
+| 2026-06-07 | ux-retro | public | [Viewport-locked single-screen mobile + installable PWA](2026-06-07-mobile-single-screen-pwa.mdx) |
+| 2026-06-10 | tech-retro | public | [Load testing (k6) + CI pipeline (GitHub Actions)](2026-06-10-load-testing-ci.mdx) |

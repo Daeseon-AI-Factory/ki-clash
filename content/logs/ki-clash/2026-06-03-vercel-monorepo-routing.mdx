@@ -1,0 +1,45 @@
+---
+title: "Vercel monorepo routing + canonical-domain redirects"
+date: "2026-06-03"
+project: ki-clash
+kind: troubleshoot
+visibility: public
+language: en
+summary: "Added a root-level vercel.json so Vercel builds the web/ subdirectory in this monorepo instead of failing on a missing root package.json, then layered 301 redirects so www and the old kiclash alias both funnel to the canonical jjan.daeseon.ai."
+tags: ["vercel", "deploy", "troubleshoot"]
+---
+
+Two deploy-troubleshooting fixes the same afternoon: first teaching Vercel where the Next.js app actually lives, then collapsing every domain alias onto one canonical host.
+
+## What
+
+This repo is a monorepo — the Next.js frontend lives at `web/`, not the repo root. Vercel auto-builds from the repo root by default, so the build couldn't find `package.json` and `npm install` failed. A root-level `vercel.json` fixes that by pointing the build at `web/`. A follow-up commit added 301 redirects so the brand resolves to a single canonical domain.
+
+## Changes
+
+- Added root-level `vercel.json` so the build `cd`s into `web/` first (`f0c01d8`). The config sets `buildCommand` to `cd web && npm install && npm run build`, `outputDirectory` to `web/.next`, and `framework` to `nextjs`. `installCommand` is neutralized (`echo 'install handled inside buildCommand'`) because install now happens inside the build command.
+- Added canonical-domain 301 redirects to the same `vercel.json` (`bc43380`). Two host-matched `redirects` entries send `www.jjan.daeseon.ai` and `kiclash.daeseon.ai` to `https://jjan.daeseon.ai/:path*`, both with `"permanent": true`.
+
+## Why
+
+The failure mode from `f0c01d8` was concrete — Vercel's default root build produced:
+
+```
+npm error enoent Could not read package.json:
+/vercel/path0/package.json (no such file or directory)
+```
+
+There's no root `package.json` because the app is under `web/`. Overriding `buildCommand` to `cd web && ...` is the supported monorepo pattern. Per the commit message, the cleaner alternative is setting **Root Directory = web** in the Vercel dashboard — both work; the committed `vercel.json` is the zero-click, in-repo fallback that survives a fresh project import.
+
+The redirects in `bc43380` exist to keep one canonical brand host. The user-visible brand is **JJAN! · 짠**, and the engineering log records the live frontend as `https://jjan.daeseon.ai` (`docs/engineering-log.md`). `kiclash.daeseon.ai` is the older alias from the pre-rename domain plan that's still documented in the log's Phase 9 section, so a 301 from it to `jjan.daeseon.ai` preserves any old links. `301` (`"permanent": true`) is the right code here because the canonical move is intended to be permanent and we want search engines to consolidate ranking on the canonical host.
+
+## Notes
+
+- Per the `bc43380` commit message, `www.jjan` still needs a CNAME at Cloudflare to actually resolve — the Vercel side is already claimed via `vercel domains add`, but DNS is the missing half. The redirect rule only fires once the host reaches Vercel.
+- The engineering log notes the frontend auto-deploys from a `main` push on Vercel (`docs/engineering-log.md`), so committing `vercel.json` to `main` is what wires these settings into the live build.
+- These two commits land the same day (both `2026-06-03`, committer TZ `-04:00`); the actual production cutover to `jjan.daeseon.ai` is recorded separately in the engineering log as completed `2026-06-07`.
+
+## Commits
+
+- `f0c01d8` — fix(vercel): root-level vercel.json so build finds web/ subdirectory
+- `bc43380` — fix(vercel): canonical-domain redirects to jjan.daeseon.ai

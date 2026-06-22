@@ -1,0 +1,57 @@
+---
+title: "Rebrand to JJAN! · 짠 + recruiter-ready bilingual README"
+date: "2026-06-02"
+project: ki-clash
+kind: update
+visibility: public
+language: en
+summary: "Renamed the user-visible product from \"Ki Clash\" to \"JJAN! · 짠\" across the web surfaces (metadata, lobby, shop, share-sheet) while keeping the internal ki-clash code slug untouched, and shipped a grounded bilingual EN/KO recruiter README plus a problem-indexed troubleshooting reference."
+tags: ["brand", "docs"]
+---
+
+A documentation + branding day: the user-facing name became **JJAN! · 짠**, and two grounded reference docs landed — a bilingual README and a troubleshooting index.
+
+## What
+
+Three commits, all dated 2026-06-02:
+
+- A user-visible rebrand from "Ki Clash" to **JJAN! · 짠** on the web app's public surfaces (`6e6c090`).
+- A comprehensive bilingual EN/KO README aimed at a recruiter or fellow engineer (`36a525d`).
+- A problem-indexed troubleshooting reference doc (`31ae407`).
+
+Important distinction this post keeps straight: **JJAN! is the user-visible brand**; **`ki-clash` stays the internal project/code slug**. The rebrand deliberately touched only what a user reads, not the code identity.
+
+## Changes
+
+**Brand rename — `6e6c090` (`brand: rename user-visible surfaces from "Ki Clash" to "JJAN! · 짠"`).** Four web files, +26/-8:
+
+- `web/src/app/layout.tsx` — page metadata `title` became `"JJAN! · 짠"`, with a rewritten `description` and newly added `openGraph` / `twitter` (summary_large_image) card blocks (`siteName: "JJAN!"`).
+- `web/src/app/page.tsx` — the lobby `<h1>` went from `Ki Clash` to `JJAN` with a yellow-accented `!` (`text-yellow-300`) and a glow `textShadow`; the subtitle changed from `기싸움` to `짠 · 기싸움`, and the tagline gained a "1-second reveal duel" lead-in.
+- `web/src/app/shop/page.tsx` — `"Support Ki Clash"` → `"Support JJAN!"`.
+- `web/src/app/invite/page.tsx` — the `navigator.share` sheet title `"Ki Clash Challenge"` → `"JJAN! Challenge"`, with new copy `"Read me in JJAN! — 1-second 1v1 duel. JJAN!"`.
+
+Per the commit body, the rename **intentionally did not touch** the invisible identifiers: Redis key prefixes (`ki_clash:game:*`, `ki_clash:room:*`, `ki_clash:player:*`), repo / package / module names, source-file header comments, and `/api/v1/...` API paths.
+
+**Bilingual README — `36a525d` (`docs: comprehensive bilingual README (EN/KO) — recruiter-ready overview`).** Replaced the placeholder one-liner with a full overview (`README.md` +385/-2, `README.ko.md` +373, 756 insertions total). `README.ko.md` is a translation of the same content, not a separate marketing pitch — the two cross-link (`English` · `한국어`). The commit body lists repo-verified stats captured at write time (e.g. 93 commits, 36 fighter PNGs across 6 characters × 6 poses); per the project's zero-fabrication rule I'm citing those as the commit's own numbers rather than re-deriving them here.
+
+**Troubleshooting reference — `31ae407` (`docs(troubleshooting): add grounded problem-indexed troubleshooting reference`).** New `docs/troubleshooting.md` (+100). It's a problem-indexed companion to this date-indexed timeline: 8 non-trivial fixes in **Symptom / Cause / Fix / Commit / Pattern** form (the PvP concurrency bugs, JWT 401 auto-recovery, Railway deploy fixes). The commit body notes an adversarial verify pass caught and corrected one fabricated cause before publishing.
+
+## Why
+
+"Ki Clash" was generic and overlapped with existing Clash-named titles. **JJAN (짠)** is the Korean onomatopoeia for a surprise reveal — the sound you make uncovering something at the same instant, which is exactly the game's core moment ("3, 2, 1, JJAN!"). The name maps directly onto the mechanic.
+
+Keeping the code slug as `ki-clash` is the deliberate part: a brand can change cheaply when it lives only in user-facing strings, but renaming Redis key prefixes, modules, and API paths is a migration with real blast radius. Separating the two means the rebrand is a 4-file string change, not a refactor.
+
+The README and troubleshooting doc serve the recruiter-facing goal: a grounded, anti-fabrication overview someone can read in two minutes, plus a problem-indexed log that shows how concrete bugs were diagnosed and fixed.
+
+## Notes
+
+- **The README title still reads "Ki Clash · 기싸움."** The README commit (`36a525d`, 15:31) landed earlier the same day than the brand commit (`6e6c090`, 20:07), so it predates the JJAN! decision and was not retro-edited in this batch.
+- **Domain plan (from the commit body, not yet provisioned):** `jjan.daeseon.ai` as a zero-cost subdomain on the already-owned `daeseon.ai`, with a possible move to a dedicated domain later. The README's live link at this point is still `kiclash.daeseon.ai`.
+- The troubleshooting entries are cross-referenced to decision records — e.g. the spurious-`opponent_reconnected` fix cites **DR-10** ("Single `handle_connect()` vs separate first/reconnect handlers"), the "tell, don't ask" / push-the-decision-into-the-callee pattern documented in `docs/engineering-log.md`.
+
+## Commits
+
+- `6e6c090` — brand: rename user-visible surfaces from "Ki Clash" to "JJAN! · 짠"
+- `36a525d` — docs: comprehensive bilingual README (EN/KO) — recruiter-ready overview
+- `31ae407` — docs(troubleshooting): add grounded problem-indexed troubleshooting reference

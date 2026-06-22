@@ -1,0 +1,44 @@
+---
+title: "DR-16 — client-ready handshake + 8-dimension live verification"
+date: "2026-06-04"
+project: ki-clash
+kind: troubleshoot
+visibility: public
+language: en
+summary: "Gated turn 1 behind a two-player presence check so the 5s turn clock never starts against a ghost opponent, split the room start-guard from the handoff-guard to fix a 'Match starting' hang, made CharacterAvatar render the real fighter PNG, then ran an 8-dimension live verification that surfaced 4 bugs."
+tags: ["pvp", "websocket", "multiplayer", "troubleshoot"]
+---
+
+This session was real-time multiplayer correctness work: hold the first turn until both clients are actually connected, unstick the room→gameplay handoff, fix the lobby avatar, and then verify the whole thing against the live backend.
+
+## What
+
+The room flow is REST: the server spawns the game and hands each browser a `game_id`, and each browser then opens its own `wss://…/ws/game/{id}`. Browsers finish loading at different speeds — per the DR-16 engineering-log entry, one player's arena (`2× ~400KB fighter PNGs + arena`) can take 5–6s to render. If the 5-second turn clock (which auto-submits `charge` on timeout) starts on the *first* WebSocket connection, the early player burns turn 1 against an opponent whose socket isn't even open yet. DR-16 is the fix for that race; this session also cleared a frontend handoff hang and a lobby avatar that showed an emoji instead of the fighter art.
+
+## Changes
+
+- **Client-ready handshake — hold turn 1 until BOTH connect** (`2e99349`). In `go-server/session.go`, `start()` now gates the first `waiting_for_action` on a presence count: it early-returns unless `len(sess.ConnectedPlayers) >= 2`. `handleConnect` adds the connecting player to the Redis presence set *before* `start()` runs, so the **second** socket to connect is the one that opens the gate and broadcasts turn 1 to both. The first connector is a logged no-op (`start_waiting_for_opponent`); the `Started` flag keeps it idempotent against a double-fire. Also touched `docs/troubleshooting.md`.
+- **Split start-guard from handoff-guard** (`7d7fccc`). In `web/src/components/room/RoomScreen.tsx`, a single `startCalledRef` guard sat above the `in_game` check, so once a client called `POST /rooms/{code}/start` (setting the ref), the next poll that saw `status=in_game` returned early and `onGameStart` never fired — both players sat on "Match starting..." forever. Fix: two independent refs — `gameHandedOffRef` fires `onGameStart` exactly once for **both** players regardless of who called `/start`, and `startCalledRef` still dedupes the `/start` POST.
+- **CharacterAvatar renders the real fighter PNG** (`fc3e718`). In `web/src/components/arena/CharacterAvatar.tsx`, the non-arena surfaces (room lobby, character grid, shop, invite) rendered the character's symbol emoji inside the ki-aura halo. It now loads `/fighters/<id>/idle.png` via `fighterAsset(...)` and only falls back to the emoji on an `onError` (PNG 404) — the same image-first pattern as `FighterSprite`.
+- **Logged the 8-dimension live verification** (`00dc60c`). Added the DR-16 entry to `docs/engineering-log.md` and 4 found-bug entries plus a mission summary to `docs/troubleshooting.md`.
+
+## Why
+
+The handshake fix is grounded in a measured before/after in the DR-16 log entry. Before the fix, a two-client probe showed P1 connecting at `[0.60s]` and immediately receiving `waiting_for_action` (clock started solo), its 5s timer expiring into an auto-`charge` `turn_result` at `[5.60s]`, and P2 only arriving at `[6.60s]` — turn 1 already gone. After the fix, the same probe showed P1 receiving **zero frames** for the full 6s solo window (past the 5s limit, so no phantom auto-charge), then both players getting `waiting_for_action` within ~8ms of P2's connect.
+
+The room hang was purely a frontend state-transition bug — the commit notes the backend (REST rooms + Go WS loop) was verified working end-to-end the whole time, with zero console errors confirming it was not a WebSocket/network failure.
+
+## Decisions
+
+**DR-16 — gate turn 1 on a presence count.** The log entry weighs three options: (A) presence gate — `len(connected)==2` triggers turn 1; (B) server-side deadline only — start the clock at spawn/first connect; (C) an explicit client `client_ready` ack after assets render. (A) was chosen. (B) doesn't fix the bug (it's the exact failure above). (C) is the most precise (it waits for full render) but adds a new client→server message and an extra round-trip. The reasoning: the WebSocket connection is *already* a readiness signal, and the presence set was already in Redis `connected_players` for cross-instance reconnect (DR-13/DR-15), so the fix is one `len()==2` check inside the same atomic `watchAndUpdate` that marks the player connected — no new state, no new protocol surface. The log frames the meta-pattern as: *never start a synchronized clock on the first participant; gate the first synchronized event on a readiness condition covering all participants, and let the last arrival trigger it.*
+
+## Notes
+
+After deploying (with the DR-16 fix included), an 8-agent verification workflow ran against the live backend (`api.jjan.daeseon.ai`) — each agent ran a real `python3` script, no fabricated results. Per the mission summary in `docs/troubleshooting.md`, the overall result was GREEN (an uninterrupted 2-player match starts, plays to completion, and resolves with no desync), with **7/8 dimensions PASS** and `disconnect-reconnect` PARTIAL. That dimension surfaced 4 bugs:
+
+- **HIGH** — mid-match disconnect doesn't pause: the 5s turn timer keeps firing and auto-charges the absent player, so the "30s reconnect window" isn't a true grace period. The turn scheduler is decoupled from connection state mid-match (the inverse of DR-16, where it's coupled at match open).
+- **HIGH** — `opponent_reconnected` is never broadcast: a reconnecting player resumes, but the surviving player is never told, so a "waiting for opponent" overlay would never clear. (`opponent_disconnected` fires correctly on close; `handleConnect` keyed reconnect detection on `HasConnected()`, but `handleDisconnect` removes the player from `connected_players`, so every reconnect was misclassified as a first-connect and the `opponent_reconnected` branch never ran.)
+- **LOW** — a forfeit `match_result` carries zeroed stats (`rounds_won_p1:0, rounds_won_p2:0, total_turns:0`) even when turns were played; the `winner` field is correct.
+- **LOW** — `/health` responds 405 to HEAD (`allow: GET`); a GET returns 200 `{"status":"ok"}`. HEAD-based uptime monitors would misreport the API as down.
+
+The DR-16 log entry notes these were resolved later (the two HIGH disconnect/reconnect bugs in commit `9d7ad2d`, by applying the same presence-aware scheduling idea during the disconnect grace window) — outside this session's commits.

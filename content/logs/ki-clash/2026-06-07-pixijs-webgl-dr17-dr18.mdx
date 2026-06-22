@@ -1,0 +1,49 @@
+---
+title: "PixiJS v8 WebGL effects (DR-17) and the additive-overlay lesson (DR-18)"
+date: "2026-06-07"
+project: ki-clash
+kind: tech-retro
+visibility: public
+language: en
+summary: "A PixiJS v8 WebGL effect engine and /pixi-test harness wired into both PvP and vs-AI matches — plus the day's hard lesson: the first integration replaced the dynamic KiAuraArena and silently deleted its character motion, so it was reverted and re-done as an additive transparent overlay (DR-18: enhance = compose, not replace)."
+tags: ["webgl","pixijs","visual","retrospective"]
+---
+
+A single day (2026-06-07) that pushed the battle arena's effects ceiling onto the GPU — and then taught me the difference between *adding* a layer and *replacing* a working component the expensive way.
+
+## What
+
+The DOM/CSS arena (`KiAuraArena`, framer-motion + a few dozen divs) had a hard visual ceiling: tens of animated elements, CSS `blur` glow that's expensive, and no path to thousands of additive particles or GPU filters (shockwave, bloom, RGB-split). DR-17 was the decision to render only the battle arena with **PixiJS v8 (WebGL)** while keeping React for all UI.
+
+The same day produced DR-18: a retrospective on how the first integration went wrong. I read "add spectacular effects" as "rewrite the arena," replaced `KiAuraArena` with a static-PNG `PixiBattleArena`, and silently lost the character motion the old component owned. The fix was to make the WebGL effects an **additive transparent overlay** layered over the original `KiAuraArena`.
+
+## Changes
+
+- **PixiJS v8 WebGL effect engine + `/pixi-test` harness** (`046c6da`) — new `web/src/components/arena/pixi/`: `particles.ts` (a pooled, additive-blend `GlowEmitter` with a runtime-generated soft-glow texture), `effects.ts` (six self-cleaning ticker effects driving pixi-filters: `GlowFilter`, `ShockwaveFilter`, `RGBSplitFilter`, `AdvancedBloomFilter`, plus `ColorMatrixFilter`), `PixiBattleArena.tsx` + its client wrapper, and a standalone `web/src/app/pixi-test/page.tsx` to fire each effect on demand with no backend. Adds `pixi.js` / `pixi-filters` to `web/package.json`.
+- **Wire into live PvP + beef up the energy wave** (`2440dca`) — `web/src/app/pvp/page.tsx` mounts `PixiBattleArena`; `effects.ts` reworks the energy-wave (a 3-layer energy beam).
+- **DR-17 logged** (`56b7d55`) — 85 lines added to `docs/engineering-log.md` framing the draw-axis vs ship-axis decision.
+- **Wire into single-player (vs AI) match** (`9cc7362`) — same arena into `web/src/app/page.tsx`.
+- **Wide desktop layout experiment** (`bfaa646`) → **resize fix** (`321ab15`) → **rollback to mobile-first** (`397eaed`). The wide box exposed a latent bug: `PixiBattleArena` computed ground/scale/positions once at init, so the sprites kept stale positions when the host box resized. `321ab15` extracted a `layout()` recomputed on every `ResizeObserver` fire; `397eaed` then rolled the wide layout itself back to the narrow `max-w-2xl` column on all viewports (preference), keeping the resize fix.
+- **Troubleshooting logged** (`a4d5ec6`) — `docs/troubleshooting.md` records the resize bug, the wide-layout rollback, and a Vercel preview-401 gotcha (preview URLs are auth-walled by default; only the production domain is public).
+- **The correction** (`90a9a10`, `a854f1c`, `4320d35`) — `90a9a10` restored the original KiAuraArena footprint keeping only the effects; `a854f1c` reverted both pages to the dynamic `KiAuraArena` verbatim; `4320d35` added the right design: a new `PixiFxOverlay.tsx` — a transparent WebGL layer rendering ONLY particles/beams (no fighters, no background), spawning at left/right fighter anchors recomputed on resize, composed over the untouched KiAuraArena on both `page.tsx` and `pvp/page.tsx`.
+- **DR-18 retrospective logged** (`d68f30f`) — 65 lines added to `docs/engineering-log.md`.
+
+## Why
+
+DR-17's core argument is that two axes are independent and were being conflated: **how you draw** (DOM < Canvas < WebGL < native engine) versus **how you ship** (web < PWA < Capacitor < native). "Install / app store" is packaging and doesn't change the graphics ceiling; the ceiling is on the draw axis, and WebGL is the jump there.
+
+A game engine (Unity/Godot) was rejected on two counts from the trade-off table: WKWebView has no WebGPU and the WASM bundle is a mobile-load liability (so it breaks the "one codebase → web + PWA + app stores" goal), and a turn-based 1v1 needs no physics/3D/scene-graph — its asset reuse would be 0%. PixiJS WebGL runs identically across web, PWA, and Capacitor and reuses all the existing React/TS + PNG assets. PixiJS is a renderer, not a game engine — that's exactly why it fits: take the lightest tool that clears the ceiling.
+
+A readability decision rides along: action effects keep a *unified shape* (so players read "that was an attack" instantly in a fast RPS-style game) with identity coming from a per-character color tint; the bespoke spectacle lives in the match-end finisher — the fighting-game convention that normals read clean and only the super is bespoke.
+
+## Decisions
+
+- **DR-17 — WebGL effects via PixiJS, not a game engine.** Chosen over staying on DOM/CSS, Canvas2D, or a Unity/Godot WebGL export. Trade-off: PixiJS buys thousands of particles + GPU filters and the same code across web/PWA/Capacitor; the cost is a medium learning curve on Pixi v8 and a mid-size bundle. The implementation was written against the source-verified Pixi 8.19 / pixi-filters 6.1 API — e.g. the glow texture is generated from a 2D-canvas radial gradient to sidestep the version-sensitive `FillGradient`.
+
+- **DR-18 — Enhancement is composition, not substitution.** Asked to add "이펙트만" (effects ONLY), I replaced the whole dynamic arena, and `KiAuraArena` turned out to own the character motion (windup/impact/recoil via `useActionAnimation` + `FighterSprite`), which the swap silently deleted. The log's own trade-off table is blunt: replacing a component loses its un-inventoried behavior and has a whole-arena blast radius, whereas an ADD-overlay keeps the motion untouched and is one line to delete. The fix matched the request: a thin, deletable `PixiFxOverlay` composed over the original arena. This is the project's standing "additive, not replace" lesson made concrete.
+
+## Notes
+
+- The string of `bfaa646 → 321ab15 → 397eaed` followed by `90a9a10 → a854f1c → 4320d35` is itself the DR-18 symptom: once the foundation (replaced arena) was wrong, several follow-up "fixes" tuned the wrong base before the revert-and-recompose. The cheap correction was possible because the final design is a deletable layer.
+- The resize bug pattern generalizes: any WebGL/canvas view with `resizeTo` (or a responsive container) must re-layout on a `ResizeObserver`, never position/scale once at init.
+- Vercel preview URLs return 401 by default (Deployment Protection); only the production domain is public — not an app bug, documented in `docs/troubleshooting.md`.

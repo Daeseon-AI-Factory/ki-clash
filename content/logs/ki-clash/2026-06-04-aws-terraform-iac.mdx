@@ -1,0 +1,53 @@
+---
+title: "AWS infra as Terraform IaC — VPC + EC2 + separated EBS + EIP"
+date: "2026-06-04"
+project: ki-clash
+kind: tech-retro
+visibility: public
+language: en
+summary: "One Terraform module stands up the JJAN! backend on AWS — a /16 VPC, a single t3.micro EC2 host, a lifecycle-protected EBS data volume that outlives instance replacement, and an Elastic IP — followed by four deploy fixes the first real build surfaced (Go base bump, distroless self-healthcheck, Caddy domain, Vercel build env)."
+tags: ["aws", "terraform", "infra", "deploy"]
+---
+
+2026-06-04 moves the backend off Railway-era ad-hoc deploys onto declarative AWS infra. One Terraform module (`infra/aws/`) defines the whole host; four follow-up fixes are the bugs the first real EC2 build exposed.
+
+## What changed
+
+**Terraform IaC — VPC + EC2 + separated EBS + EIP (`b2b20e8`).** Eight new files under `infra/aws/`, 492 insertions, no edits to anything else — pure greenfield infra:
+- `main.tf` — provider pinned `hashicorp/aws ~> 5.0`, `required_version >= 1.5`, state left local for now. Two data sources keep the module reproducible: latest Ubuntu 24.04 LTS AMI filtered to Canonical's owner id `099720109477` (supply-chain guard), and `aws_availability_zones` so EC2 and EBS land in the same AZ.
+- `network.tf` — VPC `10.0.0.0/16`, a public subnet `10.0.1.0/24`, an internet gateway, a route table sending `0.0.0.0/0` to the IGW, and a security group opening only `22` (SSH from `var.my_ip_cidr` only), `80`, and `443`. Postgres `5432` / Redis `6379` are deliberately not exposed — containers talk over the Docker network.
+- `compute.tf` — the `aws_instance`, a `gp3` root volume (`delete_on_termination = true`), a **separate** `aws_ebs_volume` data disk with `lifecycle { prevent_destroy = true }`, its `aws_volume_attachment` at `/dev/sdf`, and an `aws_eip`.
+- `user_data.sh.tftpl` — boot-once script (Docker install + data-volume mount), injected via `templatefile`; `user_data_replace_on_change = true` so editing the script replaces the instance.
+- `variables.tf`, `outputs.tf`, `terraform.tfvars.example`, `.gitignore`.
+
+**Go Docker base 1.23 → 1.25 (`3721b79`).** The `go.mod` was authored against Go 1.25 locally but `go-server/Dockerfile` still pinned `golang:1.23-alpine`, so the EC2 build failed: `go: go.mod requires go >= 1.25.0 (running go 1.23.12)`. One-line bump to `golang:1.25-alpine`.
+
+**Distroless self-healthcheck (`6bc1af0`).** The game container's healthcheck called `wget`, which doesn't exist in the distroless final image, so it was marked unhealthy and Caddy's `depends_on: service_healthy` blocked — even though the server was listening fine. Fix: add a `-healthcheck` subcommand to the Go binary that GETs `/health` and exits 0/1, and point the Docker `HEALTHCHECK` at `["CMD", "/ki-clash-go", "-healthcheck"]` in `docker-compose.prod.yml`.
+
+**Caddy domain → `api.jjan.daeseon.ai` (`a90ae83`).** Caddy was requesting a Let's Encrypt cert for the old `api.kiclash.daeseon.ai` for two reasons: the `caddy` service had no `environment` block so `.env`'s `API_DOMAIN` never reached the container, and the `Caddyfile` default fell back to the kiclash domain. Fix passes `API_DOMAIN` into the container and flips the `Caddyfile` default to the jjan domain.
+
+**Inline `NEXT_PUBLIC_API_URL` into Vercel buildCommand (`bcf8c03`).** The Vercel env var kept landing empty (CLI 54.7 non-interactive add bug), so the production bundle fell back to `localhost:8000`. Since `NEXT_PUBLIC_*` is inlined at build time and this value is a public URL (no secret), the fix hardcodes it in `vercel.json`'s `buildCommand`: `NEXT_PUBLIC_API_URL=https://api.jjan.daeseon.ai npm run build`.
+
+## Why
+
+The whole module is built around one operational idea, stated in `compute.tf`'s own comments: **cattle, not pets.** The EC2 instance plus its root volume are cattle — disposable, recreated at will. The separate EBS data volume is the pet: it holds Postgres/Redis state and gets `prevent_destroy = true` so a stray `terraform destroy` can't wipe it. The Elastic IP is the third leg: a default public IP changes on instance replacement, so pinning an EIP means the DNS A record for `api.jjan.daeseon.ai` never has to move when the host is rebuilt.
+
+The deploy fixes share a theme: each is a gap between "works on my laptop" and "builds on a clean EC2 host." The Go version drift, the missing healthcheck tool in distroless, the unset domain env var, and the empty Vercel env var were all invisible locally and only surfaced on the real build.
+
+## Decisions
+
+Per `docs/engineering-log.md`, this is **Phase 14 (AWS deploy via Terraform IaC)** — marked DONE / LIVE. The log records the live targets as `https://jjan.daeseon.ai` (Vercel frontend) and `https://api.jjan.daeseon.ai` (AWS EC2, Seoul `ap-northeast-2`), and the infra shape as "EC2 = single t3.micro … Terraform (state local)" with an "EBS-separated data vol, 2GB swap, Caddy SSL." No dedicated DR-number is assigned to this phase in the log; the rationale lives in the Terraform comments and the Phase 14 line.
+
+## Notes
+
+- State is intentionally local (`terraform.tfstate`) for the solo-learning stage; `main.tf` notes the migration path to S3 + DynamoDB lock for the team stage.
+- The single public subnet is sufficient because there's one instance; `network.tf` calls out the private-subnet split as the future move once a DB needs isolating.
+- `outputs.tf` emits copy-paste-ready values (`public_ip`, a `dns_record_to_create` string, the `ssh_command`, and the persistent `data_volume_id` for snapshots) so the post-`apply` steps need no manual digging.
+
+## Commits
+
+- `b2b20e8` — infra(aws): Terraform IaC — VPC + EC2 + separated EBS data volume + EIP
+- `3721b79` — fix(go-server): bump Docker base golang 1.23→1.25 (go.mod requires 1.25.0)
+- `6bc1af0` — fix(deploy): Go self-healthcheck flag for distroless image
+- `a90ae83` — fix(deploy): Caddy domain → api.jjan.daeseon.ai (env + default)
+- `bcf8c03` — fix(vercel): inline NEXT_PUBLIC_API_URL into buildCommand

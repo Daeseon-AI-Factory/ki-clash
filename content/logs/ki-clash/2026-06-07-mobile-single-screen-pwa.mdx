@@ -1,0 +1,68 @@
+---
+title: "Viewport-locked single-screen mobile + installable PWA"
+date: "2026-06-07"
+project: ki-clash
+kind: ux-retro
+visibility: public
+language: en
+summary: "Locks every gameplay phase to one no-scroll viewport (100svh, capped arena, compact spacing) on a single stable skeleton that never reflows, removes the growing in-match turn history, makes the web client an installable home-screen PWA, and cuts the AI reveal/round hold from 5.1s/4.5s to 3s."
+tags: ["mobile", "pwa", "ux", "responsive"]
+---
+
+A day of making the game fit one phone screen — no scroll, no jump — and turning the web client into a home-screen app.
+
+## What
+
+Two goals, both about feel on a real phone:
+
+1. **One screen, no scroll, no reflow.** Every gameplay phase (playing / revealing / round_end, on both the AI and PvP pages) now renders on the same fixed skeleton locked to the visible viewport, so action buttons are always reachable and the layout never jumps between phases.
+2. **Installable PWA.** The web client gets a manifest, a service worker, and icons so JJAN! can be added to a phone home screen and launch standalone.
+
+Plus a pacing tweak: the AI-mode post-action result hold dropped from 5.1s/4.5s to 3s.
+
+## Changes
+
+**Viewport fit + no-scroll**
+
+- `min-h-screen` (= `100vh`, which on iOS Safari includes the URL-bar area and overflows the visible viewport) was swapped to `min-h-[100svh]` on both game pages, and `viewportFit: "cover"` was added in `web/src/app/layout.tsx` so `100svh` maps to the real notched screen. Gameplay containers went `space-y-6 → space-y-3` and the arena shrank `h-64 sm:h-72 → h-44 sm:h-64` (`36f1039`, files: `web/src/app/layout.tsx`, `web/src/app/page.tsx`, `web/src/app/pvp/page.tsx`, `web/src/components/arena/KiAuraArena.tsx`).
+- The partial compaction was then replaced with a true single-screen flex column locked to `h-[calc(100svh-2rem)] overflow-hidden`: HUD / result text / action cards are `shrink-0` (always visible), the arena is `flex-1 min-h-0` (grows on tall phones, shrinks on short ones), and AI trash-talk is hidden under 700px height so essentials always fit (`d365ab7`, files: `web/src/app/page.tsx`, `web/src/app/pvp/page.tsx`, `web/src/components/arena/KiAuraArena.tsx`).
+
+**Stable skeleton (no reflow between phases)**
+
+- AI page: `playing` / `revealing` / `round_end` were unified into ONE fixed skeleton — HUD + arena stay in the same place/size every phase (arena never remounts); only a fixed bottom slot swaps content (action cards / reveal / round result). The Confirm button is now always rendered (disabled "Pick an action" until a pick) so selecting an action no longer shifts the layout (`623fcc5`, files: `web/src/app/page.tsx`, `web/src/components/GameBoard.tsx`).
+- PvP page: same treatment applied — `playing` / `waiting` / `revealing` / `round_end` collapsed into one fixed layout (always-on bold ROUND header + score, capped arena `max-h-[34svh]` that never remounts, `min-h` bottom slot that swaps by phase) (`096bccb`, file: `web/src/app/pvp/page.tsx`).
+- Removed the growing **in-match turn history** from `MatchHUD` — the recent-turns list grew as the match went on and pushed the locked layout out of one screen (`cc41462`, file: `web/src/components/MatchHUD.tsx`).
+- Killed the bottom white band and a clipped Confirm button: `globals.css` body/html background was white by default (`--background #fff`), showing a white band below `100svh` and on iOS overscroll — set dark (`#0b0b14`) always with `overscroll-behavior: none`. The AI bottom slot's hard `h-[224px]` (which clipped Confirm) became natural `min-h`. Arena capped at `max-h-[34svh]`; ActionCards made compact on phones (hide Korean + description under `sm`); ROUND shown bold/yellow in `MatchHUD` (`15a14f0`, files: `web/src/app/globals.css`, `web/src/app/page.tsx`, `web/src/components/ActionCard.tsx`, `web/src/components/MatchHUD.tsx`).
+
+**Installable PWA**
+
+- Added `web/src/app/manifest.ts` (Next.js serves it at `/manifest.webmanifest`): `name: "JJAN! · 짠"`, `display: "standalone"`, `orientation: "portrait"`, background/theme `#0b0b14`. New service worker `web/public/sw.js` (network-first for navigations, cache-first for static assets, never caches `/api/` or cross-origin), registered via `web/src/components/ServiceWorkerRegister.tsx`, with `web/public/icons/` (192, 512, 512-maskable, apple-touch) wired through `web/src/app/layout.tsx` (`6c95a0b`).
+
+**Pacing tweak**
+
+- AI-mode auto-advance: `revealing` hold `5100ms → 3000ms`, `round_end` hold `4500ms → 3000ms`. TurnReveal's outcome lands ~2.1s in, leaving a brief beat to read the result. PvP advance is server-driven and untouched (`bdce3dd`, file: `web/src/app/page.tsx`).
+
+## Why
+
+On an iPhone the action cards were below the fold — you had to scroll to play a one-second reveal game, which kills the feel. The root cause was `100vh` on iOS Safari counting the URL-bar area; `100svh` plus `viewportFit: cover` maps the layout to the actually-visible screen.
+
+The harder problem was *stability*. Even fitting one screen, the layout jumped every phase — the arena remounted, the bottom content changed height, picking an action shifted everything. The fix (per the engineering log's 2026-06-07 session notes) was to make each page ONE fixed skeleton — HUD + a capped arena (`max-h-[34svh]`) that never remounts + a `min-h` bottom slot that swaps content — so the layout never reflows, clips, or scrolls. The growing turn history was incompatible with that constraint, so it came out of the in-match HUD (full history still lives on the `/history` page).
+
+The PWA work makes JJAN! installable to a phone home screen and launchable standalone — the cheapest path to an "app-like" presence before a real store build.
+
+## Notes
+
+- The single-screen layout arrived in two passes: `36f1039` did partial compaction, then `d365ab7` replaced it with the true flex-locked column — both are in this post because the final behavior is the sum.
+- The engineering-log "current state at a glance" lists `Mobile responsive single-screen layout ✅ DONE — AI + PvP` and `PWA: installable to phone home screen (manifest + sw.js)`, matching the commits above.
+- "JJAN! · 짠" is the user-visible brand; the internal code slug stays `ki-clash`.
+
+## Commits
+
+- `d365ab7` — feat(mobile): viewport-locked gameplay — one screen, any phone, no scroll
+- `36f1039` — fix(mobile): no-scroll fit — 100svh, compact spacing, smaller mobile arena
+- `623fcc5` — fix(mobile): stable gameplay layout — no reflow between phases (AI page)
+- `15a14f0` — fix(mobile): no bottom white gap, no clipped cards, shorter arena, clear round
+- `cc41462` — fix(mobile): remove turn HISTORY from MatchHUD (grew + broke viewport layout)
+- `096bccb` — fix(mobile): unify PvP gameplay into one fixed skeleton (same as AI page)
+- `6c95a0b` — feat(pwa): installable home-screen app (manifest + SW + icons)
+- `bdce3dd` — tweak(ai): reveal/round auto-advance 5.1s/4.5s -> 3s (felt too long)

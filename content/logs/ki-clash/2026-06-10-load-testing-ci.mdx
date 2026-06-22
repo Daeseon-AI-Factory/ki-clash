@@ -1,0 +1,106 @@
+---
+title: "Load testing (k6) + CI pipeline (GitHub Actions)"
+date: "2026-06-10"
+project: ki-clash
+kind: tech-retro
+visibility: public
+language: en
+summary: "Added a k6 load/perf suite (smoke, ramping REST, and concurrent WebSocket capacity scripts) against the live JJAN backend, plus a GitHub Actions CI pipeline whose python/go/web jobs gate every push and PR to main — the test gate the Vercel auto-deploy flow was missing."
+tags: ["testing", "ci", "performance", "k6"]
+---
+
+Two pieces landed the same afternoon: a [k6](https://k6.io) load suite for the
+runtime hot paths, and a GitHub Actions pipeline that turns "did it build / do
+the tests pass" into a merge gate instead of a hope.
+
+## What
+
+Up to this point the functional suites (pytest, Go `go test`) proved
+correctness, but nothing exercised the stack under concurrency, and nothing ran
+automatically on a push — Vercel auto-deploy was CD-only, with no test gate in
+front of it. These two commits close both gaps.
+
+## Changes
+
+### k6 load/perf suite — `5837e07` `test(load): add k6 load/perf suite (REST + WebSocket)`
+
+A new `load/` directory (5 files, 318 insertions) of k6 scripts that complement
+the functional tests. All flows are factored into shared helpers so the three
+scenarios reuse the same real auth/room/AI sequences.
+
+- `load/lib.js` — shared helpers. `guestToken()` (POST `/api/v1/auth/guest`),
+  `spawnRoomGame()` (two guests → create room → join → pick characters → ready →
+  start, returning a real `game_id` + both tokens), and `playAIGame()` (create
+  vs-AI game → GET → one `charge` action). `BASE_URL` defaults to the live
+  backend and `WS_URL` is derived by swapping `http`→`ws`.
+- `load/smoke.js` — 1 VU, 2 iterations, whole-stack validation: the vs-AI REST
+  flow, the Room-PvP REST flow, then a single WebSocket connect to the Go game
+  server (`/api/v1/ws/game/{id}?token=...`) checking for the `101` upgrade.
+  Thresholds: `checks rate>0.95`, `http_req_duration p(95)<2000`.
+- `load/rest_load.js` — `ramping-vus` executor (20s ramp / 40s sustain / 15s
+  ramp-down) splitting traffic ~70% vs-AI / ~30% Room-PvP, with think-time
+  between iterations. Thresholds: `http_req_failed rate<0.02`,
+  `http_req_duration p(95)<1500` (incl. a `room_start`-tagged p95), `checks
+  rate>0.95`. Peak VUs default to 15, overridable via `-e PEAK=`.
+- `load/ws_load.js` — `per-vu-iterations` executor probing Go game-server socket
+  capacity: `setup()` pre-spawns one real game per VU, then each VU opens its
+  socket, pings every 5s, holds it (default 20s), and records `ws_connected` /
+  `ws_failed` counters and a `ws_first_msg_ms` trend. Thresholds:
+  `ws_connecting p(95)<3000`, `checks rate>0.95`. Concurrency defaults to 25,
+  overridable via `-e CONNS=`.
+- `load/README.md` — install/run table, the `BASE_URL` override, a results-reading
+  guide, and a safety note (below).
+
+### CI pipeline — `3362f9b` `ci: add GitHub Actions pipeline (test + build gate on push/PR)`
+
+A single `.github/workflows/ci.yml` (88 insertions) that runs on every push to
+`main` and every PR to `main`, with `concurrency` set to cancel in-progress runs
+on the same ref. As authored, three jobs:
+
+- `python-test` — spins up `postgres:16` and `redis:7` service containers (with
+  health-checks), installs `.[dev]`, runs `alembic upgrade head`, then `pytest
+  -q`. Integration tests auto-skip when no live stack is present, so this stays
+  unit-level on CI.
+- `go-test` — `go test ./...` in `go-server` on Go 1.25, no external deps.
+- `web-build` — `npx tsc --noEmit` then `npm run build` in `web`, to catch the
+  TS/build breakage that recurred during the PixiJS work.
+
+The commit message frames it plainly: a red X blocks the breakage from reaching
+`main`.
+
+## Why
+
+- **Concurrency is a different failure mode than correctness.** The PvP path is
+  stateful (Redis-backed) and runs over a separate Go WebSocket server; unit
+  tests can't tell you how many simultaneous sockets it holds or how REST latency
+  degrades under a ramp. `ws_load.js` and `rest_load.js` target exactly those
+  hot paths, and the thresholds are encoded in each script so k6 exits non-zero
+  when breached — they double as pass/fail gates, not just dashboards.
+- **A deploy pipeline without a test gate is a loaded gun.** Vercel was
+  auto-deploying on push with nothing verifying tests or the build first. The
+  CI workflow inserts that gate across all three runtimes (Python engine/services,
+  Go game server, Next.js web) so a breaking change shows a red X before it can
+  ship.
+
+## Notes
+
+- **Safety: the live backend is a single t3.micro** (1 GB, one uvicorn worker).
+  The load defaults are intentionally gentle for that reason, and the README
+  recommends pointing heavy runs at a local `docker compose` stack first. The
+  commit message records the smoke run passing live (100% checks, http p95
+  ~500 ms) — that's the only measured number here; the threshold values quoted
+  above are configured limits, not observed results.
+- **The load suite is not wired into CI.** By design — the scripts hit a
+  live/remote stack, so they're point-in-time perf checks run manually or on a
+  schedule. The README floats a nightly job running `smoke.js` against a
+  throwaway stack as a future regression gate.
+- The CI file has since grown additional jobs (mobile export, parity checks)
+  beyond what `3362f9b` introduced; this entry describes only the three jobs as
+  originally committed.
+- No prior `docs/engineering-log.md` entry or DR number covers this work — it's
+  net-new tooling, grounded only in the two commits above.
+
+## Commits
+
+- `5837e07` — test(load): add k6 load/perf suite (REST + WebSocket)
+- `3362f9b` — ci: add GitHub Actions pipeline (test + build gate on push/PR)

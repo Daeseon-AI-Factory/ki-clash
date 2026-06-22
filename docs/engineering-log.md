@@ -22,7 +22,7 @@
 
 ---
 
-# Part 0 — RESUME HERE (last updated 2026-06-07, mobile/effects session)
+# Part 0 — RESUME HERE (last updated 2026-06-10, load-testing + CI session)
 
 > Read this first when picking the project back up. Single
 > "where are we / what's next" snapshot. Parts 1-2 below are full history.
@@ -41,6 +41,7 @@ Phase 1-10 (backend, Go port, visuals, Room PvP)   ✅ DONE
 Phase 14 (AWS deploy via Terraform IaC)            ✅ DONE — LIVE
 PixiJS WebGL effects (DR-17/18)                    ✅ DONE — additive overlay
 Mobile responsive single-screen layout             ✅ DONE — AI + PvP
+CI (GitHub Actions) + k6 load suite (DR-19)        ✅ DONE — merge gate
 Capacitor (real App Store / Play Store app)        ⏳ NOT STARTED (next)
 ```
 
@@ -65,6 +66,31 @@ redis, caddy). SSH: `ssh -i ~/.ssh/jjan_aws ubuntu@$(cd infra/aws && terraform o
   content) so the layout never reflows/clips/scrolls; `100svh`; dark body
   (no white band); compact ActionCards; bold ROUND; in-game history removed.
 - **Version tags:** `v-dom-arena` / `v-pixi-arena` / `v-pixi-wide` (on GitHub).
+
+## What this session (2026-06-10) shipped
+
+Test-infrastructure pass — no product change, just the safety net the
+ship-fast flow had been running without. See **DR-19** for the reasoning.
+
+- **CI pipeline** (`3362f9b`, `.github/workflows/ci.yml`) — the merge gate the
+  manual + Vercel-auto-deploy flow lacked (Vercel was CD-only, no test gate).
+  As committed, three jobs on every push to `main` and every PR: `python-test`
+  (pytest on `postgres:16` + `redis:7` service containers, `alembic upgrade head`
+  first; integration tests auto-skip without a live stack), `go-test`
+  (`go test ./...` in `go-server`, Go 1.25, no external deps), `web-build`
+  (`tsc --noEmit` + `next build` — catches the TS/build breaks the PixiJS work
+  kept hitting). `concurrency` + `cancel-in-progress` kills stale runs.
+  *(The working tree has since grown three more jobs — mobile iOS-bundle export
+  + online-parity + launch-marketing link checks — not yet committed.)*
+- **k6 load/perf suite** (`5837e07`, `load/` — 5 files, 318 insertions):
+  `smoke.js` (1-VU whole-stack: vs-AI + Room-PvP + one WS connect),
+  `rest_load.js` (ramping REST, vs-AI 70% / Room-PvP 30%, latency + error
+  thresholds), `ws_load.js` (N concurrent Go game-server sockets =
+  connection-capacity probe), shared `lib.js` flow helpers. `BASE_URL` defaults
+  to live `api.jjan.daeseon.ai` with deliberately gentle load (single t3.micro);
+  thresholds `http_req_failed < 2%` and `http_req_duration p(95) < 1.5s` make k6
+  exit non-zero, so they double as gates. Smoke verified live: 100% checks,
+  http p95 ~500ms.
 
 ## Next steps (pick up here)
 
@@ -196,8 +222,8 @@ C. Smoke test:
 
 **Context:** Jason (5y SK AX backend, prepping for Toronto) initialized Ki Clash
 as **Product003** of his AI Product Factory. Game concept: real-time 1v1
-strategy based on the Korean schoolyard "기싸움" (Dragon Ball ki-battle) hand
-game. Best-of-3 rounds, 5 actions (Charge / Block / Attack / Energy Wave /
+strategy based on the Korean schoolyard "기싸움" (Korean ki-battle) hand
+game. Best-of-3 rounds, 5 actions (Charge / Block / Attack / Ki Burst /
 Teleport), simultaneous reveal, ki economy.
 
 **Original tech stack (per `docs/spec.md` + `CLAUDE.md` defaults):**
@@ -245,7 +271,7 @@ Deep alignment session on tech direction. **Outcomes saved to project memory:**
 3. **Visual direction: NOT pixel art.** Initial pixel-art system in
    `web/src/components/pixel-art/` rejected by Jason as "indie cheap." Target
    aesthetic: modern anime card game (Marvel Snap / Slay the Spire /
-   Reigns refs), with Dragon Ball-style effects rendered legally safe
+   Reigns refs), with high-impact arcade effects rendered legally safe
    (original characters, generic effect names, anime style is genre-neutral).
 
 4. **AI as visual director, not designer.** Jason will use Adobe Firefly /
@@ -594,11 +620,11 @@ fill the highest-value gaps before moving to logging/observability.
 - Forfeit (both directions)
 - 2-0 Bo3 termination
 - Match draw via 3-round 1-1-tie
-- Energy Wave pierces Block
-- Teleport dodges Energy Wave
+- Ki Burst pierces Block
+- Teleport dodges Ki Burst
 
 **Identified gaps:**
-1. Energy Wave clash (both 3 ki → both lose 3) — never exercised
+1. Ki Burst clash (both 3 ki → both lose 3) — never exercised
 2. 2-1 Bo3 finish (only 2-0 path tested; ~half of real matches go 3 rounds)
 3. `turn_history` accumulation in `RoundState`
 4. `round_results` accumulation in `GameState` + on the final `MatchResult`
@@ -1222,7 +1248,7 @@ DAU exceeds 500.
 
 **Decision:** Reject pixel art (already implemented). Target "modern
 anime card game" aesthetic (Marvel Snap / Slay the Spire / Reigns refs)
-with Dragon Ball-style effects, all original art, AI-augmented design.
+with high-impact arcade effects, all original art, AI-augmented design.
 
 **Options considered:**
 - A) Keep pixel art (existing code in `web/src/components/pixel-art/`)
@@ -1251,7 +1277,7 @@ with Dragon Ball-style effects, all original art, AI-augmented design.
 2. **Outsourced art breaks the Factory.** Per-product $300-800 art
    spend × 10 products = $3-8k. Compared to 80 hours of one-time AI
    workflow learning, the time investment wins on Factory ROI.
-3. **Geometric is too far from the Dragon Ball-energy target.** Jason
+3. **Geometric is too far from the ki-battle target.** Jason
    wants flashy auras, beams, glow — that's anime, not minimalist.
 4. **Modern anime + AI-augmented design hits all targets:** high visual
    ceiling, low marginal cost per asset, skill compounds across
@@ -2375,6 +2401,67 @@ replacement destroys. Keep enhancements behind a thin, deletable layer so a
 > blast radius."
 
 **Commit:** `revert(arena): restore original dynamic KiAuraArena on both pages`
+
+---
+
+## DR-19: CI as a merge gate — and keep load tests OFF the per-PR path
+
+**Decision:** Add a GitHub Actions pipeline that runs hermetic unit + build
+gates on every push/PR to `main`; keep the k6 load/perf suite as a manual /
+scheduled tool that hits a live stack, **not** a per-PR gate.
+
+**Context:** Until now the flow was "commit → push → Vercel auto-deploys." That
+is CD with **no test gate** — the only thing standing between a broken commit and
+production was manual testing. During the PixiJS work (DR-17/18) the TypeScript
+build broke repeatedly and was only caught by hand or in a preview. Separately,
+the new k6 suite (`5837e07`) can drive real load, which raised the question of
+where load tests belong in the pipeline.
+
+**Options considered:**
+- **A) No CI** — keep relying on Vercel CD + manual testing. (status quo)
+- **B) CI with unit + build gates per push/PR; load tests manual/scheduled.** ← chosen
+- **C) Full CI including k6 load/perf on every PR.**
+
+**Trade-off table:**
+
+| Dimension | A) No CI | B) Unit+build gate, load off-path | C) Load tests per PR |
+|---|---|---|---|
+| Catches regressions before merge | ❌ prod/manual only | ✅ fast, deterministic | ✅ but slow |
+| Pipeline determinism / flakiness | n/a | ✅ hermetic (containers) | ❌ load is noisy |
+| Protects live infra | n/a | ✅ never touched by gate | ❌ hammers single t3.micro |
+| PR feedback speed | n/a | ✅ minutes | ❌ load runs are long |
+| Perf signal captured | ❌ | ⚠️ on-demand only | ✅ continuous |
+
+**Reasoning chain:** A leaves the exact gap that bit us — Vercel deploys
+whatever is on `main` with nothing verifying it builds, so a red build reaches
+users. B closes that with three **hermetic** jobs (Postgres/Redis as service
+containers, `tsc --noEmit` + `next build`, `go test ./...`) — cheap, fast, and
+deterministic, the only kind of check that belongs on a blocking path. C is the
+trap: the k6 suite defaults at a **live, single-instance** backend
+(`api.jjan.daeseon.ai`, one t3.micro), so gating every PR on it would both
+**hammer production** and make the pipeline **flaky** (load latency is
+non-deterministic by nature). Load tests are point-in-time *perf* checks, not
+*correctness* gates. They still encode non-zero-exit thresholds (`http_req_failed
+< 2%`, `p95 < 1.5s`), so they *can* later be wired into a nightly job against a
+throwaway stack — but never onto the per-PR path.
+
+**Meta-pattern:** *Match the test to the gate.* Deterministic, cheap, hermetic
+checks (unit, type, build) belong on the blocking per-PR path. Expensive,
+environment-coupled, non-deterministic checks (load, perf, e2e against live
+infra) belong on a manual/scheduled path against disposable infrastructure —
+letting them gate a merge buys flakiness and collateral load, not safety.
+
+**Interview framing:**
+> "I added CI as a merge gate but deliberately kept the k6 load tests *off* the
+> per-PR path. The unit and build jobs are hermetic — Postgres and Redis as
+> service containers, a typecheck and a production build — so they're fast and
+> deterministic, which is the bar for anything that blocks a merge. The load
+> suite hits a live single-instance backend, so gating PRs on it would hammer
+> prod and make the pipeline flaky; load is a point-in-time perf check, not a
+> correctness gate. The principle is matching each test's cost and determinism
+> to where in the pipeline it runs."
+
+**Commits:** `5837e07` (k6 load/perf suite), `3362f9b` (GitHub Actions CI).
 
 ---
 

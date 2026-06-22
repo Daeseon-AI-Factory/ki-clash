@@ -13,7 +13,7 @@ tags: ["testing", "observability", "sentry", "prometheus", "logging"]
 
 Phase 2 closed test gaps and stood up the observability layer. Five areas:
 
-- **2.2 game-engine test gap-filling** — added 12 new tests in 7 named classes covering Energy Wave clash (both 3 ki -> both lose 3), the 2-1 Bo3 finish path (both P1 and P2 directions), `turn_history` accumulation, `round_results` accumulation, `p1/p2_ki_before` audit fields, `DEFAULT_TIMEOUT_ACTION` (CHARGE + free), and `game_id` uniqueness across 20 consecutive matches. 64 passed in 0.24s.
+- **2.2 game-engine test gap-filling** — added 12 new tests in 7 named classes covering Ki Burst clash (both 3 ki -> both lose 3), the 2-1 Bo3 finish path (both P1 and P2 directions), `turn_history` accumulation, `round_results` accumulation, `p1/p2_ki_before` audit fields, `DEFAULT_TIMEOUT_ACTION` (CHARGE + free), and `game_id` uniqueness across 20 consecutive matches. 64 passed in 0.24s.
 - **JWT detour** — client-side auto-recovery from expired tokens (see below).
 - **2.3 matchmaking unit tests** — `MatchmakingService` had zero tests; added 17 tests in 4 classes (join/leave queue, FIFO `match_players` across 2/3/4 players, `check_timeouts` stale removal, background loop start/stop) against real Redis with a per-test queue flush and a `FakeWSManager` substitute. 17 passed in 1.45s.
 - **2.4 structured JSON logging** — `app/core/logging.py` (CORE_CANDIDATE) with a stdlib-only `JsonFormatter` emitting single-line JSON (ISO 8601 UTC timestamp, level, logger, message, module, function, line, exception traceback, `extra=` kwargs) plus an idempotent `configure_logging(json_mode, level)` that picks JSON for prod and human format for dev; wired into `app/main.py` at import time so uvicorn startup logs are captured. 8 passed in 0.06s.
@@ -52,7 +52,7 @@ Fix (`web/src/lib/api.ts`): `apiFetch` now catches 401, clears the stale token v
 
 ## Commits
 
-- `1907bcc` — test: fill game engine test gaps (energy wave clash, 2-1 Bo3, audit fields)
+- `1907bcc` — test: fill game engine test gaps (ki burst clash, 2-1 Bo3, audit fields)
 - `b13e837` — fix(web): auto-recover from expired JWT tokens
 - `9ae043e` — test: matchmaking service unit tests (Phase 2.3)
 - `e99acab` — feat(logging): structured JSON logging configuration (Phase 2.4)

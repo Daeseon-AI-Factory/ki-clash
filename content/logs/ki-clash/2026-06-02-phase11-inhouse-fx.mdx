@@ -1,0 +1,57 @@
+---
+title: "Phase 11 — in-house FX overhaul (Lottie-quality, no external assets)"
+date: "2026-06-02"
+project: ki-clash
+kind: ux-retro
+visibility: public
+language: en
+summary: "Phase 11 rebuilds all six arena effects in-house with framer-motion + canvas-confetti + multi-layer SVG (zero external dependency), fixes white-box fighter backgrounds with local AI bg removal + pose-aware sprite transforms, and splits the Attack (POW punch) and Energy Wave (energy-beam) moves into visually disjoint FX."
+tags: ["visual", "fx", "web"]
+---
+
+A three-commit polish pass on the web arena: build effects in-house instead of shipping Lottie clips, clean up the fighter sprites, and make the two attack moves read as different moves.
+
+## What
+
+Phase 11 lands the in-house FX overhaul (commit `1c10eb5`, subject `feat(web): in-house FX overhaul — Lottie-quality without external assets (Phase 11)`), then two follow-up fixes Jason flagged from looking at it live: transparent sprite backgrounds + pose-aware transforms (`eecbd2a`), and a redesign that visually differentiates the Attack and Energy Wave moves (`3f12641`). All three landed 2026-06-02.
+
+## Changes
+
+In-house FX overhaul — `1c10eb5`:
+
+- All per-action effects rebuilt inline in `web/src/components/arena/KiAuraArena.tsx` (+458 / −79). Charge, Block, Attack, Teleport, and the energy-charge windup each gained multi-layer composition (e.g. Charge went from 6 fixed dots to a ground light-pillar + 3 staggered pulse rings + 5 rising particle columns + 8 orbiting motes).
+- Cross-screen FX: beam strikes now add an impact explosion at the landing point, and `canvas-confetti` fires a spark burst at the receiving fighter's location on attack and energy-wave impact.
+- Three vetted Lottie packs were stashed at `web/public/lottie/` (`orbit-core.json`, `confetti-burst.json`, `circle-ripple.json`) as scaffolding for a future dedicated EffectsLayer — kept, not wired in. The commit notes bundle impact is ~0 (everything inline; `canvas-confetti` already shipped).
+
+Transparent backgrounds + pose-aware transforms — `eecbd2a`:
+
+- Re-ran all 6 `idle.png` files through `rembg` (local U2Net AI background removal) so they carry an alpha channel instead of a white square. The PNGs grew accordingly (e.g. `web/public/fighters/bora/idle.png` 62571 → 473100 bytes, `haneul/idle.png` 50511 → 369697 bytes).
+- Added pose-aware branching in `web/src/components/arena/FighterSprite.tsx` (+32): the CSS "puppet" transforms (the big KO/hit rotates) only apply on the idle/SVG fallback path. When a pose-specific PNG is loaded (`attempt === "pose"`), only subtle scale/translate is applied so a pose that's already baked into the art isn't double-posed.
+
+Attack vs Energy Wave differentiation — `3f12641`:
+
+- Reworked `web/src/components/arena/KiAuraArena.tsx` again (+317 / −168) to give the two moves disjoint visual languages.
+- Attack (`AttackFX`): pulled the gold confetti embers (they were borrowing the Energy Wave palette), added a sharp white flash + crimson shock-burst, a POW-style angular starburst polygon, crossing slash lines, dark debris chunks, and kinetic speed lines — tuned to read as a hard, fast melee hit.
+- Energy Wave: a denser charge windup (`EnergyChargeFX`) plus a new `KamehamehaBeam` component — a wide multi-layer plasma beam (halo + main + white core) with flickering arcs, a screen-wide vignette flash, a wider impact explosion, and lingering smoke wisps. Yellow/orange palette, no red.
+
+## Why
+
+The trigger was a product call: rather than ship a couple of mismatched, separately-licensed Lottie clips, build all six effects in-house at comparable quality with libraries already in the bundle. That keeps zero external-asset dependency and zero licensing risk while still delivering the "juice."
+
+The two follow-up fixes are both regressions that only showed up once the effects were live. The white sprite box and the double-posed KO frame are exactly the kind of thing that's invisible in code review and obvious on screen. And the Attack/Energy Wave pair were conceptually opposite moves (melee punch vs ranged ki blast) that happened to look the same — both crossing the screen with warm bursts — so they needed disjoint palettes and shapes to read as distinct moves even with the audio off.
+
+## Decisions
+
+- **DR-2 — anime aesthetic over pixel art** (`docs/engineering-log.md`, "DR-2: Visual aesthetic — pixel art vs modern card game"): this pass continues to execute DR-2's high-impact arcade-anime direction, which is the reason for leaning into flashy multi-layer effects in the first place. The in-house-vs-Lottie call here is a tactical extension of that: same visual target, no external-asset coupling.
+
+## Notes
+
+- The Lottie packs at `web/public/lottie/` are intentionally dead weight for now — staged for a later `EffectsLayer` component, not loaded by the current arena.
+- `rembg` runs locally (`pip install rembg`); the ~50KB JPEG → ~400KB PNG-with-alpha size increase per fighter was accepted as the cost of the cleaner composite on the dark arena.
+- This FX work is the inline framer-motion / canvas-confetti / SVG path in `KiAuraArena.tsx`; it is distinct from the later Pixi/WebGL particle arena described elsewhere in the engineering log.
+
+## Commits
+
+- `1c10eb5` — feat(web): in-house FX overhaul — Lottie-quality without external assets (Phase 11)
+- `eecbd2a` — fix(art): transparent backgrounds on 6 fighter PNGs + pose-aware sprite transforms
+- `3f12641` — feat(web): differentiate Attack (POW punch) vs Energy Wave (Kamehameha) FX

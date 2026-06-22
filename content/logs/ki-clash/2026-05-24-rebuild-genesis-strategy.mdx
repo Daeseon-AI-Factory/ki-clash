@@ -17,10 +17,10 @@ Note on "genesis": the log titles this entry "Project genesis," but git history 
 
 ## Spec re-grounded
 
-Ki Clash is initialized as **Product003** of the AI Product Factory — a real-time 1v1 strategy game based on the Korean schoolyard "기싸움" (Dragon Ball ki-battle) hand game:
+Ki Clash is initialized as **Product003** of the AI Product Factory — a real-time 1v1 strategy game based on the Korean schoolyard "기싸움" (Korean ki-battle) hand game:
 
 - Best-of-3 rounds
-- 5 actions: Charge / Block / Attack / Energy Wave / Teleport
+- 5 actions: Charge / Block / Attack / Ki Burst / Teleport
 - Simultaneous reveal
 - Ki economy
 
@@ -43,7 +43,7 @@ Original tech stack re-grounded per `docs/spec.md` + CLAUDE.md defaults (log lin
 Chosen: Option D, a hybrid 2-tier split — Python/FastAPI platform server now (auth, payment, profile, history), Go game server later once DAU exceeds ~500. Why: Spring is a known game-server anti-pattern and breaks Factory ROI (LangChain4j lags Python LangChain by 6-12 months); Python is good-enough CRUD for the platform tier; Go's goroutine model (~10KB/conn, <1ms GC, 50-100k conns) is only needed at scale, so the rewrite is deferred under "Build for 100, optimize later" (log lines 200-208).
 
 **DR-2 — Visual aesthetic (pixel art vs modern card game).**
-Chosen: Option B, a modern anime card-game aesthetic with AI-generated assets (Firefly + Figma), all original art, Dragon Ball-style effects. Why: Ki Clash monetizes via ads, so first-5-second visual impact drives the funnel; the initial pixel-art system in `web/src/components/pixel-art/` reads "indie cheap" on mobile, outsourced art ($300-800/character) breaks the Factory, and geometric is too far from the Dragon Ball-energy target — anime + AI gives a high ceiling, low marginal cost, and compounding skill (log lines 210-214).
+Chosen: Option B, a modern anime card-game aesthetic with AI-generated assets (Firefly + Figma), all original art, high-impact arcade effects. Why: Ki Clash monetizes via ads, so first-5-second visual impact drives the funnel; the initial pixel-art system in `web/src/components/pixel-art/` reads "indie cheap" on mobile, outsourced art ($300-800/character) breaks the Factory, and geometric is too far from the ki-battle target — anime + AI gives a high ceiling, low marginal cost, and compounding skill (log lines 210-214).
 
 ## Supporting calls
 

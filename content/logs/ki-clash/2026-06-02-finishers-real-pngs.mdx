@@ -1,0 +1,62 @@
+---
+title: "Character-specific ultimate finishers + real fighter PNGs on select"
+date: "2026-06-02"
+project: ki-clash
+kind: ux-retro
+visibility: public
+language: en
+summary: "Replaced the one generic match-end beam with six per-character signature ultimates, swapped the emoji placeholders on character-select for the real fighter PNGs under global-friendly names, and closed the 6×6 fighter sprite matrix with seokjin + yuri's pose sets."
+tags: ["visual", "finale", "art"]
+---
+
+The finale used to fire the same generic energy-beam regardless of who won, and the character-select cards still showed emoji symbols instead of the sprites we'd already shipped. This session fixed both, and finished the last 10 pose PNGs.
+
+## What
+
+Three commits, all on 2026-06-02:
+
+- `c05b83e` — `feat(web): real PNGs on character select + global-friendly names + apocalyptic finale`
+- `2eff315` — `feat(finale): 6 character-specific ultimate finishers + pose-PNG batch`
+- `2f71b59` — `art(fighters): final 10 pose PNGs — seokjin + yuri full pose sets`
+
+## Changes
+
+**Real PNGs on character select (`c05b83e`).** `web/src/components/CharacterSelect.tsx` was rendering the symbol emoji as the avatar because the old card pointed at `/characters/<id>/portrait.png`, which never existed. The card now loads `/fighters/<id>/idle.png` — the sprites already in the repo — with an `onError` handler that falls back to the symbol emoji, plus a per-character aura halo behind the sprite and a hover lift.
+
+**Global-friendly names (`c05b83e`).** `web/src/lib/characters.ts` got an international `name` field with the Korean name kept as a `koreanName` subtitle. The mapping (id stays untouched — it's the stable key for URLs / Redis / asset paths):
+
+- `haneul` → Kael (Sky)
+- `bora` → Selene (Moon Oracle)
+- `taeyang` → Blaze (Sun)
+- `danbi` → Yuki (Sweet Rain)
+- `seokjin` → Atlas (Stone Master)
+- `yuri` → Rosa (Crystal)
+
+**Six character-specific finishers (`2eff315`).** New `web/src/components/finale/CharacterFinishers.tsx` (721 LOC added) introduces a dispatcher that maps character id → a signature multi-phase finisher, swapped into `MatchFinale`'s `FinalBlowStage` in place of the generic beam. Each finisher runs through the same phase gates (`charge → fire → hit → fly → land`):
+
+- Kael — Wind Vortex (spinning conic-gradient tornadoes + lightning strikes)
+- Selene — Lunar Eclipse (rising moon, crescent energy blades, reality cracks, void portal)
+- Blaze — Solar Flare Burst (rising sun, fan of beams, heat-shimmer distortion)
+- Yuki — ice-crystal freeze → giant katana slash → shatter into shards
+- Atlas — Meteor Bombardment (meteors, magma fissures, boulder slam)
+- Rosa — Pink Crystal Storm (crystal spikes, crossing lasers, heart-shaped explosion, glitter)
+
+The shared skeleton — winner sprite, loser fly, chromatic split, screen shake, the 3-wave confetti barrage, vignette — is unchanged; only the FX identity layer is per-character (`web/src/components/finale/MatchFinale.tsx`).
+
+**Apocalyptic generic finisher (`c05b83e`).** Before the per-character split landed, the shared `FinalBlowStage` itself was rebuilt from a tame shockwave into a longer (1.9s → 2.4s), full-screen-flash, multi-layer plasma column finisher with a crater and debris swarm (`web/src/components/finale/MatchFinale.tsx`, ~399 lines changed).
+
+**Pose-PNG sets completed (`2eff315`, `2f71b59`).** `2eff315` carried the `bora` / `danbi` / `haneul` pose batches plus a regenerated `taeyang` set. `2f71b59` added the final 10 PNGs — `seokjin` and `yuri`, five poses each (`windup` / `impact` / `hit` / `ko` / `victory`) — closing every fighter's full pose set. No code change was needed; `FighterSprite` already picks the pose-specific PNG through its existing fallback chain.
+
+## Why
+
+The character-select swap and the per-character finishers are both driven by direct user feedback that the finale and roster felt generic. The international-name layer is a global-launch readiness move — the Korean names were kept as heritage subtitles rather than dropped, and the stable `id` was deliberately left alone so nothing in URLs, Redis keys, or asset paths breaks.
+
+## Decisions
+
+- **DR-2 — Visual aesthetic (pixel art vs modern card game):** this work continues DR-2's high-impact arcade anime direction. The per-character signature ultimates and the real-sprite roster are the same "first-5-seconds visual impact" bet realized one layer deeper — distinct, flashy FX per fighter instead of one reused beam.
+
+## Notes
+
+- `2f71b59` reports `10 files changed, 0 insertions(+), 0 deletions(-)` — expected, since the changed files are all binary PNGs (git counts no text lines).
+- `taeyang/idle.png` shows a size change in `2eff315` (`418417 -> 414245 bytes`) because the idle was regenerated with a safe non-trademarked prompt alongside the new pose PNGs.
+- The franchise-flavored hints in the source comments (character "vibes") are internal art notes only; the shipped names and FX are original.
