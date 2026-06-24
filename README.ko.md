@@ -1,373 +1,293 @@
 <div align="center">
 
-# Ki Clash · 기싸움
+# JJAN! · 짠 · 기싸움
 
-**실시간 1v1 기싸움 게임 — 상대의 수를 읽고, 기를 모으고, 결정타를 친다**
+### 실시간 1:1 리빌 듀얼 — 상대를 읽고, 기를 모으고, 먼저 친다.
 
-<sub>FastAPI + **두 개 병렬 런타임** (Python + Go) 가 같은 Redis 상태 공유 · Next.js 16 PWA · Tekken식 4-character 코드 룸 PvP · 6 캐릭터 시그니처 필살기 · AI 스프라이트 파이프라인</sub>
+<sub>FastAPI + **두 개의 병렬 런타임(Python + Go)** 이 하나의 Redis 게임 상태를 공유 · Next.js 16 PWA · 같은 백엔드를 쓰는 풀 React Native(Expo) 앱 · 4글자 룸 코드 기반 PvP · 6 파이터 시그니처 궁극기 · AI 스프라이트 파이프라인 · GitHub Actions CI · k6 부하 스위트</sub>
 
-[**🌐 라이브 프런트엔드 → kiclash.daeseon.ai**](https://kiclash.daeseon.ai) · [GitHub](https://github.com/Daeseon-AI-Factory/ki-clash)
+<br>
 
-[English](./README.md) · **한국어**
+[![▶ JJAN! 플레이 — 로그인 불필요](https://img.shields.io/badge/▶_JJAN!_바로_플레이-로그인_불필요-22c55e?style=for-the-badge)](https://jjan.daeseon.ai)
+&nbsp;
+[![CI](https://github.com/Daeseon-AI-Factory/ki-clash/actions/workflows/ci.yml/badge.svg)](https://github.com/Daeseon-AI-Factory/ki-clash/actions/workflows/ci.yml)
+
+[**🌐 jjan.daeseon.ai**](https://jjan.daeseon.ai) · [GitHub repo](https://github.com/Daeseon-AI-Factory/ki-clash) · [English](./README.md) · **한국어**
+
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-async-009688?logo=fastapi&logoColor=white)
+![Go](https://img.shields.io/badge/Go-1.23-00ADD8?logo=go&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white)
+![React](https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white)
+![Expo](https://img.shields.io/badge/Expo-React_Native-000020?logo=expo&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/Postgres-asyncpg-4169E1?logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-pub%2Fsub-DC382D?logo=redis&logoColor=white)
+![Caddy](https://img.shields.io/badge/Caddy-Let's%20Encrypt-1F88C0?logo=caddy&logoColor=white)
+![AWS](https://img.shields.io/badge/AWS-EC2-FF9900?logo=amazonaws&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-151_py_%2B_13_go-brightgreen)
 
 </div>
 
----
+![JJAN! 랜딩](docs/screenshots/01-landing-hero.png)
 
-> **요약.** 한국 학교에서 하는 "기싸움"을 실시간 1v1 PvP로 재해석한 게임. **백엔드가 두 런타임으로 같은 Redis 게임 상태를 공유함** — Python (auth / matchmaking / 룸 / REST + WebSocket) 이 현재 권한자고, Go WebSocket 게이트웨이 (게임 루프 풀 포팅 + E2E 검증 완료) 는 Caddy 라우트 한 줄로 hot path 인계 받을 준비 완료. **Tekken식 룸 PvP**: 호스트가 룸 생성 → 4-character 코드 → 친구 조인 → 양쪽 캐릭터 선택 → ready → 게임 시작. 매치 끝 시네마틱은 **6명 캐릭터별 시그니처 필살기**로 분기 (윈드 보텍스 / 루나 슬래시 / 솔라 플레어 / 아이스 셰터 / 메테오 / 핑크 크리스털 폭풍). 6명 캐릭터 스프라이트는 모두 진짜 PNG — **Pollinations/flux → rembg 투명 BG → image-first fallback chain** 파이프라인으로 생성 (총 36장: 6 캐릭 × 6 포즈).
-
-## 목차
-
-- [Ki Clash 가 뭔가](#ki-clash-가-뭔가)
-- [왜 이 프로젝트인가](#왜-이-프로젝트인가)
-- [제품 워크스루](#제품-워크스루)
-- [기술 스택](#기술-스택)
-- [아키텍처](#아키텍처)
-- [멀티플레이어 정확성](#멀티플레이어-정확성)
-- [게임 엔진 & API](#게임-엔진--api)
-- [로컬 실행](#로컬-실행)
-- [배포](#배포)
-- [엔지니어링 로그](#엔지니어링-로그)
-- [정직한 한계](#정직한-한계)
-- [프로젝트 구조](#프로젝트-구조)
+> **TL;DR.** 한국 학교 운동장의 *기싸움* 을 모티프로 한 실시간 1:1 PvP 게임. 매 턴 두 플레이어가 **5가지 액션**(차지 / 블록 / 어택 / 기 버스트 / 텔레포트) 중 하나를 동시에 비공개로 고르면, 두 수가 같은 순간에 공개되고 결과 행렬이 누가 적중했는지 결정한다. **3판 2선승제.** 진짜 핵심은 게임이 아니라 **시스템 엔지니어링**이다 — 두 백엔드 런타임(Python + Go)이 *같은* Redis 게임 상태를 공유해서 어느 쪽이든 실시간 WebSocket을 서빙할 수 있고, 분산 상태에서 터지는 PvP 동시성 버그 4개를 실제로 찾아 고치고 회귀 테스트로 박았다. Next.js PWA **와** 풀 React Native 앱이 하나의 백엔드 계약 위에서 돌고, 6-job CI 게이트와 k6 부하 스위트로 검증한다. 혼자 ~4.3개월 / **137 커밋**, 모든 트레이드오프를 2,500줄 결정 로그로 증명. *(레포 코드네임은 `ki-clash`, Redis 네임스페이스는 `ki_clash:*` 유지 — 라이브 제품 브랜드는 **JJAN!**.)*
 
 ---
 
-## Ki Clash 가 뭔가
+## 화면
 
-*Ki Clash (기싸움)* 은 한국에서 자란 사람이면 다 아는 그 손바닥 게임의 아케이드 버전이다 — 양쪽이 동시에 기 **모으기**, **막기**, **때리기**, **에네르기파**, **순간이동** 중 하나 선택. 동시에 공개되고 outcome matrix 가 누가 맞았는지 / 누가 기를 모았는지 / 누가 빗나갔는지 결정. 먼저 **3판 중 2판 승리** 한 쪽이 매치 승.
+<table>
+<tr>
+<td width="33%"><img src="docs/screenshots/02-play-menu.png" alt="플레이 메뉴"></td>
+<td width="33%"><img src="docs/screenshots/03-fighter-select.png" alt="파이터 선택"></td>
+<td width="33%"><img src="docs/screenshots/04-battle-reveal.png" alt="배틀 — 리빌 타이머"></td>
+</tr>
+<tr>
+<td align="center"><sub><b>플레이 메뉴</b> — AI 3티어(랜덤 / 패턴 읽기 / 게임이론) + PvP · 튜토리얼 · 랭크.</sub></td>
+<td align="center"><sub><b>파이터 선택</b> — 6 파이터(Kael · Selene · Blaze · Yuki · Atlas · Rosa).</sub></td>
+<td align="center"><sub><b>배틀</b> — 5초 리빌 타이머, 줄어들기 전에 선택.</sub></td>
+</tr>
+<tr>
+<td width="33%"><img src="docs/screenshots/05-battle-ki-economy.png" alt="기 이코노미"></td>
+<td width="33%"><img src="docs/screenshots/07-round-win.png" alt="라운드 승리"></td>
+<td width="33%"><img src="docs/screenshots/09-match-defeat.png" alt="매치 종료"></td>
+</tr>
+<tr>
+<td align="center"><sub><b>기 이코노미</b> — 어택 / 기 버스트 / 텔레포트는 모은 기를 소모, 차지로 충전.</sub></td>
+<td align="center"><sub><b>라운드 종료</b> — 3판 2선승, 자동 진행.</sub></td>
+<td align="center"><sub><b>매치 종료</b> — 캐릭터별 피날레 → VICTORY / DEFEAT → 스탯 + Play Again.</sub></td>
+</tr>
+</table>
 
-플레이 방식 2가지:
+<details>
+<summary><b>더 보기</b> (배틀 액션바 · 승리 연출)</summary>
 
-1. **Quick Match** — 로비에서 자동 매칭, 다음 들어온 사람과 페어링.
-2. **Create / Join Room** — 호스트 4-character 코드 받아서 (Slack / iMessage / 구두로) 공유, 친구 조인, 양쪽 캐릭터 선택, ready, 게임 시작. "인터뷰어가 30초만에 같이 플레이" 경로.
-
-6명 캐릭터, 매치 마지막 결정타에 캐릭터별 시그니처 필살기 발동.
-
----
-
-## 왜 이 프로젝트인가
-
-> *바쁜 리뷰어용 — 이 repo 가 실제로 보여주는 엔지니어링.*
-
-- **🔀 병렬 서버 런타임 2개, 공유 진실 1개.** Python 과 Go 가 같은 Redis JSON blob (`ki_clash:game:{id}`) 을 read/write. 어느 쪽이든 WebSocket 연결 서빙 가능; 표준 패턴 (load → `WATCH`/`MULTI`/`EXEC` 클로저 내 mutate → per-player Redis 채널 publish) 이 런타임 간 byte-for-byte 포팅. **E2E 검증됨**: Python REST 엔드포인트로 룸 생성, 양쪽 플레이어가 Go WebSocket 으로 접속, 양쪽 `charge` 제출, 양쪽 정확히 personalize 된 `turn_result` envelope + 올바른 ki accounting 수신 (`go-server/test_e2e.py` 통과).
-- **🛡️ 분산 상태 강화 + 버그 문서화.** in-process 시뮬레이터가 발견한 PvP-concurrency 버그 4개 수정 (첫 접속에 spurious `opponent_reconnected`, `start()` 가 두 곳에서 호출되어 중복 `waiting_for_action`, message ordering, `action_confirmed` 의 `turn_number` 누락). 4개 다 [`docs/troubleshooting.md`](./docs/troubleshooting.md) 에 symptom / cause / commit 해시 와 함께 기록, Python 통합 테스트 (`tests/integration/test_pvp_flow.py::TestPhase3Regressions`) 가 재발 방지.
-- **🧠 15개 작성된 디자인 결정.** 엔지니어링 로그의 `## Engineering Decision Reference` 가 DR-1 ~ DR-15 — 각 100-300 줄 entry: 백엔드 언어 (Python vs Spring vs Go), 시각 미학, 자산 파이프라인 모양, JWT 복구 전략, `xfail` 정책, 테스트에 real Redis vs fakeredis, stateless workers + Redis-as-truth, per-player pub/sub topology, turn submission 동시성 제어 등.
-- **🎨 저작권 + 투명도 리뷰 통과한 AI 스프라이트 파이프라인.** 36개 fighter PNG (6 캐릭 × 6 포즈: idle / windup / impact / hit / ko / victory), 다 캐릭터별 prompt 로 **Pollinations/flux** 생성 → 흰 배경 제거를 위해 **rembg (U2Net)** 으로 재처리. 컴포넌트가 포즈별 PNG 선택; 포즈-specific PNG 가 로드되면 CSS "puppet" rotation transform 이 미세한 scale-only 로 줄어들어서 `ko.png` (이미 누워있음) 가 이중 회전 안 됨. 특정 라이선스 캐릭터에 너무 가깝게 나온 스프라이트 1회 재생성 통과.
-- **🎬 6개 캐릭터별 시그니처 필살기.** 공유 카메하메하 빔 하나 아니고, 각 fighter 가 자기 multi-phase finisher 받음 (번개 동반 윈드 보텍스, void 포털 루나 이클립스 슬래시, multi-beam solar flare, frozen-block + shard explosion ice shatter, magma cracks 동반 meteor bombardment, 하트 폭발 pink crystal storm). 각 finisher 는 dispatched motion-design 컴포넌트, FinalBlowStage 의 charge → fire → hit → fly → land 페이즈 머신 후킹.
-- **🧱 ~3.5개월 / 93 commits 빌드, 로그가 증명.** 공개 추론 트레일 (`docs/engineering-log.md`, 2,136 줄; `docs/troubleshooting.md` 문제 인덱스) — 모든 non-trivial 선택에 대체안 / 받아들인 트레이드오프 / 이후 재사용된 패턴 명시.
-
----
-
-## 제품 워크스루
-
-| 흐름 | 동작 |
+| ![액션바](docs/screenshots/06-battle-action.png) | ![승리 연출](docs/screenshots/08-victory-fx.png) |
 |---|---|
-| **로비** | 3 카드: **Quick Match** · **Create Room** · **Join Room** (inline 4-character 코드 입력). |
-| **Quick Match** | 글로벌 Redis matchmaking 큐 조인. FIFO 페어링 — 다음 조인하는 사람과 매칭. |
-| **Create Room** | `POST /api/v1/rooms` 가 4-character 코드 발행 (32자 알파벳, 모호한 글자 제외 — `1`/`I`/`L`/`0`/`O`). 호스트가 코드 + copy 버튼 보임. |
-| **Join Room** | 게스트가 코드 입력, `POST /api/v1/rooms/{code}/join` 으로 페어링. 양쪽이 서로 보임. |
-| **선택 + ready** | 양쪽 6명 중 캐릭 선택 (`PUT /rooms/{code}/character`), ready 토글 (`PUT /rooms/{code}/ready`). 양쪽 ready 되면 룸 자동 게임 생성 (`POST /rooms/{code}/start`, idempotent — 어느 client 든 호출 가능). |
-| **게임플레이** | 매 턴: 줄어드는 바 위 5초 카운트다운, 5개 액션 중 선택 (Charge / Block / Attack / Energy Wave / Teleport). 타임아웃 시 `charge` 자동 제출. 양쪽 액션 들어오면 서버 resolve, personalized turn results 브로드캐스트. |
-| **라운드 종료** | 라운드 승자 표시, 4.5초 후 자동 진행. |
-| **매치 종료** | 캐릭터별 finale: charge → fire → hit (RGB chromatic split, 3-wave confetti, max screen-shake) → fly (loser 따라 debris 무리) → land (impact crater) → vignette → "VICTORY / DEFEAT / DRAW" 텍스트 슬램 → stats 패널 슬라이드 업 + **Play Again**. |
+| **액션바** — 카운트다운 아래에서 선택, 타임아웃 시 자동 `charge`. | **승리 연출** — 3단 컨페티, 크로마틱 분리, 스크린 셰이크. |
 
-싱글플레이 흐름은 같은 게임 엔진을 deterministic AI (`app/core/ai_opponent/`) 상대로 — 3 난이도 (easy: 랜덤 + charge 편향 · medium: 최근 너 액션 패턴 매칭 · hard: 게임 이론 mixed strategy).
+</details>
+
+---
+
+## 이 프로젝트가 보여주는 것
+
+> *바쁜 리뷰어용 — 이 레포가 실제로 증명하는 엔지니어링.*
+
+- **🔀 두 개의 병렬 서버 런타임, 하나의 진실.** Python과 Go가 게임 상태를 같은 Redis JSON 블롭(`ki_clash:game:{id}`)에 읽고 쓴다. 어느 쪽이든 특정 WebSocket 연결을 서빙 가능 — load → `WATCH`/`MULTI`/`EXEC` 클로저 안에서 mutate → per-player Redis 채널로 publish 라는 정석 패턴을 두 런타임에 그대로 포팅했다. **E2E 검증됨:** Python REST API로 룸을 만들고, 두 플레이어가 Go WebSocket으로 접속, 둘 다 `charge` 제출, 둘 다 올바르게 개인화된 `turn_result` 봉투와 정확한 기 계산을 수신(`go-server/test_e2e.py`, 통과).
+- **🛡️ 분산 상태 하드닝 — 버그를 문서로 남김.** 인프로세스 시뮬레이터로 찾아 고친 실제 PvP 동시성 버그 4개(첫 접속 시 잘못 뜨는 `opponent_reconnected` · `start()`가 두 곳에서 불려 중복되던 `waiting_for_action` · 메시지 순서 · `turn_number` 없는 `action_confirmed`). 모두 [`docs/troubleshooting.md`](./docs/troubleshooting.md) 에 증상 / 원인 / 커밋 해시로 정리하고, 회귀 테스트 클래스(`tests/integration/test_pvp_flow.py::TestPhase3Regressions`)로 박아 재발 차단.
+- **📱 하나의 백엔드, 두 프론트엔드, 프로토콜 중복 0.** 풀 React Native(Expo) 앱(`mobile/`, ~6.9 KLOC, 7개 라우팅 화면)이 Next.js 웹과 **완전히 동일한** `/api/v1` REST + WebSocket 계약을 사용. 웹과 모바일이 어긋나는 걸 막기 위한 전용 CI job(`check-online-parity.mjs`)까지 둠.
+- **🧠 19개의 문서화된 설계 결정.** 엔지니어링 로그의 `## Engineering Decision Reference` 가 **DR-1 ~ DR-19** — 각각 고려했다 버린 대안을 적은 100–300줄 항목: 백엔드 언어(Python vs Spring vs Go), 스테이트리스 워커 + Redis-as-truth, per-player pub/sub 토폴로지, 턴 제출 낙관적 동시성, JWT 복구 전략, `xfail` 정책 등.
+- **🎨 저작권 + 투명도 검수를 통과하는 AI 스프라이트 파이프라인.** 36개의 파이터 PNG(6 캐릭터 × 6 포즈)를 **Pollinations/flux** 로 생성한 뒤 **rembg(U²-Net)** 로 생성기가 남긴 흰 배경 제거. 렌더러가 포즈별 PNG를 고르고, 포즈 PNG가 로드되면 CSS "퍼펫" 회전이 scale-only로 떨어져서 `ko.png`(이미 누워있음)가 이중 회전되지 않음. 특정 라이선스 캐릭터에 너무 가까웠던 스프라이트는 이미 1회 재생성 완료.
+- **🧱 혼자 · ~4.3개월 · 137 커밋 · 그걸 증명하는 결정 로그.** 규율 있는 anti-fabrication 글더미: [`docs/engineering-log.md`](./docs/engineering-log.md)(2,512줄) + [`docs/troubleshooting.md`](./docs/troubleshooting.md) — 인용된 커밋 해시는 전부 실제, "Symptom"은 전부 실제 관측된 메시지, 모든 결정은 기각한 대안을 명시.
 
 ---
 
 ## 기술 스택
 
-| 레이어 | 선택 |
+| 레이어 | 선택 & 역할 |
 |---|---|
-| **Platform server** | Python 3.11 / FastAPI (async) — auth, matchmaking, rooms, profile, REST, *현재 권한자* WebSocket. 61개 파일에 5,313 LOC. |
-| **Game server** | Go 1.23 / gorilla/websocket — PvP 게임 루프 풀 포팅 (engine + session + Redis WATCH/MULTI/EXEC + per-player pub/sub + heartbeats). 10개 파일에 2,018 LOC. Python과 같은 JWT secret; 같은 Redis namespace. 프로덕션 compose 의 독립 Docker 서비스. |
-| **Database** | PostgreSQL 16 + SQLAlchemy 2.0 async — users, matches, ranked Elo, purchases. |
-| **State store** | Redis 7 — game session JSON (`ki_clash:game:{id}` 1시간 TTL), matchmaking queue (sorted set), per-player pub/sub channels (`ki_clash:player:{id}`), 룸 (`ki_clash:room:{code}`), rate-limit counters. |
-| **Auth** | JWT (HS256), guest-first 발행: 플레이어는 이메일 없이 시작 가능; 나중에 옵션으로 업그레이드. 프런트는 stale token 자동 복구 (401 → guest 재발행 → 1회 재시도). |
-| **결제** | Stripe Checkout (ad-free 패스 — 웹훅 핸들러 스캐폴드, live 키는 env 로). |
-| **Frontend** | Next.js 16 (App Router) · React 19 · TypeScript 5 · Tailwind v4 · 조연출용 `framer-motion` · 임팩트 버스트용 `canvas-confetti` · `lottie-react` (설치만 — 현재 FX는 in-house). 46개 파일에 10,053 LOC. |
-| **AI opponent** | Pure-Python deterministic 전략 — 게임플레이 경로에 LLM 없음 (CLAUDE.md "Deterministic Backbone" 규칙). |
-| **스프라이트 파이프라인** | Pollinations/flux text-to-image · `rembg` (U2Net) background removal · 3단 fallback (`<pose>.png` → `idle.png` → procedural SVG chibi). `web/public/fighters/` 에 36개 PNG. |
-| **Reverse proxy** | Caddy 2 — automatic Let's Encrypt SSL, env-driven `API_DOMAIN`, WebSocket upgrade 자동 처리. `/api/v1/ws/game/*` 는 Go 서비스로, 나머지는 Python으로 라우팅. |
-| **Observability** | 양쪽 런타임에 structured JSON logging (stdlib), Prometheus `/metrics`, 옵션 Sentry (`SENTRY_DSN` opt-in). |
-| **테스트** | 8개 `tests/` 모듈에 Python test function 112개 (engine, game-store, matchmaking service, AI opponent, ws-manager pub/sub, logging, observability, integration PvP flow). `go-server/engine_test.go` 에 Go 단위 테스트 13개. |
+| **플랫폼 서버** | **Python 3.11 / FastAPI**(async) — auth · 매치메이킹 · 룸 · 프로필 · 결제 · REST · 현재 *권위적인* WebSocket. 5,671 LOC / 62 파일. |
+| **게임 서버** | **Go 1.23 / gorilla/websocket** — 전체 PvP 게임 루프 포팅(엔진 + 세션 + Redis `WATCH/MULTI/EXEC` + per-player pub/sub + 하트비트). 2,082 LOC / 11 파일. Python과 같은 JWT 시크릿·같은 Redis 네임스페이스, 독립 Docker 서비스. |
+| **웹** | **Next.js 16**(App Router) · React 19 · TypeScript 5 · Tailwind v4 · `framer-motion` · `canvas-confetti`. 설치형 **PWA**, edge 렌더 1200×630 OG 공유 카드. ~14,000 LOC / 85 파일. |
+| **모바일** | **React Native / Expo**(New Architecture, RN 0.81 / Reanimated 4 / Skia) — 7개 라우팅 화면(game · pvp · ranked · history · invite · tutorial), EAS iOS 빌드/제출 프로필. ~6.9 KLOC. 웹과 같은 백엔드 계약. |
+| **DB** | **PostgreSQL 16** + SQLAlchemy 2.0 async — 유저 · 매치 · 랭크 Elo · 결제. |
+| **상태 저장소** | **Redis 7** — 게임 세션 JSON(`ki_clash:game:{id}`, 1시간 TTL) · 매치메이킹 큐(ZSET) · per-player pub/sub 채널 · 룸 코드 · 레이트리밋 카운터. |
+| **인증** | JWT(HS256), **게스트 우선**: 이메일 없이 즉시 플레이, 나중에 업그레이드. 프론트가 만료 토큰을 자동 복구(401 → 게스트 재발급 → 1회 재시도). |
+| **결제** | 두 프로바이더를 하나의 서비스 뒤에 — **Stripe**(광고 제거 패스) + **Lemon Squeezy**(Founder Pass), 둘 다 서명 검증 웹훅 + 체크아웃 퍼널 애널리틱스. |
+| **AI 상대** | 순수 Python **결정론적** 전략 — 게임플레이 경로에 LLM 없음("결정론적 백본" 원칙). 이지 / 패턴 매칭 / 게임이론 혼합 전략. |
+| **관측성** | 구조화 JSON 로그 + **양쪽 런타임** 모두에 Prometheus `/metrics`(커스텀 게임 메트릭: 매치 수, 라이브 PvP 게이지, 턴 해결 레이턴시 히스토그램) + opt-in Sentry. |
+| **그로스** | 1st-party 애널리틱스 퍼널(`sendBeacon`, ~20개 타입드 이벤트, 검증된 ingest 라우트) + 코드로 정의한 프로모 시스템(타입드 UTM 캠페인, 로깅 `/go/<slug>` 리다이렉터, 생성형 포스팅 캘린더). |
+| **리버스 프록시** | **Caddy 2** — 자동 Let's Encrypt SSL, `/api/v1/ws/game/*` → Go, 나머지 → Python 라우팅. |
+| **CI/CD** | **GitHub Actions** — 매 push/PR마다 6-job 게이트: 실제 Postgres+Redis 컨테이너 상대 `pytest` · `go test` · 웹 `tsc`+build · Expo iOS 번들 export · 웹/모바일 패리티 · 마케팅 링크 체크. |
+| **부하/성능** | **k6** 스위트(`load/`) — smoke · REST 램프 · 라이브 게임을 미리 스폰하고 핑하는 소켓을 잡는 WebSocket 용량 테스트, SLO 임계치를 인코드해 위반 시 실패. |
+| **테스트** | **Python 151개** 테스트 함수(8개 모듈) + **Go 13개** 유닛 테스트(엔진 cell-by-cell + 시점 반전). |
 
 ---
 
 ## 아키텍처
 
-**한 매치, 두 런타임, 하나의 Redis.** Hot-path WebSocket 게임플레이가 Python 또는 Go 둘 다로 클라이언트가 알아채지 못하게 서빙 가능 — 양쪽이 같은 JSON envelope, 같은 Redis 키, 같은 JWT secret 사용. Caddy 가 단일 스위치.
+**한 매치, 두 런타임, 하나의 Redis.** 핫패스 WebSocket 게임플레이를 클라이언트가 눈치채지 못한 채 Python이든 Go든 서빙할 수 있다 — 둘 다 같은 JSON 봉투를 말하고, 같은 Redis 키를 쓰고, 같은 JWT 시크릿을 쓴다. Caddy가 단일 스위치.
 
-```
-   Browser  (Next.js 16 PWA)            ┌────────────────────┐
-    ├─ REST          ───────────────────│  kiclash.          │
-    │                                   │  daeseon.ai        │
-    │                                   │     ↓ Vercel       │
-    │                                   │  static + SSR      │
-    │                                   └────────────────────┘
-    │
-    │  WSS / HTTPS
-    ▼
-   api.kiclash.daeseon.ai     ┌─────── Caddy (Let's Encrypt) ───────┐
-                              │                                     │
-                              │   /api/v1/ws/game/*  →  game:8001   │  ← Go
-                              │   그 외 전부         →  api:8000    │  ← Python
-                              │                                     │
-                              └─────┬─────────────────────┬─────────┘
-                                    │                     │
-                            ┌───────▼──────┐      ┌───────▼─────┐
-                            │ Python       │      │ Go game     │
-                            │ FastAPI      │      │ server      │
-                            │ (auth, rooms,│      │ (engine,    │
-                            │  matchmaking,│      │  session,   │
-                            │  REST, ws)   │      │  pub/sub)   │
-                            └──┬─────┬─────┘      └──┬──────────┘
-                               │     │               │
-                       Postgres │     │ Redis ───────┘ (공유 진실)
-                       (users,  │     │   ki_clash:game:{id}    JSON 세션
-                       matches) │     │   ki_clash:room:{code}  4-character 룸
-                                │     │   ki_clash:matchmaking:queue  ZSET
-                                │     │   ki_clash:player:{id}  pub/sub 채널
+```mermaid
+flowchart TD
+    Web["웹 · Next.js 16 PWA<br/>jjan.daeseon.ai (Vercel)"]
+    Mob["모바일 · React Native / Expo<br/>(동일 /api/v1 계약)"]
+    Caddy{"Caddy 2<br/>Let's Encrypt · api.jjan.daeseon.ai"}
+    Py["Python · FastAPI<br/>auth · 룸 · 매치메이킹<br/>REST · WebSocket"]
+    Go["Go 게임 서버<br/>엔진 · 세션 · pub/sub"]
+    Redis[("Redis 7 — 공유 진실<br/>ki_clash:game / room / queue / player")]
+    PG[("Postgres 16<br/>유저 · 매치 · Elo · 결제")]
+
+    Web -- REST + WSS --> Caddy
+    Mob -- REST + WSS --> Caddy
+    Caddy -- "/api/v1/ws/game/*" --> Go
+    Caddy -- "그 외 전부" --> Py
+    Py <--> Redis
+    Go <--> Redis
+    Py <--> PG
 ```
 
-**핵심 결정** (`docs/engineering-log.md` Part 2 DR-N 별 풀 reasoning):
+**핵심 결정**(전체 근거는 [`docs/engineering-log.md`](./docs/engineering-log.md) Part 2의 DR-N):
 
-- **Stateless workers, Redis-as-truth (DR-15).** 게임 상태는 Redis 에만. 어느 런타임의 어느 worker든 JSON blob 로드해서 게임 WebSocket 서빙 가능; 프로세스 메모리에는 WebSocket 연결 자체 외에 아무것도 안 들고 있음. 이게 Python + Go 동거를 안전하게 만드는 핵심.
-- **Pessimistic lock 아니고 Optimistic concurrency (DR-14).** 두 플레이어가 같은 ms 안에 액션 제출하면 Redis `WATCH` / `MULTI` / `EXEC` + 3-retry budget 으로 처리. Python (`watch_and_update`) 과 Go (`Store.watchAndUpdate`) 같은 패턴. 현재 스케일에서 single-digit per-day contention; Lua 스크립트는 future work (`go-server/submit_action.lua` PoC 존재 — Redis `cjson` 이 Python Pydantic 과 빈 배열 round-trip 깨서 deferred, inline 문서화).
-- **Per-player pub/sub channels (DR-13).** 서버가 플레이어에게 push 보내야 할 때 — 로컬 WebSocket 보유 중이면 직접; 아니면 `ki_clash:player:{id}` 에 `PUBLISH` → 연결 보유 인스턴스가 relay. 이게 cross-runtime push 를 정확하게: Python 이 Go-served 플레이어에게 push 가능, 반대도 가능.
-- **Two-envelope action submission, atomic resolution.** 서버가 양쪽 액션 둘 다 들어올 때까지 보유, 그 다음 single atomic write 로 턴 resolve. Phase 3 의 4개 PvP-concurrency 버그 (`docs/troubleshooting.md`) 닫음.
-- **Lazy / conditional integration (DR-9).** Sentry, Prometheus, Stripe — 모든 외부 통합이 env var 없으면 no-op. 로컬 dev 에 0 계정 필요.
+- **스테이트리스 워커, Redis-as-truth (DR-15).** 게임별 상태는 Redis에만 존재 — 어느 런타임의 어느 워커든 JSON 블롭을 로드해 게임을 서빙. 열린 `WebSocket` 외에는 프로세스 메모리에 아무것도 안 잡음. 이게 Python + Go 병행을 안전하게 만드는 핵심.
+- **낙관적 동시성, 비관적 락 아님 (DR-14).** 같은 sub-ms 윈도우에 제출하는 두 플레이어는 3회 재시도 예산의 Redis `WATCH`/`MULTI`/`EXEC` 를 통과. `watch_and_update`(Python)와 `Store.watchAndUpdate`(Go)가 동일 패턴 구현.
+- **Per-player pub/sub 채널 (DR-13).** 플레이어에게 push할 때 소켓을 들고 있으면 로컬로, 아니면 `ki_clash:player:{id}` 에 `PUBLISH` → 연결을 잡은 인스턴스가 릴레이. 그래서 Python이 Go가 서빙 중인 플레이어에게 push 가능, 반대도.
+- **지연/조건부 통합 (DR-9).** Sentry · Prometheus · Stripe · Lemon Squeezy — 모든 외부 통합이 env var 없으면 no-op. 로컬 개발에 계정 0개.
 
 ---
 
-## 멀티플레이어 정확성
+## 멀티플레이어 정합성
 
-1v1 턴제 PvP 게임을 어렵게 만드는 5가지 구체적인 사항, 이 repo 가 처리하는 방식.
+1:1 턴제 PvP를 어렵게 만드는 5가지와 그 처리 방식.
 
-| 우려사항 | 구현 |
+| 관심사 | 구현 |
 |---|---|
-| **동시 액션** | Two-envelope 패턴. 서버가 `p1_action` / `p2_action` 따로 저장하고 둘 다 있을 때만 `resolveTurn`. atomic Redis update 가 두 번째 제출의 **저장**과 둘 다의 **클리어**를 같은 `EXEC` 안에서 — 한쪽이 set 됐는데 다른 worker 가 stale 데이터 읽는 window 없음. |
-| **같은 ms 동시 제출** | `WATCH` / `MULTI` / `EXEC` + 3-retry budget. in-process PvP 시뮬레이터 (`scripts/pvp_simulator.py`) + `tests/services/test_matchmaking_service.py` 매치메이킹 서비스 테스트로 검증. |
-| **Client-server 메시지 ordering** | `action_confirmed` envelope 가 적용되는 명시적 `turn_number` 캐리, 클라이언트는 자기 제출 correlate (도착 순서 의존 X). (Phase 3 Bug 4 — 턴 5의 stale `action_confirmed` 가 이미 in-flight 인 턴 6 제출 확인으로 잘못 해석될 수 있었음.) |
-| **Disconnect / reconnect** | 끊긴 플레이어별로 30초 forfeit 타이머 동작. fire 시 **Redis 재읽기** — `connected_players` 에서 window 안에 어느 worker (Go 또는 Python) 든 reconnect 가 보이면 forfeit 은 no-op. 양쪽 런타임이 같은 set 업데이트. |
-| **First-connect vs reconnect** | 단일 `handle_connect(game_id, player_id)` 가 atomic update 안에서 결정: 플레이어 id 가 이미 `connected_players` 에 있으면 reconnect (opponent 알림 + state 재송신); 아니면 add 하고 silent 진행. WebSocket 엔드포인트의 이전 if/else 가 첫 접속에 `opponent_reconnected` 잘못 발사하던 거 (Phase 3 Bug 1) 대체. |
-
-전체 타임라인 + 이 버그들을 surface 한 시뮬레이터 출력은 `docs/engineering-log.md` Phase 3 섹션.
+| **동시 액션** | 2-봉투 패턴. `p1_action` / `p2_action` 을 따로 저장하고 둘 다 있을 때만 `resolveTurn`. 원자적 Redis 업데이트가 같은 `EXEC` 안에서 두 번째 제출을 **저장**하고 두 필드를 **클리어** — 하나만 세팅된 채 stale 워커가 읽는 윈도우가 없음. |
+| **같은 ms 동시 제출** | 3회 재시도 예산의 `WATCH`/`MULTI`/`EXEC`. 인프로세스 PvP 시뮬레이터(`scripts/pvp_simulator.py`)와 매치메이킹 서비스 테스트로 검증. |
+| **클라-서버 메시지 순서** | `action_confirmed` 봉투가 적용 대상 `turn_number` 를 명시 → 클라가 도착 순서가 아니라 턴으로 상관관계 매칭. *(Phase 3 Bug 4 — 턴5의 stale confirm이 진행 중인 턴6 제출의 확인으로 오인될 수 있었음.)* |
+| **연결 끊김 / 재접속** | 끊긴 플레이어당 30초 몰수 타이머; 발화 시 **Redis 재독** — `connected_players` 가 *어느* 워커(Go/Python)로든 재접속을 보이면 몰수는 no-op. 두 런타임이 같은 set 갱신. |
+| **첫 접속 vs 재접속** | 단일 `handle_connect(game_id, player_id)` 가 원자 업데이트 안에서 결정: id가 이미 `connected_players` 에 있으면 재접속(상대 알림 + 상태 재전송), 없으면 추가하고 조용히 진행. 첫 접속에 `opponent_reconnected` 가 잘못 뜨던 Phase 3 Bug 1 제거. |
 
 ---
 
 ## 게임 엔진 & API
 
-**게임 규칙** (`app/core/game_engine/types.py`):
+**룰**(`app/core/game_engine/types.py`): `KI_CAP = 10` · `TURN_LIMIT = 20` · `ROUNDS_TO_WIN = 2`(3판 2선) · `TURN_TIME_LIMIT_SECONDS = 5`(타임아웃 시 자동 `charge`).
 
-| 상수 | 값 |
-|---|---|
-| `KI_CAP` | 10 (라운드당 ki 상한) |
-| `TURN_LIMIT` | 20 (어느 쪽도 결정타 안 내면 라운드 종료) |
-| `ROUNDS_TO_WIN` | 2 (3판 2선승) |
-| `TURN_TIME_LIMIT_SECONDS` | 5 (타임아웃 시 `charge` 자동 제출) |
+**결과 행렬**(`app/core/game_engine/outcome_matrix.py`): `(p1_action, p2_action) → outcome` 을 매핑하는 손튜닝 **5×5** 테이블. 예: `Attack ⨯ Charge → P1 승`(차지를 읽음) · `Ki Burst ⨯ Block → P1 승`(버스트가 블록 관통) · `Ki Burst ⨯ Teleport → 회피` · `Attack ⨯ Attack → 클래시`. `tests/core/test_game_engine.py` **와** `go-server/engine_test.go` 에서 cell-by-cell 테스트 — 두 런타임이 동일하게 해결.
 
-**Outcome matrix** (`app/core/game_engine/outcome_matrix.py`): 손으로 튜닝한 5×5 테이블 `(p1_action, p2_action) → outcome`. 예: `Attack ⨯ Charge → P1 라운드 승` (charge 읽음); `Energy Wave ⨯ Block → P1 라운드 승` (energy wave 가 block 관통); `Energy Wave ⨯ Teleport → dodged`; `Attack ⨯ Attack → clash` (양쪽 ki 잃음). 매트릭스는 `tests/core/test_game_engine.py` 와 `go-server/engine_test.go` 에서 셀별 테스트 — 양쪽 런타임이 동일하게 resolve.
-
-**API surface** (`app/api/v1/`) — 7개 라우터에 23 엔드포인트:
+**API 표면** — 8개 모듈에 걸쳐 **HTTP 라우트 23개 + WebSocket 엔드포인트 2개**(`app/api/v1/endpoints/`):
 
 ```
-Auth          POST  /api/v1/auth/guest                 guest JWT 발행
-              POST  /api/v1/auth/upgrade               guest 에 이메일/이름 첨부
-              POST  /api/v1/auth/refresh
-
-Players       GET   /api/v1/players/me                 profile + 통계
-              GET   /api/v1/players/me/matches         매치 히스토리
-
-Games (vs AI) POST  /api/v1/games/ai                   AI 매치 시작
-              GET   /api/v1/games/{id}
-              POST  /api/v1/games/{id}/action          액션 제출
-
-Rooms (PvP)   POST  /api/v1/rooms                      생성 — 4-character 코드 반환
-              GET   /api/v1/rooms/{code}               state 폴링 (멤버 게이트)
-              POST  /api/v1/rooms/{code}/join
-              PUT   /api/v1/rooms/{code}/character
-              PUT   /api/v1/rooms/{code}/ready
-              POST  /api/v1/rooms/{code}/start         idempotent, 게임 spawn
-              POST  /api/v1/rooms/{code}/leave
-
-Ranked        GET   /api/v1/ranked/leaderboard
-              GET   /api/v1/ranked/me
-
-Purchases     POST  /api/v1/purchases/checkout/ad-free Stripe Checkout 세션
-              GET   /api/v1/purchases/ad-free-status
-              POST  /api/v1/purchases/webhook          Stripe 웹훅 (서명 검증)
-
-WebSocket     /api/v1/ws/matchmaking?token=...         quick-match 큐 조인
-              /api/v1/ws/game/{game_id}?token=...      게임플레이 채널
-
-Ops           GET   /health
-              GET   /metrics                            Prometheus exposition
+Auth        POST /api/v1/auth/guest · /upgrade · /refresh
+Players     GET  /api/v1/players/me · /me/matches
+Games(AI)   POST /api/v1/games/ai · GET /games/{id} · POST /games/{id}/action
+Rooms(PvP)  POST /api/v1/rooms · GET/POST/PUT /rooms/{code}[/join /character /ready /start /leave]
+Ranked      GET  /api/v1/ranked/leaderboard · /me
+Purchases   POST /api/v1/purchases/checkout/* · GET /ad-free-status · POST /webhook (서명 검증)
+WebSocket        /api/v1/ws/matchmaking?token=…   ·   /api/v1/ws/game/{game_id}?token=…
+Ops         GET  /health · /metrics (Prometheus)
 ```
+
+---
+
+## 성능 · 테스트 · CI
+
+- **CI 게이트(GitHub Actions, 6 job, 매 push/PR).** `python-test` 가 실제 **Postgres 16 + Redis 7** 서비스 컨테이너를 띄우고 `alembic upgrade head` 후 `pytest`. `go-test` 는 `go test ./...`. `web-build` 는 `tsc --noEmit` + `next build`. `mobile-check` 는 타입체크 + 실제 `expo export --platform ios`. 나머지 2개 job은 웹↔모바일 패리티와 마케팅 링크 검사. [![CI](https://github.com/Daeseon-AI-Factory/ki-clash/actions/workflows/ci.yml/badge.svg)](https://github.com/Daeseon-AI-Factory/ki-clash/actions/workflows/ci.yml)
+- **테스트.** Python 테스트 함수 151개(엔진 · 게임스토어 · 매치메이킹 서비스 · AI 상대 · ws-manager pub/sub · 로깅 · 관측성 · 통합 PvP 플로우) + Go 유닛 테스트 13개(엔진 행렬 + 시점 반전 헬퍼).
+- **부하/성능(k6, `load/`).** `smoke.js`(1 VU 풀 플로우) · `rest_load.js`(램핑 VU, vs-AI 70% / Room-PvP 30%) · `ws_load.js`(REST로 N개 라이브 게임 미리 스폰, VU별로 핑 소켓 유지). SLO 임계치(`http_req_failed < 2%`, `p95 < 1500ms`, `ws_connecting p95 < 3000ms`)를 인코드해 위반 시 non-zero exit. [`load/README.md`](./load/README.md) 에 단일 `t3.micro` 안전 주의사항과 결과 해석법 정리(지어낸 수치 없음).
 
 ---
 
 ## 로컬 실행
 
-**로컬 dev 는 외부 계정 0개 필요** — Stripe X, Sentry X, AWS X, 도메인 X. Docker Compose 가 스택 띄움; 나머지는 graceful no-op.
+**외부 계정 불필요** — Stripe·Sentry·AWS·도메인 전부 없이. 모든 통합이 env var 없으면 graceful no-op.
 
 ```bash
-# Repo + 백엔드
 git clone https://github.com/Daeseon-AI-Factory/ki-clash.git
 cd ki-clash
-docker compose up -d              # Postgres + Redis + Python API on :8000
+docker compose up -d                       # Postgres + Redis + Python API on :8000
 docker compose exec api alembic upgrade head
 
-# 프런트
-cd web
-npm install
-npm run dev                       # http://localhost:3000
+# 웹
+cd web && npm install && npm run dev        # http://localhost:3000
 
-# 검증
-curl http://localhost:8000/health    # → {"status":"ok"}
-open http://localhost:3000           # AI 매치 플레이
+# 확인
+curl http://localhost:8000/health           # → {"status":"ok"}
+open http://localhost:3000                   # AI 매치 플레이
 ```
 
-**PvP 로컬 시도**: 두 브라우저 열어 (하나 일반, 하나 incognito) → 둘 다 `/pvp` → 하나가 **Create Room** 탭 + 4-character 코드 복사 → 다른 쪽 **Join Room** 탭 + 코드 입력 → 양쪽 캐릭 선택 → 양쪽 ready → 매치 시작.
-
-**Go 게임 서버 시도 (옵션)** — `:8001` 에서 같은 Redis 공유:
-
-```bash
-brew services stop redis             # host 에 6379 듣고 있는 Redis 있으면
-cd go-server
-JWT_SECRET_KEY=$(cd .. && docker compose exec -T api python -c \
-  "from app.config import settings; print(settings.jwt_secret_key)") \
-go run .
-
-curl http://localhost:8001/health    # → {"status":"ok","server":"go"}
-python3 test_e2e.py                  # Go 상대 풀 게임 루프 smoke test
-```
+**로컬 PvP:** 브라우저 2개(하나는 시크릿) → 둘 다 `/pvp` → 한쪽이 **Create Room**, 4글자 코드 복사 → 다른 쪽이 **Join Room**, 코드 입력 → 둘 다 파이터 선택 → 둘 다 ready → 매치 시작.
 
 **테스트 실행:**
 
 ```bash
-docker compose exec api python -m pytest        # Python test function 112개, 8 파일
-cd go-server && go test ./...                   # Go test function 13개
+docker compose exec api python -m pytest     # Python 테스트 함수 151개
+cd go-server && go test ./...                # Go 테스트 함수 13개
 ```
 
 ---
 
 ## 배포
 
-하이브리드 플랜 확정: **Vercel (프런트) + AWS EC2 free-tier t3.micro (백엔드)** + `daeseon.ai` 레지스트라 DNS.
-
-**작성 시점 라이브:**
-
 | 서비스 | 상태 |
 |---|---|
-| `https://kiclash.daeseon.ai` (Vercel — Next.js 프런트) | ✅ 라이브 |
-| `https://api.kiclash.daeseon.ai` (EC2 — Python + Go + Postgres + Redis + Caddy via `docker-compose.prod.yml`) | ⏳ 스캐폴드 완성, 아직 미프로비전 |
+| **웹** — `https://jjan.daeseon.ai`(Vercel · Next.js) | ✅ 라이브 |
+| **백엔드** — `https://api.jjan.daeseon.ai`(EC2 · Python + Go + Postgres + Redis + Caddy, `docker-compose.prod.yml`) | 🟡 컨테이너화 + 배포 런북 커밋 완료 |
 
-풀 단계별 (security group, Elastic IP, DNS A/CNAME 레코드, `openssl rand` secret 생성, `docker compose up -d --build`, Caddy 자동 Let's Encrypt cert 발급) 은 [`deploy/aws-ec2/QUICKSTART.md`](./deploy/aws-ec2/QUICKSTART.md), 긴 형식 동반 문서 [`deploy/aws-ec2/README.md`](./deploy/aws-ec2/README.md).
-
-> **Vercel 모노레포 노트.** 이 repo 는 Next.js 프로젝트가 `web/` 에 있는 polyrepo (repo 루트는 Python 백엔드 + Go 서버 + docs). Vercel 대시보드에서 **Settings → General → Root Directory → `web`** 설정해야 빌드가 올바른 위치에서 실행됨.
-
-프로덕션 스택 (단일 인스턴스, free tier 에서 ~100 동시 매치, DR-15 statelessness 로 horizontal scale 필요 시):
+프로덕션 토폴로지(단일 인스턴스, 프리티어에서 동시 매치 ~100; 확장은 DR-15의 스테이트리스로 수평 확장):
 
 ```
-EC2 t3.micro (Ubuntu 24.04)
-└── docker-compose.prod.yml
-    ├── caddy   (80/443 — Let's Encrypt auto-SSL, reverse proxy)
-    ├── api     (Python FastAPI, 2 uvicorn workers)
-    ├── game    (Go WebSocket gateway)
-    ├── db      (Postgres 16 — pgdata 볼륨)
-    └── redis   (Redis 7 — AOF persistence)
+EC2 t3.micro (Ubuntu 24.04) → docker-compose.prod.yml
+  ├── caddy   (80/443 — Let's Encrypt 자동 SSL, 리버스 프록시)
+  ├── api     (Python FastAPI, uvicorn)
+  ├── game    (Go WebSocket 게이트웨이)
+  ├── db      (Postgres 16 — pgdata 볼륨)
+  └── redis   (Redis 7 — AOF 영속화)
 ```
+
+단계별 가이드(보안그룹·Elastic IP·DNS·시크릿 생성·Caddy 자동 인증서)는 [`deploy/aws-ec2/`](./deploy/aws-ec2/). **Vercel 주의:** Next.js 앱이 `web/` 에 있으므로 Vercel 프로젝트에서 **Root Directory → `web`** 설정.
 
 ---
 
 ## 엔지니어링 로그
 
-이 repo 는 disciplined **anti-fabrication** 작성 파일들 보유. 인용된 모든 commit 해시는 진짜; 트러블슈팅 docs 의 모든 "Symptom" 은 literally 관찰된 메시지; Decision Reference 의 모든 entry 가 고려되고 거절된 대안 명시.
-
-- [`docs/engineering-log.md`](./docs/engineering-log.md) — 2,136 줄. **Part 0** 가 "RESUME HERE" 현재 상태 스냅샷; **Part 1** 은 연대순 빌드 스토리 (Phase 1 → 11); **Part 2** 가 *Engineering Decision Reference* — DR-1 (백엔드 언어) ~ DR-15 (stateless workers + Redis-as-truth) — 각 entry 가 100-300 줄 트레이드오프 분석 + 대안 + 거절된 경로 + 재사용 가능 meta-pattern.
-- [`docs/troubleshooting.md`](./docs/troubleshooting.md) — 문제 인덱스 reference. Entry 별 format: **Symptom / Cause / Fix / Commit / Pattern**. PvP 버그 1-4, JWT 401 stale-token loop, Pollinations rate-limit 충돌, Lua `cjson` empty-array 이슈 (reasoning 과 함께 deferred) 등 커버. 같은 anti-fabrication 규칙.
-- [`docs/spec.md`](./docs/spec.md) — MVP 전체가 만들어진 original product spec (게임 규칙, 타겟 본능, 수익 모델, MVP 스코프).
-- [`docs/architecture.md`](./docs/architecture.md), [`docs/multiplayer-networking.md`](./docs/multiplayer-networking.md), [`docs/firefly-prompts.md`](./docs/firefly-prompts.md) — 부속 디자인 / ops docs.
-
-**Stats** (검증됨, 추론 아님):
+- [`docs/engineering-log.md`](./docs/engineering-log.md) — **2,512줄.** *Part 0* = "RESUME HERE" 현재 상태 스냅샷 · *Part 1* = 시간순 빌드 스토리 · *Part 2* = **Engineering Decision Reference**, DR-1 → DR-19, 각 항목이 대안·기각 경로·재사용 메타패턴을 담은 100–300줄 트레이드오프 분석.
+- [`docs/troubleshooting.md`](./docs/troubleshooting.md) — 문제 인덱스형(18개 항목). 항목 포맷: **Symptom / Cause / Fix / Commit / Pattern**. PvP 버그 4개, JWT 401 stale-token 루프, Pollinations 레이트리밋 충돌, Lua `cjson` 빈 배열 이슈(근거와 함께 보류) 등.
+- [`docs/spec.md`](./docs/spec.md) · [`docs/architecture.md`](./docs/architecture.md) · [`docs/multiplayer-networking.md`](./docs/multiplayer-networking.md) — 제품 스펙 + 보조 설계.
 
 ```
 $ git log --oneline | wc -l
-   93
-$ git log --reverse --format='%ai' | head -1   # 첫 commit
+   137
+$ git log --reverse --format='%ai' | head -1   # 첫 커밋
 2026-02-12 16:07:43 +0900
-$ git log -1 --format='%ai'                    # 최근 commit (작성 시점)
-2026-06-02 15:17:24 -0400
+$ git log -1 --format='%ai'                     # 최신(작성 시점)
+2026-06-21 21:20:14 -0400
 ```
 
 ---
 
 ## 정직한 한계
 
-> 명백히 적어둠 — 가장자리 아는 게 엔지니어링의 일부이기 때문.
+> 솔직하게 — 경계를 아는 것도 엔지니어링의 일부.
 
-- **EC2 백엔드 아직 미프로비전.** Vercel 의 프런트는 라이브; 백엔드 `docker-compose.prod.yml` + Caddyfile + 배포 runbook 다 커밋 + 준비, 하지만 EC2 launch / DNS A 레코드 / 첫 배포는 대기 중이고 interactive AWS-console 작업 필요.
-- **자동 프런트엔드 테스트 없음.** 112개 Python test function 이 engine, matchmaking service, game store, AI opponent, WebSocket manager 의 pub/sub, observability, integration PvP flow 커버. 13개 Go 단위 테스트가 engine 셀별 + perspective-flip 헬퍼 커버. 웹 프런트는 현재 자동 테스트 0개 — `npm run dev` + 브라우저 DevTools 로 manually 검증. React 컴포넌트용 테스트 스위트가 명백한 다음 투자.
-- **Go 런타임은 와이어드, 권한자 아님.** Go 게임 서버가 진짜 Python 발행 게임 세션 정확히 서빙할 수 있음을 E2E 검증. `docker-compose.prod.yml` 이 `game` 을 `api` 옆에 같이 실행하고, Caddyfile 의 거기로 라우트가 commit 됨 — 켜는 건 한 줄 uncomment + redeploy. 그 전엔 Python 이 실 사용자 서빙.
-- **Lua atomic submit deferred.** `go-server/submit_action.lua` 를 `WATCH`/`MULTI`/`EXEC` 의 single-round-trip atomic 대안으로 작성. Redis 의 `cjson` empty-array-as-object 인코딩 한계 hit (Python Pydantic 의 strict-mode 가 round-trip 된 JSON 거절). `WATCH`/`MULTI`/`EXEC` 로 복귀, 현재 스케일엔 fine (contention 이 single-digit/day). `go-server/session.go::submitAction` 에 inline 문서화.
-- **일부 스프라이트 생성이 commercial release 에 편하지 않을 정도로 특정 라이선스 캐릭터에 가까움.** 가장 노골적인 케이스 1회 재생성 (Konoha 스타일 헤드밴드를 generic 빨간 sweatband 로 교체). 실 commercial 런칭의 정직한 경로는 Adobe Firefly (Adobe 가 commercial indemnification) 또는 commission artist — 파일 경로 `/fighters/<id>/<pose>.png` 가 코드 변경 0 으로 drop-in 교체 가능하게 함.
-- **Cross-instance disconnect 감지는 이제 Redis 사용** — 코드 리뷰로 검증, 실제 multi-instance 배포 대상 스트레스 테스트는 아직 안 함.
-- **Mobile (Expo) 타겟 일시중지.** 원래 스코프, React 19 와 Reanimated/Skia 사이 peer-dep 충돌로 deferred. 그동안 프런트는 모바일 브라우저에서 PWA 로 작동.
+- **아직 React 컴포넌트 유닛 테스트 없음.** Python(151) · Go(13) 스위트는 매 push마다 CI에서 돌고 k6 스위트가 REST + WebSocket 핫패스를 커버하지만, 웹/모바일 컴포넌트는 여전히 수동 + CI 타입체크/빌드로 검증. 컴포넌트 테스트가 다음 투자 1순위.
+- **Go 런타임은 연결됨, 플랫폼은 Python.** 커밋된 `Caddyfile` 이 `/api/v1/ws/game/*` 를 Go 서비스로 라우팅하고 E2E 테스트가 실제 Python 발급 세션을 올바르게 서빙함을 확인 — 그 외 전부(auth·룸·매치메이킹·REST)는 Python이 권위적.
+- **Lua 원자적 제출 보류.** `go-server/submit_action.lua` 를 `WATCH`/`MULTI`/`EXEC` 의 단일 왕복 대안으로 작성했으나, Redis `cjson` 이 빈 배열을 객체로 인코딩 → Pydantic strict-mode가 라운드트립에서 거부. `WATCH`/`MULTI`/`EXEC`(현재 경합에서 충분) 로 되돌리고 인라인 문서화.
+- **일부 스프라이트가 라이선스 캐릭터에 가까움.** 가장 노골적인 케이스는 1회 재생성 완료. 상업 출시의 정직한 길은 Adobe Firefly(법적 면책) 또는 외주 작가 — `/fighters/<id>/<pose>.png` 레이아웃이 코드 변경 0으로 교체 가능하게 함.
+- **크로스 인스턴스 연결 끊김 감지** 는 Redis 기반·코드 리뷰 완료지만, 실제 멀티 인스턴스 배포 상대 스트레스 테스트는 아직.
 
 ---
 
 ## 프로젝트 구조
 
 ```
-app/                                FastAPI 백엔드 (Python 3.11, async)
-  api/v1/
-    router.py                       aggregator
-    endpoints/{auth,games,players,ranked,purchases,rooms,ws}.py
-  core/
-    auth/                           JWT (HS256) + guest auth
-    game_engine/                    pure engine: types, outcome_matrix, engine
-    ai_opponent/                    easy / medium / hard deterministic 전략
-    game_store.py                   Redis 기반 PvP 세션 — WATCH/MULTI/EXEC
-    room_store.py                   4-character 코드 Tekken식 룸
-    ws_manager/                     per-player pub/sub (DR-13)
-    logging.py  observability.py    JSON logs + Prometheus + Sentry init
-  modules/ki_clash/game_session.py  stateless PvP 세션 orchestration (DR-15)
-  services/                         matchmaking, game, ranked, payment, player
-  models/  schemas/                 SQLAlchemy + Pydantic
-go-server/                          Go 1.23 — 풀 게임루프 런타임 (2 KLOC)
-  main.go  handler.go  session.go  engine.go  store.go  pubsub.go  messages.go
-  auth.go  types.go  observability.go
-  engine_test.go                    engine + 헬퍼용 13개 단위 테스트
-  test_e2e.py                       E2E smoke (Python rooms → Go WS)
-  submit_action.lua                 atomic submit (deferred — Limitations 참조)
-  Dockerfile                        multi-stage distroless 빌드 (~25 MB)
-web/                                Next.js 16 (App Router) PWA
-  src/app/{,/pvp,/tutorial,/shop,/invite,/history,/ranked}/page.tsx
-  src/components/
-    arena/{KiAuraArena,FighterSprite,CharacterAvatar}.tsx
-    finale/{MatchFinale,CharacterFinishers}.tsx
-    room/RoomScreen.tsx
-    GameBoard.tsx  MatchHUD.tsx  TurnReveal.tsx  Countdown.tsx  …
-  src/hooks/{useGame,usePvP,useActionAnimation,useSoundEffects,useAdTiming}.ts
-  src/lib/{api,characters,actions,assets,sound}.ts
-  public/fighters/<id>/{idle,windup,impact,hit,ko,victory}.png  ← 36개 PNG
-docs/                               engineering-log · troubleshooting · spec · …
-deploy/aws-ec2/                     QUICKSTART.md · README.md · .env.prod.example
-docker-compose.yml                  dev: db + redis + api
-docker-compose.prod.yml             prod: + game (Go) + caddy
-Caddyfile                           reverse proxy + automatic Let's Encrypt SSL
-tests/                              8 파일에 Python test function 112개
-CLAUDE.md                           AI 보조 편집용 프로젝트 컨벤션
+app/                       FastAPI 백엔드 (Python 3.11, async)
+  api/v1/endpoints/        auth · games · players · ranked · purchases · rooms · ws
+  core/                    auth(JWT+게스트) · game_engine(types/matrix/engine)
+                           ai_opponent · game_store(WATCH/MULTI/EXEC) · room_store
+                           ws_manager(per-player pub/sub) · payment · observability
+  services/                matchmaking · game · ranked · payment · player
+  models/  schemas/        SQLAlchemy + Pydantic
+go-server/                 Go 1.23 풀 게임루프 런타임 (engine/session/store/pubsub)
+  engine_test.go           유닛 13개 · test_e2e.py  E2E (Python 룸 → Go WS)
+web/                       Next.js 16 PWA — arena/finale/room 컴포넌트, 훅, lib
+  public/fighters/<id>/{idle,windup,impact,hit,ko,victory}.png   ← 36 PNG
+mobile/                    React Native / Expo 앱 — 같은 백엔드 위 7개 화면
+load/                      k6 — smoke · rest_load · ws_load
+docs/                      engineering-log · troubleshooting · spec · screenshots/
+deploy/aws-ec2/            QUICKSTART · 런북 · .env.prod.example
+.github/workflows/ci.yml   6-job CI 게이트
+docker-compose{,.prod}.yml dev: db+redis+api · prod: + game(Go) + caddy
 ```
 
 ---
 
 <div align="center">
 
-**[Ki Clash · 기싸움](https://kiclash.daeseon.ai)** — 상대의 수를 읽고, 기를 모으고, 결정타를 쳐라.
+**[JJAN! · 짠 · 기싸움](https://jjan.daeseon.ai)** — 상대를 읽고, 기를 모으고, 먼저 친다.
 
-<sub>Repo: [Daeseon-AI-Factory/ki-clash](https://github.com/Daeseon-AI-Factory/ki-clash) · 라이브 프런트: [kiclash.daeseon.ai](https://kiclash.daeseon.ai) · [English README](./README.md)</sub>
+<sub>Daeseon(Jason) Yoo 단독 제작 · [github.com/Daeseon-AI-Factory/ki-clash](https://github.com/Daeseon-AI-Factory/ki-clash) · [English README](./README.md)</sub>
 
 </div>
