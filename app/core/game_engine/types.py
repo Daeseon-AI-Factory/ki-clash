@@ -60,17 +60,23 @@ class TurnOutcome(str, Enum):
 class Difficulty(str, Enum):
     """AI opponent difficulty levels."""
 
+    NOVICE = "novice"
     EASY = "easy"
     MEDIUM = "medium"
     HARD = "hard"
+    EXPERT = "expert"
+    GRANDMASTER = "grandmaster"
 
 
 class MatchType(str, Enum):
     """Type of match."""
 
+    AI_NOVICE = "ai_novice"
     AI_EASY = "ai_easy"
     AI_MEDIUM = "ai_medium"
     AI_HARD = "ai_hard"
+    AI_EXPERT = "ai_expert"
+    AI_GRANDMASTER = "ai_grandmaster"
     PVP = "pvp"
 
 

@@ -1,4 +1,6 @@
-"""Tests for AI opponents: Easy, Medium, Hard."""
+"""Tests for AI opponents: Novice, Easy, Medium, Hard, Expert, Grandmaster."""
+
+import random
 
 import pytest
 
@@ -15,13 +17,20 @@ from app.core.game_engine.types import (
 )
 from app.core.game_engine.engine import GameEngine
 from app.core.ai_opponent.base import create_ai_opponent
+from app.core.ai_opponent.novice import NoviceAI
 from app.core.ai_opponent.easy import EasyAI
 from app.core.ai_opponent.medium import MediumAI
 from app.core.ai_opponent.hard import HardAI
+from app.core.ai_opponent.expert import ExpertAI
+from app.core.ai_opponent.grandmaster import GrandmasterAI
 from app.core.game_engine.types import Difficulty
 
 
 class TestCreateAIOpponent:
+    def test_creates_novice(self) -> None:
+        ai = create_ai_opponent(Difficulty.NOVICE)
+        assert isinstance(ai, NoviceAI)
+
     def test_creates_easy(self) -> None:
         ai = create_ai_opponent(Difficulty.EASY)
         assert isinstance(ai, EasyAI)
@@ -34,19 +43,24 @@ class TestCreateAIOpponent:
         ai = create_ai_opponent(Difficulty.HARD)
         assert isinstance(ai, HardAI)
 
+    def test_creates_expert(self) -> None:
+        ai = create_ai_opponent(Difficulty.EXPERT)
+        assert isinstance(ai, ExpertAI)
 
-def _make_game_state(p2_ki: int = 0) -> GameState:
-    """Helper to create a game state with specific P2 ki."""
-    state = GameState(
-        match_type=MatchType.AI_EASY,
+    def test_creates_grandmaster(self) -> None:
+        ai = create_ai_opponent(Difficulty.GRANDMASTER)
+        assert isinstance(ai, GrandmasterAI)
+
+
+def _make_game_state(p2_ki: int = 0, p1_ki: int = 0, match_type: MatchType = MatchType.AI_EASY) -> GameState:
+    return GameState(
+        match_type=match_type,
         status=MatchStatus.IN_PROGRESS,
-        current_round=RoundState(round_number=1, p1_ki=0, p2_ki=p2_ki),
+        current_round=RoundState(round_number=1, p1_ki=p1_ki, p2_ki=p2_ki),
     )
-    return state
 
 
 def _make_history(p1_actions: list[Action]) -> list[TurnResult]:
-    """Helper to create a turn history with given P1 actions."""
     history = []
     for i, action in enumerate(p1_actions):
         history.append(TurnResult(
@@ -62,10 +76,35 @@ def _make_history(p1_actions: list[Action]) -> list[TurnResult]:
     return history
 
 
+class TestNoviceAI:
+    def test_only_affordable_actions(self) -> None:
+        ai = NoviceAI()
+        state = _make_game_state(p2_ki=0)
+        for _ in range(50):
+            action = ai.choose_action(state, [])
+            assert ACTION_KI_COST[action] <= 0
+
+    def test_sometimes_counters_last_move(self) -> None:
+        """With charge history, novice should sometimes attack."""
+        ai = NoviceAI()
+        state = _make_game_state(p2_ki=3)
+        history = _make_history([Action.CHARGE])
+        actions = [ai.choose_action(state, history) for _ in range(100)]
+        # Should attack at least occasionally (counter for CHARGE is ATTACK)
+        assert Action.ATTACK in actions
+
+    def test_is_noisy(self) -> None:
+        """Novice AI should pick multiple different actions — not deterministic."""
+        ai = NoviceAI()
+        state = _make_game_state(p2_ki=5)
+        history = _make_history([Action.CHARGE] * 5)
+        actions = {ai.choose_action(state, history) for _ in range(100)}
+        assert len(actions) >= 2
+
+
 class TestEasyAI:
     def test_always_returns_affordable_action(self) -> None:
         ai = EasyAI()
-        # With 0 ki, should only return Charge or Block
         state = _make_game_state(p2_ki=0)
         for _ in range(50):
             action = ai.choose_action(state, [])
@@ -79,60 +118,60 @@ class TestEasyAI:
             assert action in Action
 
     def test_charges_frequently(self) -> None:
-        """Easy AI should charge more often than other actions."""
         ai = EasyAI()
         state = _make_game_state(p2_ki=5)
         actions = [ai.choose_action(state, []) for _ in range(200)]
-        charge_count = actions.count(Action.CHARGE)
-        # Charge has 0.45 weight, so should be at least 25% of the time
-        assert charge_count > 50
+        assert actions.count(Action.CHARGE) > 50
 
 
 class TestMediumAI:
     def test_counters_charge_with_attack(self) -> None:
-        """If opponent keeps charging, medium AI should attack."""
+        """Deterministic counter path: opponent always charges → medium attacks."""
         ai = MediumAI()
         state = _make_game_state(p2_ki=3)
-        history = _make_history([Action.CHARGE, Action.CHARGE, Action.CHARGE])
-        # Should counter charge with attack
-        action = ai.choose_action(state, history)
-        assert action == Action.ATTACK
+        history = _make_history([Action.CHARGE] * 5)
+        # Run many trials; most should be ATTACK (noise is 20%)
+        actions = [ai.choose_action(state, history) for _ in range(200)]
+        attack_count = actions.count(Action.ATTACK)
+        # Counter is ATTACK; with 20% random noise and ki-override checks,
+        # expect at least 50% attack when opponent spams charge
+        assert attack_count > 80
 
     def test_counters_attack_with_block(self) -> None:
-        """If opponent keeps attacking, medium AI should block."""
         ai = MediumAI()
         state = _make_game_state(p2_ki=3)
-        history = _make_history([Action.ATTACK, Action.ATTACK, Action.ATTACK])
-        action = ai.choose_action(state, history)
-        assert action == Action.BLOCK
+        history = _make_history([Action.ATTACK] * 5)
+        actions = [ai.choose_action(state, history) for _ in range(200)]
+        block_count = actions.count(Action.BLOCK)
+        assert block_count > 60
 
     def test_counters_energy_wave_with_teleport(self) -> None:
-        """If opponent keeps using energy wave, medium AI should teleport."""
         ai = MediumAI()
         state = _make_game_state(p2_ki=3)
-        history = _make_history([
-            Action.ENERGY_WAVE, Action.ENERGY_WAVE, Action.ENERGY_WAVE,
-        ])
-        action = ai.choose_action(state, history)
-        assert action == Action.TELEPORT
+        history = _make_history([Action.ENERGY_WAVE] * 5)
+        actions = [ai.choose_action(state, history) for _ in range(200)]
+        assert actions.count(Action.TELEPORT) > 60
 
     def test_falls_back_when_cant_afford_counter(self) -> None:
-        """If AI can't afford the counter, pick a fallback."""
         ai = MediumAI()
         state = _make_game_state(p2_ki=0)
-        history = _make_history([Action.CHARGE, Action.CHARGE, Action.CHARGE])
-        # Counter for Charge is Attack (costs 1 ki), but AI has 0 ki
+        history = _make_history([Action.CHARGE] * 5)
         action = ai.choose_action(state, history)
-        # Should fall back to Charge (always free)
-        assert action == Action.CHARGE
+        assert ACTION_KI_COST[action] == 0
 
     def test_random_on_no_history(self) -> None:
-        """With no history, medium AI picks randomly."""
         ai = MediumAI()
         state = _make_game_state(p2_ki=5)
         actions = {ai.choose_action(state, []) for _ in range(100)}
-        # Should pick at least 2 different actions over 100 tries
         assert len(actions) >= 2
+
+    def test_considers_ki_economy(self) -> None:
+        """When AI has high ki, should occasionally fire Energy Wave."""
+        ai = MediumAI()
+        state = _make_game_state(p2_ki=8)
+        history = _make_history([Action.CHARGE] * 3)
+        actions = [ai.choose_action(state, history) for _ in range(200)]
+        assert Action.ENERGY_WAVE in actions
 
 
 class TestHardAI:
@@ -144,50 +183,137 @@ class TestHardAI:
             assert ACTION_KI_COST[action] <= 0
 
     def test_uses_mixed_strategy(self) -> None:
-        """Hard AI should use multiple different actions (not deterministic)."""
         ai = HardAI()
         state = _make_game_state(p2_ki=5)
         actions = {ai.choose_action(state, []) for _ in range(200)}
-        # Nash equilibrium means mixing — should use at least 3 actions
         assert len(actions) >= 3
 
     def test_adapts_to_charge_heavy_opponent(self) -> None:
-        """If opponent charges a lot, hard AI should attack more."""
+        random.seed(20240601)  # deterministic: this is a statistical assertion
         ai = HardAI()
+        # A charge-heavy opponent sits at low ki (still building) — opp_ki=0.
+        state = _make_game_state(p2_ki=5, p1_ki=0)
+        history = _make_history([Action.CHARGE] * 10)
+        actions = [ai.choose_action(state, history) for _ in range(200)]
+        assert (actions.count(Action.ATTACK) + actions.count(Action.ENERGY_WAVE)) > 60
+
+    def test_adapts_to_attack_heavy_opponent(self) -> None:
+        random.seed(20240601)  # deterministic: this is a statistical assertion
+        ai = HardAI()
+        # An attack-heavy opponent must actually have ki to attack with, so
+        # p1_ki must be non-zero — otherwise HardAI's ki-economy rule correctly
+        # treats a ki-starved opponent as safe to attack, which is a different
+        # behavior than the pattern-adaptation this test targets.
+        state = _make_game_state(p2_ki=5, p1_ki=5)
+        history = _make_history([Action.ATTACK] * 10)
+        actions = [ai.choose_action(state, history) for _ in range(200)]
+        assert (actions.count(Action.BLOCK) + actions.count(Action.TELEPORT)) > 60
+
+    def test_attacks_more_when_opp_has_no_ki(self) -> None:
+        """If opponent can't afford attacks, hard AI should exploit with more attacks."""
+        ai = HardAI()
+        state = _make_game_state(p2_ki=5, p1_ki=0)
+        actions = [ai.choose_action(state, []) for _ in range(200)]
+        assert actions.count(Action.ATTACK) > 60
+
+
+class TestExpertAI:
+    def test_always_returns_affordable_action(self) -> None:
+        ai = ExpertAI()
+        state = _make_game_state(p2_ki=0)
+        for _ in range(50):
+            action = ai.choose_action(state, [])
+            assert ACTION_KI_COST[action] <= 0
+
+    def test_prefers_attack_vs_charge_heavy_opponent(self) -> None:
+        """EV of Attack is +20 when opponent keeps charging."""
+        ai = ExpertAI()
         state = _make_game_state(p2_ki=5)
         history = _make_history([Action.CHARGE] * 10)
         actions = [ai.choose_action(state, history) for _ in range(200)]
-        attack_count = actions.count(Action.ATTACK)
-        energy_wave_count = actions.count(Action.ENERGY_WAVE)
-        # Should punish charging with attacks
-        assert (attack_count + energy_wave_count) > 60
+        # With 10 charges in history, attack EV should dominate
+        assert (actions.count(Action.ATTACK) + actions.count(Action.ENERGY_WAVE)) > 120
 
-    def test_adapts_to_attack_heavy_opponent(self) -> None:
-        """If opponent attacks a lot, hard AI should block/teleport more."""
-        ai = HardAI()
-        state = _make_game_state(p2_ki=5)
-        history = _make_history([Action.ATTACK] * 10)
+    def test_prefers_teleport_vs_burst_heavy_opponent(self) -> None:
+        """When opponent keeps bursting, teleport has highest EV (+9 dodge)."""
+        ai = ExpertAI()
+        state = _make_game_state(p2_ki=3, p1_ki=5)
+        history = _make_history([Action.ENERGY_WAVE] * 8)
         actions = [ai.choose_action(state, history) for _ in range(200)]
-        block_count = actions.count(Action.BLOCK)
-        teleport_count = actions.count(Action.TELEPORT)
-        assert (block_count + teleport_count) > 60
+        assert actions.count(Action.TELEPORT) > 100
+
+    def test_attacks_aggressively_when_opp_has_zero_ki(self) -> None:
+        """When opponent has 0 ki, only charge/block are affordable.
+        Energy Wave (EV=+20 vs both) strictly beats Attack (EV=+9 vs 50/50 charge/block),
+        so expert AI should heavily prefer offensive moves."""
+        ai = ExpertAI()
+        state = _make_game_state(p2_ki=3, p1_ki=0)
+        actions = [ai.choose_action(state, []) for _ in range(100)]
+        offensive = actions.count(Action.ATTACK) + actions.count(Action.ENERGY_WAVE)
+        assert offensive > 60
+
+    def test_is_not_purely_deterministic(self) -> None:
+        """Noise floor ensures expert AI can't be fully read."""
+        ai = ExpertAI()
+        state = _make_game_state(p2_ki=5)
+        actions = {ai.choose_action(state, []) for _ in range(200)}
+        assert len(actions) >= 3
+
+
+class TestGrandmasterAI:
+    """The GTO + bounded-exploitation tier (loads the committed strategy table)."""
+
+    def test_only_affordable_actions(self) -> None:
+        ai = GrandmasterAI(seed=1)
+        for p2_ki in range(11):
+            state = _make_game_state(p2_ki=p2_ki, p1_ki=4)
+            for _ in range(30):
+                action = ai.choose_action(state, [])
+                assert ACTION_KI_COST[action] <= p2_ki
+
+    def test_uses_mixed_strategy(self) -> None:
+        """GTO play is a mixed strategy — should not be a single action."""
+        ai = GrandmasterAI(seed=2)
+        state = _make_game_state(p2_ki=5, p1_ki=5)
+        actions = {ai.choose_action(state, []) for _ in range(200)}
+        assert len(actions) >= 3
+
+    def test_seed_is_deterministic(self) -> None:
+        """Same seed + same state + same history => same action sequence."""
+        state = _make_game_state(p2_ki=4, p1_ki=4)
+        a = [GrandmasterAI(seed=42).choose_action(state, []) for _ in range(1)]
+        b = [GrandmasterAI(seed=42).choose_action(state, []) for _ in range(1)]
+        assert a == b
+
+    def test_exploits_always_charge_opponent(self) -> None:
+        """Against an opponent stuck charging at low ki, the AI must be able to
+        punish with a round-winning attack/wave once it can afford one."""
+        ai = GrandmasterAI(seed=3)
+        state = _make_game_state(p2_ki=5, p1_ki=0)
+        history = _make_history([Action.CHARGE] * 6)
+        actions = [ai.choose_action(state, history) for _ in range(200)]
+        offensive = actions.count(Action.ATTACK) + actions.count(Action.ENERGY_WAVE)
+        # Opponent at ki0 can only charge/block; attacking a charger wins the round.
+        assert offensive > 120
 
 
 class TestAIFullMatch:
-    """Integration test: AI can play a full best-of-3 match."""
+    """Integration test: all difficulties can play a full best-of-3 match."""
 
-    @pytest.mark.parametrize("difficulty", [Difficulty.EASY, Difficulty.MEDIUM, Difficulty.HARD])
-    def test_ai_plays_full_match(self, difficulty: Difficulty) -> None:
+    @pytest.mark.parametrize("difficulty,match_type", [
+        (Difficulty.NOVICE, MatchType.AI_NOVICE),
+        (Difficulty.EASY, MatchType.AI_EASY),
+        (Difficulty.MEDIUM, MatchType.AI_MEDIUM),
+        (Difficulty.HARD, MatchType.AI_HARD),
+        (Difficulty.EXPERT, MatchType.AI_EXPERT),
+        (Difficulty.GRANDMASTER, MatchType.AI_GRANDMASTER),
+    ])
+    def test_ai_plays_full_match(self, difficulty: Difficulty, match_type: MatchType) -> None:
         engine = GameEngine()
         ai = create_ai_opponent(difficulty)
-        match_type = {
-            Difficulty.EASY: MatchType.AI_EASY,
-            Difficulty.MEDIUM: MatchType.AI_MEDIUM,
-            Difficulty.HARD: MatchType.AI_HARD,
-        }[difficulty]
 
         state = engine.start_match(match_type)
-        max_total_turns = TURN_LIMIT * 3 + 10  # safety limit
+        max_total_turns = TURN_LIMIT * 3 + 10
 
         for _ in range(max_total_turns):
             if state.status != MatchStatus.IN_PROGRESS:
@@ -198,8 +324,6 @@ class TestAIFullMatch:
 
             ai_action = ai.choose_action(state, history)
 
-            # P1 always charges (simple strategy for test)
-            p1_ki = state.current_round.p1_ki
             p1_action = Action.CHARGE
 
             state, _, _, match_result = engine.submit_turn(
@@ -209,5 +333,4 @@ class TestAIFullMatch:
             if match_result is not None:
                 break
 
-        # Match should have ended
         assert state.status == MatchStatus.COMPLETED

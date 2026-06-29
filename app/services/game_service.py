@@ -36,9 +36,12 @@ _engine = GameEngine()
 _active_games: dict[UUID, GameState] = {}
 
 _DIFFICULTY_TO_MATCH_TYPE: dict[Difficulty, MatchType] = {
+    Difficulty.NOVICE: MatchType.AI_NOVICE,
     Difficulty.EASY: MatchType.AI_EASY,
     Difficulty.MEDIUM: MatchType.AI_MEDIUM,
     Difficulty.HARD: MatchType.AI_HARD,
+    Difficulty.EXPERT: MatchType.AI_EXPERT,
+    Difficulty.GRANDMASTER: MatchType.AI_GRANDMASTER,
 }
 
 
@@ -130,9 +133,12 @@ async def submit_action(
 
     # Determine AI difficulty from match type
     difficulty_map = {
+        MatchType.AI_NOVICE: Difficulty.NOVICE,
         MatchType.AI_EASY: Difficulty.EASY,
         MatchType.AI_MEDIUM: Difficulty.MEDIUM,
         MatchType.AI_HARD: Difficulty.HARD,
+        MatchType.AI_EXPERT: Difficulty.EXPERT,
+        MatchType.AI_GRANDMASTER: Difficulty.GRANDMASTER,
     }
     difficulty = difficulty_map.get(state.match_type)
     if difficulty is None:

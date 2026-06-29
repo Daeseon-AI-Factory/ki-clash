@@ -42,14 +42,20 @@ def create_ai_opponent(difficulty: Difficulty) -> AIOpponent:
     Raises:
         ValueError: If difficulty is unknown.
     """
+    from app.core.ai_opponent.novice import NoviceAI
     from app.core.ai_opponent.easy import EasyAI
     from app.core.ai_opponent.medium import MediumAI
     from app.core.ai_opponent.hard import HardAI
+    from app.core.ai_opponent.expert import ExpertAI
+    from app.core.ai_opponent.grandmaster import GrandmasterAI
 
     opponents: dict[Difficulty, type[AIOpponent]] = {
+        Difficulty.NOVICE: NoviceAI,
         Difficulty.EASY: EasyAI,
         Difficulty.MEDIUM: MediumAI,
         Difficulty.HARD: HardAI,
+        Difficulty.EXPERT: ExpertAI,
+        Difficulty.GRANDMASTER: GrandmasterAI,
     }
 
     ai_class = opponents.get(difficulty)
