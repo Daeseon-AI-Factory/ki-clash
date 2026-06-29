@@ -5,6 +5,20 @@
   "installCommand": "npm install",
   "framework": "nextjs",
   "regions": ["icn1"],
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "www.jjan.daeseon.ai" }],
+      "destination": "https://jjan.daeseon.ai/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "kiclash.daeseon.ai" }],
+      "destination": "https://jjan.daeseon.ai/:path*",
+      "permanent": true
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
