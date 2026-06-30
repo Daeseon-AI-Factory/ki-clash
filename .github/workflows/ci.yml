@@ -8,6 +8,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch: {}  # allow manual "Run workflow" → re-deploy on demand
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -135,3 +136,45 @@ jobs:
           node-version: "20"
       - name: Check launch marketing links
         run: node scripts/check-launch-marketing.mjs
+
+  # ── Backend CD: on every push to main (after Python+Go gates pass), SSH into
+  #    the NCP server and redeploy the backend stack. This is the root fix that
+  #    replaces manual `ssh + git pull + docker compose` after every change.
+  #    No-ops (does NOT fail CI) until the three NCP_* secrets are configured:
+  #      NCP_HOST       e.g. 223.130.161.55
+  #      NCP_USER       the SSH user that owns the cloned repo
+  #      NCP_SSH_KEY    the matching PRIVATE key (full PEM/OpenSSH text)
+  #    Also runnable on demand via the Actions tab → "Run workflow". ──
+  deploy-backend:
+    needs: [python-test, go-test]
+    if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-backend-main
+      cancel-in-progress: false
+    steps:
+      - name: Deploy to NCP over SSH
+        env:
+          NCP_HOST: ${{ secrets.NCP_HOST }}
+          NCP_USER: ${{ secrets.NCP_USER }}
+          NCP_SSH_KEY: ${{ secrets.NCP_SSH_KEY }}
+        run: |
+          if [ -z "$NCP_HOST" ] || [ -z "$NCP_USER" ] || [ -z "$NCP_SSH_KEY" ]; then
+            echo "::warning::NCP_HOST/NCP_USER/NCP_SSH_KEY not set — skipping backend deploy. Add them in Settings → Secrets → Actions to enable CD."
+            exit 0
+          fi
+          mkdir -p ~/.ssh
+          printf '%s\n' "$NCP_SSH_KEY" > ~/.ssh/ncp_deploy
+          chmod 600 ~/.ssh/ncp_deploy
+          ssh-keyscan -H "$NCP_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh -i ~/.ssh/ncp_deploy -o StrictHostKeyChecking=accept-new "$NCP_USER@$NCP_HOST" '
+            set -euo pipefail
+            CF=$(find ~ /root /home /srv /opt -maxdepth 4 -name docker-compose.naver.yml 2>/dev/null | head -1)
+            test -n "$CF" || { echo "docker-compose.naver.yml not found on server"; exit 1; }
+            cd "$(dirname "$CF")"
+            echo "repo: $(pwd)  before: $(git rev-parse --short HEAD)"
+            git pull --ff-only
+            echo "after: $(git rev-parse --short HEAD)"
+            COMPOSE_PROJECT_NAME=jjan docker compose -f docker-compose.naver.yml up -d --build
+            COMPOSE_PROJECT_NAME=jjan docker compose -f docker-compose.naver.yml ps
+          '
