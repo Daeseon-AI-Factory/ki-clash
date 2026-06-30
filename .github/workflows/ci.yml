@@ -140,10 +140,16 @@ jobs:
   # ── Backend CD: on every push to main (after Python+Go gates pass), SSH into
   #    the NCP server and redeploy the backend stack. This is the root fix that
   #    replaces manual `ssh + git pull + docker compose` after every change.
-  #    No-ops (does NOT fail CI) until the three NCP_* secrets are configured:
-  #      NCP_HOST       e.g. 223.130.161.55
+  #
+  #    Connects by DOMAIN, not IP — the NCP box's IP changes, but the API
+  #    domain's DNS always tracks the current host, so this survives IP churn.
+  #    NCP_HOST defaults to api.jjan.daeseon.ai; override only if the SSH host
+  #    differs from the API domain.
+  #
+  #    No-ops (does NOT fail CI) until these secrets are configured:
   #      NCP_USER       the SSH user that owns the cloned repo
   #      NCP_SSH_KEY    the matching PRIVATE key (full PEM/OpenSSH text)
+  #      NCP_HOST       (optional) SSH host/domain; default api.jjan.daeseon.ai
   #    Also runnable on demand via the Actions tab → "Run workflow". ──
   deploy-backend:
     needs: [python-test, go-test]
@@ -155,14 +161,15 @@ jobs:
     steps:
       - name: Deploy to NCP over SSH
         env:
-          NCP_HOST: ${{ secrets.NCP_HOST }}
+          NCP_HOST: ${{ secrets.NCP_HOST || 'api.jjan.daeseon.ai' }}
           NCP_USER: ${{ secrets.NCP_USER }}
           NCP_SSH_KEY: ${{ secrets.NCP_SSH_KEY }}
         run: |
-          if [ -z "$NCP_HOST" ] || [ -z "$NCP_USER" ] || [ -z "$NCP_SSH_KEY" ]; then
-            echo "::warning::NCP_HOST/NCP_USER/NCP_SSH_KEY not set — skipping backend deploy. Add them in Settings → Secrets → Actions to enable CD."
+          if [ -z "$NCP_USER" ] || [ -z "$NCP_SSH_KEY" ]; then
+            echo "::warning::NCP_USER/NCP_SSH_KEY not set — skipping backend deploy. Host defaults to api.jjan.daeseon.ai (DNS follows IP changes). Add the secrets in Settings → Secrets → Actions to enable CD."
             exit 0
           fi
+          echo "Deploying to $NCP_USER@$NCP_HOST (resolves to $(getent hosts "$NCP_HOST" | awk '{print $1}' | head -1 || echo '?'))"
           mkdir -p ~/.ssh
           printf '%s\n' "$NCP_SSH_KEY" > ~/.ssh/ncp_deploy
           chmod 600 ~/.ssh/ncp_deploy
