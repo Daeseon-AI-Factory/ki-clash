@@ -128,6 +128,13 @@ export default function TurnReveal({
   if (!turnResult || !visible) return null;
 
   const outcome = OUTCOME_DISPLAY[turnResult.outcome];
+  // Win/lose subtext is name-aware so PvP reads "Opponent wins" (not "AI wins").
+  const subtext =
+    turnResult.outcome === "p1_wins_round"
+      ? `${playerName} win the round!`
+      : turnResult.outcome === "p2_wins_round"
+        ? `${aiName} wins the round!`
+        : outcome.subtext;
   const isFlipped = stage !== "face_down";
   const showOutcome = stage === "outcome";
 
@@ -164,7 +171,7 @@ export default function TurnReveal({
             <p className={`text-3xl font-black ${outcome.color}`}>
               {outcome.text}
             </p>
-            <p className="text-sm text-gray-400 mt-1">{outcome.subtext}</p>
+            <p className="text-sm text-gray-400 mt-1">{subtext}</p>
           </div>
         )}
       </div>

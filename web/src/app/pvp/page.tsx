@@ -6,12 +6,13 @@ import ActionCard from "@/components/ActionCard";
 import KiMeter from "@/components/KiMeter";
 import type { Action } from "@/lib/api";
 import { API_TO_ACTION, type ActionKind } from "@/lib/actions";
-import type { TurnOutcome } from "@/lib/api";
+import type { TurnOutcome, TurnResult } from "@/lib/api";
 import Link from "next/link";
 import KiAuraArena from "@/components/arena/KiAuraArena";
 import PixiFxOverlay, {
   type OverlayEffect,
 } from "@/components/arena/pixi/PixiFxOverlayClient";
+import TurnReveal, { getShakeClass } from "@/components/TurnReveal";
 import MatchFinale from "@/components/finale/MatchFinale";
 import RoomScreen from "@/components/room/RoomScreen";
 import { AdBanner, InterstitialAd } from "@/components/ads";
@@ -20,23 +21,6 @@ import { useAdTiming } from "@/hooks/useAdTiming";
 import { getCharacter } from "@/lib/characters";
 
 const ACTIONS: Action[] = ["charge", "block", "attack", "energy_wave", "teleport"];
-
-const OUTCOME_DISPLAY: Record<string, { text: string; color: string }> = {
-  you_win: { text: "HIT!", color: "text-green-400" },
-  you_lose: { text: "HIT!", color: "text-red-400" },
-  clash: { text: "CLASH!", color: "text-yellow-400" },
-  blocked: { text: "BLOCKED!", color: "text-blue-400" },
-  dodged: { text: "DODGED!", color: "text-purple-400" },
-  neutral: { text: "—", color: "text-gray-400" },
-};
-
-const ACTION_EMOJI: Record<string, string> = {
-  charge: "⚡",
-  block: "🛡️",
-  attack: "👊",
-  energy_wave: "🔥",
-  teleport: "💨",
-};
 
 /**
  * Page-level mode controls which top-level UI is showing:
@@ -90,6 +74,14 @@ export default function PvPPage() {
     player: DEFAULT_PLAYER_CHAR,
     opponent: DEFAULT_OPPONENT_CHAR,
   });
+  // Screen shake on the dramatic reveal — identical to single-player (AI) mode.
+  const [shakeClass, setShakeClass] = useState("");
+  const handleOutcomeRevealed = useCallback((o: TurnOutcome) => {
+    const cls = getShakeClass(o);
+    if (!cls) return;
+    setShakeClass(cls);
+    setTimeout(() => setShakeClass(""), 500);
+  }, []);
   const initialRoomHandledRef = useRef(false);
   const visiblePageMode: PageMode =
     phase === "lobby" && pageMode === "pvp" ? "menu" : pageMode;
@@ -113,6 +105,21 @@ export default function PvPPage() {
     }
     return null;
   })();
+
+  // Map PvP turn data → the shared TurnReveal shape (p1=you, p2=opponent),
+  // using the engine-perspective outcome already derived as arenaOutcome.
+  const revealTurn: TurnResult | null = turnResult
+    ? ({
+        turn_number: 0,
+        p1_action: turnResult.your_action,
+        p2_action: turnResult.opponent_action,
+        outcome: arenaOutcome ?? "neutral",
+        p1_ki_before: 0,
+        p2_ki_before: 0,
+        p1_ki_after: 0,
+        p2_ki_after: 0,
+      } as TurnResult)
+    : null;
 
   const playerCharacter = getCharacter(chars.player);
   const opponentCharacter = getCharacter(chars.opponent);
@@ -200,7 +207,7 @@ export default function PvPPage() {
   // ── Render ──────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-[100svh] bg-gray-900 text-white flex flex-col items-center justify-center p-4">
+    <div className={`min-h-[100svh] bg-gray-900 text-white flex flex-col items-center justify-center p-4 ${shakeClass}`}>
       <InterstitialAd show={showInterstitial} onDismiss={dismissInterstitial} />
 
       {error && visiblePageMode !== "room" && (
@@ -435,21 +442,13 @@ export default function PvPPage() {
 
               {phase === "revealing" && turnResult && (
                 <>
-                  <div className="flex items-center justify-center gap-8">
-                    <div className="flex flex-col items-center">
-                      <span className="text-4xl">{ACTION_EMOJI[turnResult.your_action] || "❓"}</span>
-                      <span className="text-xs text-green-400">You</span>
-                    </div>
-                    <span className="text-2xl font-bold text-gray-500">VS</span>
-                    <div className="flex flex-col items-center">
-                      <span className="text-4xl">{ACTION_EMOJI[turnResult.opponent_action] || "❓"}</span>
-                      <span className="text-xs text-red-400">{opponentName || "Opponent"}</span>
-                    </div>
-                  </div>
-                  {(() => {
-                    const display = OUTCOME_DISPLAY[turnResult.outcome] || OUTCOME_DISPLAY.neutral;
-                    return <p className={`text-3xl font-black text-center ${display.color}`}>{display.text}</p>;
-                  })()}
+                  <TurnReveal
+                    turnResult={revealTurn}
+                    visible={true}
+                    onOutcomeRevealed={handleOutcomeRevealed}
+                    playerName="You"
+                    aiName={opponentName || "Opponent"}
+                  />
                   <div className="flex justify-between text-sm text-gray-400 px-4">
                     <span>Your Ki: {turnResult.your_ki}</span>
                     <span>Opp Ki: {turnResult.opponent_ki}</span>
