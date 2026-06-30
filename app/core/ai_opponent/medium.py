@@ -1,8 +1,10 @@
 # CORE_CANDIDATE
-"""Medium AI — pattern-based counter strategy.
+"""Medium AI — frequency-counter with ki economy awareness and noise.
 
-Tracks the opponent's last 3 moves and picks the best counter.
-Beatable by varying strategy, but punishes repetitive players.
+Looks at the opponent's last 5 moves, counters the most frequent.
+20% random noise makes it harder to game-plan against.
+Also considers ki economy: bursts when holding lots of ki,
+and anticipates opponent bursts when they have ki to spend.
 """
 
 import random
@@ -15,16 +17,14 @@ from app.core.game_engine.types import (
     TurnResult,
 )
 
-# Counter mapping: if opponent does X, AI should do Y
 _COUNTER: dict[Action, Action] = {
-    Action.CHARGE: Action.ATTACK,       # punish charging
-    Action.BLOCK: Action.ENERGY_WAVE,   # pierce the block (or charge)
-    Action.ATTACK: Action.BLOCK,        # block the attack
-    Action.ENERGY_WAVE: Action.TELEPORT,  # dodge the wave
-    Action.TELEPORT: Action.CHARGE,     # free charge while they dodge nothing
+    Action.CHARGE: Action.ATTACK,
+    Action.BLOCK: Action.ENERGY_WAVE,
+    Action.ATTACK: Action.BLOCK,
+    Action.ENERGY_WAVE: Action.TELEPORT,
+    Action.TELEPORT: Action.CHARGE,
 }
 
-# Fallback: if we can't afford the counter
 _COUNTER_FALLBACK: dict[Action, list[Action]] = {
     Action.CHARGE: [Action.ATTACK, Action.CHARGE],
     Action.BLOCK: [Action.CHARGE, Action.ATTACK],
@@ -33,61 +33,60 @@ _COUNTER_FALLBACK: dict[Action, list[Action]] = {
     Action.TELEPORT: [Action.CHARGE, Action.BLOCK],
 }
 
+_RANDOM_WEIGHTS: dict[Action, float] = {
+    Action.CHARGE: 0.30,
+    Action.BLOCK: 0.20,
+    Action.ATTACK: 0.30,
+    Action.ENERGY_WAVE: 0.10,
+    Action.TELEPORT: 0.10,
+}
+
 
 class MediumAI:
-    """Pattern-matching AI that counters the opponent's recent moves."""
+    """Frequency-counter AI with ki economy awareness."""
 
     def choose_action(
         self,
         game_state: GameState,
         history: list[TurnResult],
     ) -> Action:
-        """Choose an action by countering the opponent's most common recent move.
-
-        Looks at the opponent's (P1's) last 3 moves, finds the most
-        frequent, and plays the counter. Falls back to weighted random
-        if no history yet.
-
-        Args:
-            game_state: Current game state.
-            history: Turn history for the current round.
-
-        Returns:
-            The chosen counter action.
-        """
         current_round = game_state.current_round
         ai_ki = current_round.p2_ki if current_round else 0
+        opp_ki = current_round.p1_ki if current_round else 0
 
-        # No history yet — play like easy AI but slightly smarter
-        if len(history) < 1:
+        # 20% random noise — prevents perfect pattern-exploitation
+        if random.random() < 0.20:
             return self._random_affordable(ai_ki)
 
-        # Look at opponent's (P1) last 3 moves
-        recent_p1_actions = [t.p1_action for t in history[-3:]]
-        most_common = Counter(recent_p1_actions).most_common(1)[0][0]
+        # Ki economy: if we have lots of ki, push an Energy Wave
+        if ai_ki >= 6 and random.random() < 0.45:
+            return Action.ENERGY_WAVE
 
-        # Pick counter
+        # Threat anticipation: dodge if opponent can afford a burst
+        if opp_ki >= 3 and random.random() < 0.25:
+            if ai_ki >= ACTION_KI_COST[Action.TELEPORT]:
+                return Action.TELEPORT
+
+        if not history:
+            return self._random_affordable(ai_ki)
+
+        # Frequency analysis over last 5 moves
+        recent_p1 = [t.p1_action for t in history[-5:]]
+        most_common = Counter(recent_p1).most_common(1)[0][0]
+
         counter = _COUNTER[most_common]
         if ai_ki >= ACTION_KI_COST[counter]:
             return counter
 
-        # Can't afford counter — try fallbacks
         for fallback in _COUNTER_FALLBACK[most_common]:
             if ai_ki >= ACTION_KI_COST[fallback]:
                 return fallback
 
-        # Last resort: Charge or Block (always free)
         return Action.CHARGE
 
     def _random_affordable(self, ai_ki: int) -> Action:
-        """Pick a random affordable action with slight attack bias."""
         affordable = [a for a in Action if ai_ki >= ACTION_KI_COST[a]]
-        weights = {
-            Action.CHARGE: 0.30,
-            Action.BLOCK: 0.20,
-            Action.ATTACK: 0.30,
-            Action.ENERGY_WAVE: 0.10,
-            Action.TELEPORT: 0.10,
-        }
-        w = [weights[a] for a in affordable]
-        return random.choices(affordable, weights=w, k=1)[0]
+        weights = [_RANDOM_WEIGHTS[a] for a in affordable]
+        total = sum(weights)
+        normalized = [w / total for w in weights]
+        return random.choices(affordable, weights=normalized, k=1)[0]
