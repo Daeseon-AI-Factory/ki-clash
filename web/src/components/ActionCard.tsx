@@ -51,8 +51,8 @@ const ACTION_CONFIG: Record<
     description: "Hits Charge",
   },
   energy_wave: {
-    label: "Energy Wave",
-    korean: "에네르기파",
+    label: "Ki Burst",
+    korean: "기폭",
     emoji: "🔥",
     cost: 3,
     color: "border-orange-400 ring-orange-400",

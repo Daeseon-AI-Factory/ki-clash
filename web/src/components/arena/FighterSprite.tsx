@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import type { Character } from "@/lib/characters";
 import { fighterAsset, type CharacterId } from "@/lib/assets";
@@ -15,14 +15,16 @@ function poseToAssetPose(
   return pose === "recover" ? "impact" : pose;
 }
 
+type FighterPoseAsset = ReturnType<typeof poseToAssetPose>;
+
 /**
- * Anime fighter sprite — image-first with an SVG fallback.
+ * Fighter sprite — image-first with an SVG fallback.
  *
  * Render order:
  *   1. Try `/fighters/<id>/idle.png` (or pose-specific if available).
- *      Recommended: 512px+ wide, transparent BG, full-body kung-fu stance.
+ *      Recommended: 512px+ wide, transparent BG, full-body combat stance.
  *   2. On <img> error, fall back to the procedural SVG chibi defined below
- *      (shōnen-archetype design — Goku/Naruto/Bleach knockoffs).
+ *      so the game remains playable even if a pose asset is missing.
  *
  * Pose lifecycle (idle/windup/impact/recover/hit/ko/victory) is driven by
  * CSS transforms applied to the OUTER motion.div, so a single idle.png
@@ -47,6 +49,9 @@ interface FighterSpriteProps {
   flip?: boolean;
   /** Width in px (height auto-scales) */
   width?: number;
+  /** "auto" uses the original PNG roster first; "svg" forces fallback art. */
+  assetMode?: "auto" | "svg";
+  className?: string;
 }
 
 const SKIN = "#F3D9B8";
@@ -56,7 +61,7 @@ const PANTS = "#1F2937";
 
 interface CharacterDesign {
   /** Hair archetype (drives HairBack + HairFront paths) */
-  hair: "shonen-spike" | "long-flow" | "topknot" | "side-pony" | "swept" | "parted-bangs";
+  hair: "burst-spike" | "long-flow" | "topknot" | "side-pony" | "swept" | "parted-bangs";
   hairColor: string;
   hairTip?: string;
   outfitMain: string;
@@ -68,29 +73,29 @@ interface CharacterDesign {
 }
 
 const CHARACTER_DESIGN: Record<string, CharacterDesign> = {
-  // Goku-vibe: spiky black hair, blue-tinted gi, monk dot, calm-but-fierce
+  // Sky monk: spiky black hair, orange combat robe, blue sash.
   haneul: {
-    hair: "shonen-spike",
+    hair: "burst-spike",
     hairColor: "#1f2937",
     hairTip: "#60A5FA",
-    outfitMain: "#F59E0B",   // orange gi
+    outfitMain: "#F59E0B",   // orange robe
     outfitTrim: "#1E40AF",   // deep-blue sash
     iris: "#1E3A8A",
     accessory: "monk-dot",
   },
-  // Trunks-vibe: lavender swept hair, high-collar saiyan jacket
+  // Moon oracle: lavender swept hair, high-collar jacket.
   bora: {
     hair: "swept",
     hairColor: "#A78BFA",
     hairTip: "#C084FC",
     outfitMain: "#312E81",   // dark indigo undersuit
-    outfitTrim: "#F3F4F6",   // white armor plate accent
+    outfitTrim: "#F3F4F6",   // white plate accent
     iris: "#7C3AED",
     accessory: "moon",
   },
-  // Naruto-vibe: blond spike, headband, orange jumpsuit
+  // Sun brawler: blond spike, headband, orange combat suit.
   taeyang: {
-    hair: "shonen-spike",
+    hair: "burst-spike",
     hairColor: "#FCD34D",
     hairTip: "#FBBF24",
     outfitMain: "#EA580C",   // bright orange
@@ -98,9 +103,9 @@ const CHARACTER_DESIGN: Record<string, CharacterDesign> = {
     iris: "#1D4ED8",
     accessory: "headband",
   },
-  // Hitsugaya-vibe: silver spike-frost hair, captain haori over white
+  // Rain captain: silver frost hair, teal outer robe over white.
   danbi: {
-    hair: "shonen-spike",
+    hair: "burst-spike",
     hairColor: "#E5E7EB",
     hairTip: "#22D3EE",
     outfitMain: "#0E7490",   // teal haori
@@ -108,7 +113,7 @@ const CHARACTER_DESIGN: Record<string, CharacterDesign> = {
     iris: "#0891B2",
     accessory: "earring",
   },
-  // Master-vibe: topknot, broad shoulders, beard, brown/orange robe
+  // Stone master: topknot, broad shoulders, beard, earth robe.
   seokjin: {
     hair: "topknot",
     hairColor: "#451A03",
@@ -117,7 +122,7 @@ const CHARACTER_DESIGN: Record<string, CharacterDesign> = {
     iris: "#78350F",
     accessory: "beard",
   },
-  // Boa Hancock-vibe: long pink hair, elegant fitted outfit, condescending
+  // Crystal queen: long pink hair, elegant fitted outfit.
   yuri: {
     hair: "long-flow",
     hairColor: "#F472B6",
@@ -145,7 +150,34 @@ export default function FighterSprite({
   pose = "idle",
   flip = false,
   width = 80,
+  assetMode = "auto",
+  className = "",
 }: FighterSpriteProps) {
+  const assetPose = poseToAssetPose(pose);
+
+  return (
+    <FighterSpriteFrame
+      key={`${character.id}:${assetPose}:${assetMode}`}
+      character={character}
+      pose={pose}
+      flip={flip}
+      width={width}
+      assetMode={assetMode}
+      className={className}
+      assetPose={assetPose}
+    />
+  );
+}
+
+function FighterSpriteFrame({
+  character,
+  pose,
+  flip = false,
+  width = 80,
+  assetMode = "auto",
+  className = "",
+  assetPose,
+}: FighterSpriteProps & { pose: FighterPose; assetPose: FighterPoseAsset }) {
   const height = width * 1.85;
   const design = designFor(character);
 
@@ -155,16 +187,14 @@ export default function FighterSprite({
   //   3. procedural SVG
   // When the pose or character changes, restart the chain — the asset may
   // exist for one pose but not another.
-  const assetPose = poseToAssetPose(pose);
   const [attempt, setAttempt] = useState<ImageAttempt>(
-    assetPose === "idle" ? "idle" : "pose",
+    assetMode === "svg" ? "svg" : assetPose === "idle" ? "idle" : "pose",
   );
-  useEffect(() => {
-    setAttempt(assetPose === "idle" ? "idle" : "pose");
-  }, [assetPose, character.id]);
 
   const imageSrc =
-    attempt === "pose"
+    assetMode === "svg"
+      ? null
+      : attempt === "pose"
       ? fighterAsset(character.id as CharacterId, assetPose)
       : attempt === "idle"
         ? fighterAsset(character.id as CharacterId, "idle")
@@ -245,7 +275,7 @@ export default function FighterSprite({
 
   return (
     <motion.div
-      className="relative"
+      className={`relative ${className}`}
       style={{
         width,
         height,
@@ -583,7 +613,7 @@ function HairBack({ design, characterId }: { design: CharacterDesign; characterI
   const fill = `url(#hair-${characterId})`;
   switch (design.hair) {
     case "long-flow":
-      // Long flowing hair past the shoulders (Boa Hancock / Yuri)
+      // Long flowing hair past the shoulders
       return (
         <path
           d={`M 30 22 Q 22 60, 30 90 L 42 92 Q 36 50, 38 26 Z
@@ -591,8 +621,8 @@ function HairBack({ design, characterId }: { design: CharacterDesign; characterI
           fill={fill}
         />
       );
-    case "shonen-spike":
-      // Wild spiky back-volume (Goku / Naruto)
+    case "burst-spike":
+      // Wild spiky back-volume
       return (
         <path
           d={`M 30 22 L 22 6 L 32 18 L 24 0 L 38 16 L 28 -4 L 44 14
@@ -616,7 +646,7 @@ function HairBack({ design, characterId }: { design: CharacterDesign; characterI
         </>
       );
     case "swept":
-      // Long fringe swept hair (Trunks / Bora)
+      // Long fringe swept hair
       return (
         <>
           <ellipse cx="50" cy="22" rx="17" ry="13" fill={fill} />
@@ -633,7 +663,7 @@ function HairBack({ design, characterId }: { design: CharacterDesign; characterI
 function HairFront({ design, characterId }: { design: CharacterDesign; characterId: string }) {
   const fill = `url(#hair-${characterId})`;
   switch (design.hair) {
-    case "shonen-spike":
+    case "burst-spike":
       // Wild forward-facing spike fringe
       return (
         <path

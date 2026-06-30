@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { ensureAuth, type Action } from "@/lib/api";
+import { trackEvent } from "@/lib/analytics";
 
 /**
  * PvP game phases — similar to AI mode but with matchmaking steps.
@@ -110,68 +111,6 @@ export function usePvP(): UsePvPReturn {
     return localStorage.getItem("ki_clash_token");
   };
 
-  /** Connect to matchmaking WebSocket and join queue */
-  const findMatch = useCallback(async () => {
-    try {
-      setError(null);
-      await ensureAuth();
-
-      const token = getToken();
-      if (!token) {
-        setError("Not authenticated");
-        return;
-      }
-
-      setPhase("searching");
-
-      const ws = new WebSocket(
-        `${WS_BASE}/api/v1/ws/matchmaking?token=${token}`
-      );
-      matchmakingWs.current = ws;
-
-      ws.onmessage = (event) => {
-        const msg = JSON.parse(event.data);
-
-        switch (msg.type) {
-          case "queue_joined":
-            // Still searching
-            break;
-
-          case "match_found":
-            // Found an opponent — connect to game WS
-            setOpponentName(msg.data.opponent_name);
-            setPhase("matched");
-            ws.close();
-            matchmakingWs.current = null;
-            connectToGame(msg.data.game_id, token);
-            break;
-
-          case "matchmaking_timeout":
-            setError("No opponents found. Try AI mode!");
-            setPhase("lobby");
-            ws.close();
-            matchmakingWs.current = null;
-            break;
-
-          case "pong":
-            break;
-        }
-      };
-
-      ws.onerror = () => {
-        setError("Connection error");
-        setPhase("lobby");
-      };
-
-      ws.onclose = () => {
-        matchmakingWs.current = null;
-      };
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to find match");
-      setPhase("lobby");
-    }
-  }, []);
-
   /** Connect to game WebSocket for real-time PvP */
   const connectToGame = useCallback(
     (gameId: string, token: string) => {
@@ -218,6 +157,13 @@ export function usePvP(): UsePvPReturn {
 
           case "match_result":
             setMatchResult(msg.data);
+            trackEvent("match_finish", {
+              mode: "pvp",
+              winner: msg.data.winner,
+              rounds_won_p1: msg.data.rounds_won_p1,
+              rounds_won_p2: msg.data.rounds_won_p2,
+              total_turns: msg.data.total_turns,
+            });
             setPhase("match_end");
             ws.close();
             gameWs.current = null;
@@ -254,6 +200,74 @@ export function usePvP(): UsePvPReturn {
     []
   );
 
+  /** Connect to matchmaking WebSocket and join queue */
+  const findMatch = useCallback(async () => {
+    try {
+      setError(null);
+      await ensureAuth();
+
+      const token = getToken();
+      if (!token) {
+        setError("Not authenticated");
+        return;
+      }
+
+      setPhase("searching");
+      trackEvent("pvp_quick_match_started");
+
+      const ws = new WebSocket(
+        `${WS_BASE}/api/v1/ws/matchmaking?token=${token}`
+      );
+      matchmakingWs.current = ws;
+
+      ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+
+        switch (msg.type) {
+          case "queue_joined":
+            // Still searching
+            break;
+
+          case "match_found":
+            // Found an opponent — connect to game WS
+            setOpponentName(msg.data.opponent_name);
+            setPhase("matched");
+            trackEvent("play_start", {
+              mode: "pvp_quick_match",
+              game_id: msg.data.game_id,
+              opponent_name: msg.data.opponent_name,
+            });
+            ws.close();
+            matchmakingWs.current = null;
+            connectToGame(msg.data.game_id, token);
+            break;
+
+          case "matchmaking_timeout":
+            setError("No opponents found. Try AI mode!");
+            setPhase("lobby");
+            ws.close();
+            matchmakingWs.current = null;
+            break;
+
+          case "pong":
+            break;
+        }
+      };
+
+      ws.onerror = () => {
+        setError("Connection error");
+        setPhase("lobby");
+      };
+
+      ws.onclose = () => {
+        matchmakingWs.current = null;
+      };
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to find match");
+      setPhase("lobby");
+    }
+  }, [connectToGame]);
+
   /** Join a pre-existing game (spawned by a Room — bypasses matchmaking). */
   const joinGame = useCallback(
     async (gameId: string, name?: string) => {
@@ -267,6 +281,11 @@ export function usePvP(): UsePvPReturn {
         }
         if (name) setOpponentName(name);
         setPhase("matched");
+        trackEvent("pvp_match_started", {
+          mode: "room",
+          game_id: gameId,
+          opponent_name: name ?? null,
+        });
         connectToGame(gameId, token);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to join game");
@@ -290,6 +309,10 @@ export function usePvP(): UsePvPReturn {
       gameWs.current.send(
         JSON.stringify({ type: "submit_action", action })
       );
+      trackEvent("action_submitted", {
+        mode: "pvp",
+        action,
+      });
     }
   }, []);
 

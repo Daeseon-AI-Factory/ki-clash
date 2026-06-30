@@ -1,9 +1,8 @@
-__pycache__/
-*.pyc
-.env
-*.egg-info/
-.pytest_cache/
-.git/
-.DS_Store
-web/node_modules/
-mobile/node_modules/
+*
+!Dockerfile
+!pyproject.toml
+!alembic.ini
+!alembic/
+!alembic/**
+!app/
+!app/**

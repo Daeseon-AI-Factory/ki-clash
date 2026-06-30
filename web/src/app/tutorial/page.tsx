@@ -7,7 +7,7 @@ import KiMeter from "@/components/KiMeter";
 import KiAuraArena from "@/components/arena/KiAuraArena";
 import { useActionAnimation } from "@/hooks/useActionAnimation";
 import { useTutorial } from "@/hooks/useTutorial";
-import { API_TO_ACTION, type ActionKind } from "@/lib/actions";
+import { API_TO_ACTION, formatActionLabel, type ActionKind } from "@/lib/actions";
 
 const ACTIONS: Action[] = ["charge", "block", "attack", "energy_wave", "teleport"];
 
@@ -68,7 +68,7 @@ export default function TutorialPage() {
           />
 
           <div className="bg-gray-800 rounded-xl p-4 text-sm text-gray-300 space-y-2 text-left">
-            <p><strong>5 Actions:</strong> Charge, Block, Attack, Energy Wave, Teleport</p>
+            <p><strong>5 Actions:</strong> Charge, Block, Attack, Ki Burst, Teleport</p>
             <p><strong>Goal:</strong> Read your opponent and land a hit while they&apos;re vulnerable.</p>
             <p><strong>Ki:</strong> You need ki to attack. Charge to build it up!</p>
           </div>
@@ -82,7 +82,7 @@ export default function TutorialPage() {
           </button>
 
           <Link
-            href="/"
+            href="/play"
             className="block text-sm text-gray-500 hover:text-gray-300 transition-colors"
           >
             ← Skip to game
@@ -166,7 +166,7 @@ export default function TutorialPage() {
             <div className="flex flex-col items-center">
               <span className="text-4xl">{ACTION_EMOJI[playerAction]}</span>
               <span className="text-sm text-gray-400 mt-1 capitalize">
-                {playerAction.replace("_", " ")}
+                {formatActionLabel(playerAction)}
               </span>
               <span className="text-xs text-green-400">You</span>
             </div>
@@ -174,7 +174,7 @@ export default function TutorialPage() {
             <div className="flex flex-col items-center">
               <span className="text-4xl">{ACTION_EMOJI[aiAction]}</span>
               <span className="text-sm text-gray-400 mt-1 capitalize">
-                {aiAction.replace("_", " ")}
+                {formatActionLabel(aiAction)}
               </span>
               <span className="text-xs text-red-400">AI</span>
             </div>
@@ -227,14 +227,14 @@ export default function TutorialPage() {
             </h2>
             <p className="text-gray-400 mt-2">
               You know the basics. There are 2 more moves to discover:
-              <strong className="text-orange-400"> Energy Wave</strong> (pierces Block, costs 3 ki) and
+              <strong className="text-orange-400"> Ki Burst</strong> (pierces Block, costs 3 ki) and
               <strong className="text-purple-400"> Teleport</strong> (dodges all attacks, costs 1 ki).
             </p>
           </div>
 
           <div className="space-y-3">
             <Link
-              href="/"
+              href="/play"
               className="block w-full py-4 bg-green-600 hover:bg-green-500 rounded-xl
                          text-xl font-bold transition-colors text-center"
             >

@@ -28,9 +28,10 @@ export function useSoundEffects() {
 
   // Restore mute preference on mount
   useEffect(() => {
-    if (typeof window !== "undefined") {
+    const handle = window.setTimeout(() => {
       setMuted(localStorage.getItem(MUTE_KEY) === "true");
-    }
+    }, 0);
+    return () => window.clearTimeout(handle);
   }, []);
 
   /** Get or create AudioContext (lazy — needs user gesture) */

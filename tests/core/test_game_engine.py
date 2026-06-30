@@ -78,7 +78,7 @@ class TestOutcomeMatrix:
     def test_attack_vs_teleport(self) -> None:
         assert resolve_actions(Action.ATTACK, Action.TELEPORT) == TurnOutcome.DODGED
 
-    # Energy Wave row
+    # Ki Burst row
     def test_energy_wave_vs_charge(self) -> None:
         assert resolve_actions(Action.ENERGY_WAVE, Action.CHARGE) == TurnOutcome.P1_WINS_ROUND
 
@@ -357,14 +357,14 @@ class TestGameEngine:
         state, turn_result, round_result, _ = engine.submit_turn(
             state, Action.ENERGY_WAVE, Action.BLOCK
         )
-        # Energy wave hits charging opponent? No — block. But energy wave pierces block.
-        # Wait, P2 is blocking not charging. Energy Wave vs Block = P1 wins.
+        # Ki Burst hits charging opponent? No — block. But Ki Burst pierces block.
+        # Wait, P2 is blocking not charging. Ki Burst vs Block = P1 wins.
         assert turn_result.outcome == TurnOutcome.P1_WINS_ROUND
         assert round_result is not None
         assert round_result.winner == RoundWinner.P1
 
     def test_teleport_dodges_energy_wave(self, engine: GameEngine) -> None:
-        """Teleport dodges energy wave → wasted ki for attacker."""
+        """Teleport dodges Ki Burst → wasted ki for attacker."""
         state = engine.start_match(MatchType.PVP)
         # Charge both up
         for _ in range(3):
@@ -398,10 +398,10 @@ class TestGameEngine:
 
 
 class TestEnergyWaveClash:
-    """Energy Wave vs Energy Wave: both pay 3 ki, no winner."""
+    """Ki Burst vs Ki Burst: both pay 3 ki, no winner."""
 
     def test_energy_wave_clash_both_lose_3_ki(self) -> None:
-        """Direct outcome_matrix call — Energy Wave clash drains both by 3."""
+        """Direct outcome_matrix call — Ki Burst clash drains both by 3."""
         result = resolve_turn(
             turn_number=1,
             p1_action=Action.ENERGY_WAVE,

@@ -33,6 +33,14 @@ const ACTION_EMOJI: Record<string, string> = {
   teleport: "💨",
 };
 
+const ACTION_LABEL: Record<Action, string> = {
+  charge: "Charge",
+  block: "Block",
+  attack: "Attack",
+  energy_wave: "Ki Burst",
+  teleport: "Teleport",
+};
+
 export default function TutorialScreen() {
   const router = useRouter();
   const {
@@ -77,7 +85,7 @@ export default function TutorialScreen() {
             <View style={styles.infoBox}>
               <Text style={styles.infoText}>
                 <Text style={styles.bold}>5 Actions:</Text> Charge, Block,
-                Attack, Energy Wave, Teleport
+                Attack, Ki Burst, Teleport
               </Text>
               <Text style={styles.infoText}>
                 <Text style={styles.bold}>Goal:</Text> Read your opponent and
@@ -181,7 +189,7 @@ export default function TutorialScreen() {
                   {ACTION_EMOJI[playerAction]}
                 </Text>
                 <Text style={styles.faceOffAction}>
-                  {playerAction.replace("_", " ")}
+                  {ACTION_LABEL[playerAction]}
                 </Text>
                 <Text style={[styles.faceOffPlayer, { color: colors.green }]}>
                   You
@@ -193,7 +201,7 @@ export default function TutorialScreen() {
                   {ACTION_EMOJI[aiAction]}
                 </Text>
                 <Text style={styles.faceOffAction}>
-                  {aiAction.replace("_", " ")}
+                  {ACTION_LABEL[aiAction]}
                 </Text>
                 <Text style={[styles.faceOffPlayer, { color: colors.red }]}>
                   AI
@@ -248,7 +256,7 @@ export default function TutorialScreen() {
             <Text style={styles.completeSubtext}>
               You know the basics. There are 2 more moves to discover:{" "}
               <Text style={{ color: colors.energyWave, fontWeight: "700" }}>
-                Energy Wave
+                Ki Burst
               </Text>{" "}
               (pierces Block, costs 3 ki) and{" "}
               <Text style={{ color: colors.teleport, fontWeight: "700" }}>

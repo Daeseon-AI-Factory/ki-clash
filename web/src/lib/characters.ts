@@ -27,7 +27,7 @@ export interface Character {
 
 export const CHARACTERS: Character[] = [
   {
-    // Goku-vibe shonen hero — orange gi, spiky black hair with blue tips
+    // Sky monk — orange combat robe, spiky black hair with blue tips.
     id: "haneul",
     name: "Kael",
     koreanName: "하늘 · Sky",
@@ -42,7 +42,7 @@ export const CHARACTERS: Character[] = [
     ],
   },
   {
-    // Trunks/Selene-vibe lavender warrior — moon emblem
+    // Lavender moon oracle — swept hair, moon emblem.
     id: "bora",
     name: "Selene",
     koreanName: "보라 · Moon Oracle",
@@ -58,7 +58,7 @@ export const CHARACTERS: Character[] = [
     ],
   },
   {
-    // Naruto-vibe blond brawler — bright spiky, headband
+    // Sun brawler — bright spiky hair, headband, loud pressure.
     id: "taeyang",
     name: "Blaze",
     koreanName: "태양 · Sun",
@@ -74,7 +74,7 @@ export const CHARACTERS: Character[] = [
     ],
   },
   {
-    // Hitsugaya/Yuki-vibe silver captain — calm, deadly water
+    // Rain captain — silver hair, calm water-step fighter.
     id: "danbi",
     name: "Yuki",
     koreanName: "단비 · Sweet Rain",
@@ -89,7 +89,7 @@ export const CHARACTERS: Character[] = [
     ],
   },
   {
-    // Old-master strongman — topknot, beard
+    // Old-master strongman — topknot, beard.
     id: "seokjin",
     name: "Atlas",
     koreanName: "석진 · Stone Master",
@@ -105,7 +105,7 @@ export const CHARACTERS: Character[] = [
     ],
   },
   {
-    // Boa Hancock-vibe elegant queen — long pink hair, condescending
+    // Crystal queen — long pink hair, elegant and condescending.
     id: "yuri",
     name: "Rosa",
     koreanName: "유리 · Crystal",

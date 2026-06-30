@@ -1,33 +1,35 @@
 /**
- * PvP screen — matchmaking and real-time game vs another player.
+ * PvP screen — quick match plus shareable room flow.
  *
- * Uses WebSocket connections for matchmaking + gameplay.
- * All phases: lobby → searching → matched → playing → waiting →
- *             revealing → round_end → match_end
+ * Mobile now mirrors the web online flow:
+ * menu -> quick match OR room lobby -> WebSocket game.
  */
 
+import { useState } from "react";
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
   ActivityIndicator,
   ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { usePvP } from "@/hooks/usePvP";
 import ActionCard from "@/components/ActionCard";
 import KiMeter from "@/components/KiMeter";
+import RoomLobby from "@/components/RoomLobby";
 import { BattleArena, PixelPortrait } from "@/components/deprecated/pixel-art";
 import { colors, fontSize, spacing } from "@/lib/theme";
 import type { Action } from "@/lib/api";
 
-// Default characters for PvP (no character select in PvP flow yet)
 const PVP_PLAYER_CHAR = "haneul";
 const PVP_OPPONENT_CHAR = "bora";
-
 const ACTIONS: Action[] = ["charge", "block", "attack", "energy_wave", "teleport"];
+
+type PageMode = "menu" | "room" | "pvp";
 
 const OUTCOME_DISPLAY: Record<string, { text: string; color: string }> = {
   you_win: { text: "HIT!", color: colors.green },
@@ -35,7 +37,7 @@ const OUTCOME_DISPLAY: Record<string, { text: string; color: string }> = {
   clash: { text: "CLASH!", color: colors.yellow },
   blocked: { text: "BLOCKED!", color: colors.blue },
   dodged: { text: "DODGED!", color: colors.purple },
-  neutral: { text: "—", color: colors.textSecondary },
+  neutral: { text: "-", color: colors.textSecondary },
 };
 
 const ACTION_EMOJI: Record<string, string> = {
@@ -64,7 +66,54 @@ export default function PvPScreen() {
     continueFromReveal,
     continueFromRound,
     backToLobby,
+    joinGame,
   } = usePvP();
+
+  const [pageMode, setPageMode] = useState<PageMode>("menu");
+  const [roomMode, setRoomMode] = useState<"create" | "join">("create");
+  const [joinCode, setJoinCode] = useState("");
+  const [chars, setChars] = useState({
+    player: PVP_PLAYER_CHAR,
+    opponent: PVP_OPPONENT_CHAR,
+  });
+
+  const visibleMode: PageMode =
+    phase === "lobby" && pageMode === "pvp" ? "menu" : pageMode;
+
+  const startQuickMatch = async () => {
+    setChars({ player: PVP_PLAYER_CHAR, opponent: PVP_OPPONENT_CHAR });
+    setPageMode("pvp");
+    await findMatch();
+  };
+
+  const startCreateRoom = () => {
+    setRoomMode("create");
+    setPageMode("room");
+  };
+
+  const startJoinRoom = () => {
+    const code = joinCode.trim().toUpperCase();
+    if (code.length !== 4) return;
+    setJoinCode(code);
+    setRoomMode("join");
+    setPageMode("room");
+  };
+
+  const handleRoomGameStart = async (
+    gameId: string,
+    oppName: string,
+    ourChar: string,
+    oppChar: string
+  ) => {
+    setChars({ player: ourChar, opponent: oppChar });
+    setPageMode("pvp");
+    await joinGame(gameId, oppName);
+  };
+
+  const backToMenu = () => {
+    backToLobby();
+    setPageMode("menu");
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -72,44 +121,94 @@ export default function PvPScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Error */}
-        {error && (
+        {error && visibleMode !== "room" && (
           <View style={styles.errorBox}>
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
 
-        {/* LOBBY */}
-        {phase === "lobby" && (
+        {visibleMode === "menu" && (
           <View style={styles.centerArea}>
             <BattleArena
-              playerCharacterId={PVP_PLAYER_CHAR}
-              aiCharacterId={PVP_OPPONENT_CHAR}
+              playerCharacterId={chars.player}
+              aiCharacterId={chars.opponent}
             />
             <Text style={styles.title}>PvP Mode</Text>
             <Text style={styles.subtitle}>기싸움 — vs Real Player</Text>
             <Text style={styles.tagline}>
-              Find an opponent and battle in real-time.
+              Create a room, share the code, or quick match.
             </Text>
+
             <TouchableOpacity
               style={styles.findButton}
-              onPress={findMatch}
+              onPress={startQuickMatch}
               activeOpacity={0.7}
             >
-              <Text style={styles.findButtonText}>Find Match</Text>
+              <Text style={styles.findButtonText}>Quick Match</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.roomButton}
+              onPress={startCreateRoom}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.findButtonText}>Create Room</Text>
+            </TouchableOpacity>
+
+            <View style={styles.joinBox}>
+              <Text style={styles.joinLabel}>Join Room</Text>
+              <View style={styles.joinRow}>
+                <TextInput
+                  value={joinCode}
+                  onChangeText={(value) =>
+                    setJoinCode(
+                      value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4)
+                    )
+                  }
+                  placeholder="ABCD"
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  maxLength={4}
+                  style={styles.joinInput}
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.joinButton,
+                    { opacity: joinCode.trim().length === 4 ? 1 : 0.5 },
+                  ]}
+                  disabled={joinCode.trim().length !== 4}
+                  onPress={startJoinRoom}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.joinButtonText}>Join</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
             <TouchableOpacity
               style={styles.backLink}
               onPress={() => router.back()}
               activeOpacity={0.7}
             >
-              <Text style={styles.backLinkText}>← Back to AI Mode</Text>
+              <Text style={styles.backLinkText}>Back to AI Mode</Text>
             </TouchableOpacity>
           </View>
         )}
 
-        {/* SEARCHING */}
-        {phase === "searching" && (
+        {visibleMode === "room" && (
+          <RoomLobby
+            mode={roomMode}
+            initialCode={joinCode}
+            onGameStart={handleRoomGameStart}
+            onExit={() => {
+              setJoinCode("");
+              setPageMode("menu");
+            }}
+          />
+        )}
+
+        {visibleMode === "pvp" && phase === "searching" && (
           <View style={styles.centerArea}>
             <Text style={styles.bigEmoji}>🔍</Text>
             <Text style={styles.statusTitle}>Searching for opponent...</Text>
@@ -118,7 +217,10 @@ export default function PvPScreen() {
             </Text>
             <TouchableOpacity
               style={styles.cancelButton}
-              onPress={cancelSearch}
+              onPress={() => {
+                cancelSearch();
+                setPageMode("menu");
+              }}
               activeOpacity={0.7}
             >
               <Text style={styles.cancelButtonText}>Cancel</Text>
@@ -126,12 +228,11 @@ export default function PvPScreen() {
           </View>
         )}
 
-        {/* MATCHED */}
-        {phase === "matched" && (
+        {visibleMode === "pvp" && phase === "matched" && (
           <View style={styles.centerArea}>
             <BattleArena
-              playerCharacterId={PVP_PLAYER_CHAR}
-              aiCharacterId={PVP_OPPONENT_CHAR}
+              playerCharacterId={chars.player}
+              aiCharacterId={chars.opponent}
             />
             <Text style={styles.statusTitle}>Match Found!</Text>
             <Text style={styles.statusSubtext}>vs {opponentName}</Text>
@@ -139,19 +240,18 @@ export default function PvPScreen() {
           </View>
         )}
 
-        {/* PLAYING */}
-        {phase === "playing" && gameState && (
+        {visibleMode === "pvp" && phase === "playing" && gameState && (
           <View style={styles.gameArea}>
             <BattleArena
-              playerCharacterId={PVP_PLAYER_CHAR}
-              aiCharacterId={PVP_OPPONENT_CHAR}
+              playerCharacterId={chars.player}
+              aiCharacterId={chars.opponent}
             />
             <View style={styles.scoreHeader}>
               <Text style={styles.roundInfo}>
                 Round {gameState.round_number} • Turn {gameState.turn}
               </Text>
               <Text style={styles.scoreText}>
-                You {roundsWonYou} — {roundsWonOpponent}{" "}
+                You {roundsWonYou} - {roundsWonOpponent}{" "}
                 {opponentName || "Opponent"}
               </Text>
             </View>
@@ -182,8 +282,7 @@ export default function PvPScreen() {
           </View>
         )}
 
-        {/* WAITING */}
-        {phase === "waiting" && (
+        {visibleMode === "pvp" && phase === "waiting" && (
           <View style={styles.centerArea}>
             <ActivityIndicator size="large" color={colors.yellow} />
             <Text style={styles.statusTitle}>Waiting for opponent...</Text>
@@ -193,13 +292,12 @@ export default function PvPScreen() {
           </View>
         )}
 
-        {/* REVEALING */}
-        {phase === "revealing" && turnResult && (
+        {visibleMode === "pvp" && phase === "revealing" && turnResult && (
           <View style={styles.centerArea}>
             <View style={styles.faceOff}>
               <View style={styles.faceOffSide}>
                 <Text style={styles.faceOffEmoji}>
-                  {ACTION_EMOJI[turnResult.your_action] || "❓"}
+                  {ACTION_EMOJI[turnResult.your_action] || "?"}
                 </Text>
                 <Text style={styles.faceOffAction}>
                   {turnResult.your_action.replace("_", " ")}
@@ -211,7 +309,7 @@ export default function PvPScreen() {
               <Text style={styles.faceOffVs}>VS</Text>
               <View style={styles.faceOffSide}>
                 <Text style={styles.faceOffEmoji}>
-                  {ACTION_EMOJI[turnResult.opponent_action] || "❓"}
+                  {ACTION_EMOJI[turnResult.opponent_action] || "?"}
                 </Text>
                 <Text style={styles.faceOffAction}>
                   {turnResult.opponent_action.replace("_", " ")}
@@ -249,8 +347,7 @@ export default function PvPScreen() {
           </View>
         )}
 
-        {/* ROUND END */}
-        {phase === "round_end" && roundResult && (
+        {visibleMode === "pvp" && phase === "round_end" && roundResult && (
           <View style={styles.centerArea}>
             <View style={styles.roundEndBox}>
               <Text style={styles.roundLabel}>
@@ -284,18 +381,17 @@ export default function PvPScreen() {
               onPress={continueFromRound}
               activeOpacity={0.7}
             >
-              <Text style={styles.nextButtonText}>Next Round →</Text>
+              <Text style={styles.nextButtonText}>Next Round</Text>
             </TouchableOpacity>
           </View>
         )}
 
-        {/* MATCH END */}
-        {phase === "match_end" && matchResult && (
+        {visibleMode === "pvp" && phase === "match_end" && matchResult && (
           <View style={styles.centerArea}>
             {matchResult.winner === "you" ? (
-              <PixelPortrait characterId={PVP_PLAYER_CHAR} size="lg" />
+              <PixelPortrait characterId={chars.player} size="lg" />
             ) : matchResult.winner === "opponent" ? (
-              <PixelPortrait characterId={PVP_OPPONENT_CHAR} size="lg" />
+              <PixelPortrait characterId={chars.opponent} size="lg" />
             ) : (
               <Text style={styles.bigEmoji}>🤝</Text>
             )}
@@ -332,10 +428,10 @@ export default function PvPScreen() {
 
             <TouchableOpacity
               style={[styles.nextButton, { backgroundColor: colors.btnSuccess }]}
-              onPress={backToLobby}
+              onPress={backToMenu}
               activeOpacity={0.7}
             >
-              <Text style={styles.nextButtonText}>Play Again</Text>
+              <Text style={styles.nextButtonText}>Back to PvP</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -396,13 +492,24 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xl,
     fontWeight: "700",
     color: colors.textPrimary,
+    textAlign: "center",
   },
   statusSubtext: {
     fontSize: fontSize.sm,
     color: colors.textSecondary,
+    textAlign: "center",
   },
   findButton: {
     backgroundColor: colors.btnDanger,
+    borderRadius: 12,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.xxl,
+    width: "100%",
+    maxWidth: 400,
+    alignItems: "center",
+  },
+  roomButton: {
+    backgroundColor: colors.btnPrimary,
     borderRadius: 12,
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.xxl,
@@ -414,6 +521,50 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xl,
     fontWeight: "700",
     color: colors.textPrimary,
+  },
+  joinBox: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: spacing.md,
+    width: "100%",
+    maxWidth: 400,
+    gap: spacing.sm,
+  },
+  joinLabel: {
+    color: colors.textSecondary,
+    fontSize: fontSize.xs,
+    fontWeight: "800",
+    letterSpacing: 2,
+    textTransform: "uppercase",
+    textAlign: "center",
+  },
+  joinRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  joinInput: {
+    flex: 1,
+    backgroundColor: colors.background,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: 10,
+    color: colors.textPrimary,
+    fontSize: fontSize.xl,
+    fontWeight: "900",
+    letterSpacing: 8,
+    paddingHorizontal: spacing.md,
+    textAlign: "center",
+  },
+  joinButton: {
+    backgroundColor: colors.purple,
+    borderRadius: 10,
+    justifyContent: "center",
+    paddingHorizontal: spacing.lg,
+  },
+  joinButtonText: {
+    color: colors.textPrimary,
+    fontSize: fontSize.md,
+    fontWeight: "800",
   },
   cancelButton: {
     backgroundColor: colors.surfaceHover,

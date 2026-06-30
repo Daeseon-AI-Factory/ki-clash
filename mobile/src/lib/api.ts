@@ -26,7 +26,13 @@ export type Action =
   | "energy_wave"
   | "teleport";
 
-export type Difficulty = "easy" | "medium" | "hard";
+export type Difficulty =
+  | "novice"
+  | "easy"
+  | "medium"
+  | "hard"
+  | "expert"
+  | "grandmaster";
 
 export type TurnOutcome =
   | "p1_wins_round"
@@ -97,6 +103,25 @@ export interface PlayerProfile {
   created_at: string;
 }
 
+export type RoomStatus = "waiting" | "both_present" | "in_game";
+
+export interface RoomPlayerData {
+  id: string;
+  name: string;
+  character_id: string | null;
+  ready: boolean;
+}
+
+export interface RoomData {
+  code: string;
+  host: RoomPlayerData;
+  guest: RoomPlayerData | null;
+  status: RoomStatus;
+  game_id: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
 // --- Secure token management (expo-secure-store) ---
 
 const KEYS = {
@@ -158,7 +183,9 @@ async function apiFetch<T>(
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body?.error?.message || `API error: ${res.status}`);
+    throw new Error(
+      body?.error?.message || body?.detail || `API error: ${res.status}`
+    );
   }
 
   return res.json();
@@ -207,6 +234,59 @@ export async function submitAction(
 
 export async function getMyProfile(): Promise<PlayerProfile> {
   return apiFetch<PlayerProfile>("/api/v1/players/me");
+}
+
+// --- PvP Rooms ---
+
+export async function createRoom(): Promise<{ code: string; room: RoomData }> {
+  return apiFetch<{ code: string; room: RoomData }>("/api/v1/rooms", {
+    method: "POST",
+  });
+}
+
+export async function getRoom(code: string): Promise<RoomData> {
+  return apiFetch<RoomData>(`/api/v1/rooms/${code.toUpperCase()}`);
+}
+
+export async function joinRoom(code: string): Promise<RoomData> {
+  return apiFetch<RoomData>(`/api/v1/rooms/${code.toUpperCase()}/join`, {
+    method: "POST",
+  });
+}
+
+export async function setRoomCharacter(
+  code: string,
+  characterId: string
+): Promise<RoomData> {
+  return apiFetch<RoomData>(`/api/v1/rooms/${code.toUpperCase()}/character`, {
+    method: "PUT",
+    body: JSON.stringify({ character_id: characterId }),
+  });
+}
+
+export async function setRoomReady(
+  code: string,
+  ready: boolean
+): Promise<RoomData> {
+  return apiFetch<RoomData>(`/api/v1/rooms/${code.toUpperCase()}/ready`, {
+    method: "PUT",
+    body: JSON.stringify({ ready }),
+  });
+}
+
+export async function startRoomGame(
+  code: string
+): Promise<{ game_id: string; room: RoomData }> {
+  return apiFetch<{ game_id: string; room: RoomData }>(
+    `/api/v1/rooms/${code.toUpperCase()}/start`,
+    { method: "POST" }
+  );
+}
+
+export async function leaveRoom(code: string): Promise<void> {
+  await apiFetch<void>(`/api/v1/rooms/${code.toUpperCase()}/leave`, {
+    method: "POST",
+  });
 }
 
 export interface MatchSummary {

@@ -463,7 +463,7 @@ function BlockFX({ phase }: { phase: ActionPhase }) {
 }
 
 function AttackFX({ phase, side }: { phase: ActionPhase; side: "left" | "right" }) {
-  // Physical PUNCH — fast, hard, red/black. Visually opposite to Energy Wave
+  // Physical PUNCH — fast, hard, red/black. Visually opposite to Ki Burst
   // (which is wide/glowing/yellow). One sharp flash, debris particles, knock-
   // back lines. No glowing energy palette — keep it visceral.
   return (
@@ -811,11 +811,10 @@ function EnergyChargeFX({ phase, color }: { phase: ActionPhase; color: string })
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Kamehameha-style beam — wide multi-layer plasma with screen-wide
-// shockwave at impact. Visually distinct from the punch (which is fast,
-// red, debris-based). This is slow-build, wide, yellow plasma + electric.
+// Ki Burst beam — wide multi-layer plasma with screen-wide shockwave at
+// impact. Visually distinct from the punch (which is fast, red, debris-based).
 
-function KamehamehaBeam({ color, from }: { color: string; from: "left" | "right" }) {
+function KiBurstBeam({ color, from }: { color: string; from: "left" | "right" }) {
   const isLeft = from === "left";
   const initialClip = isLeft ? "inset(0 100% 0 0)" : "inset(0 0 0 100%)";
   const beamGradient = isLeft
@@ -981,7 +980,7 @@ function CrossScreenFX({
   const aiPunch = aiAction === "attack" && phase === "impact";
 
   // Confetti spark burst when an attack lands. Cheap drama at the impact
-  // point — gold sparks for punch, orange embers for energy wave.
+  // point — gold sparks for punch, orange embers for Ki Burst.
   const confettiFiredRef = useRef<string | null>(null);
   useEffect(() => {
     const key = `${phase}|${playerAction}|${aiAction}`;
@@ -1019,8 +1018,8 @@ function CrossScreenFX({
 
   return (
     <AnimatePresence>
-      {playerBeam && <KamehamehaBeam color={playerColor} from="left" />}
-      {aiBeam && <KamehamehaBeam color={aiColor} from="right" />}
+      {playerBeam && <KiBurstBeam color={playerColor} from="left" />}
+      {aiBeam && <KiBurstBeam color={aiColor} from="right" />}
       {/* Flying fist for basic Attack — projectile crossing from attacker toward target */}
       {playerPunch && (
         <motion.div

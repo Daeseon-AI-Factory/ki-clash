@@ -14,7 +14,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { View, Text, StyleSheet, Animated } from "react-native";
 import * as Haptics from "expo-haptics";
 import { colors, fontSize, spacing } from "@/lib/theme";
-import type { TurnResult, TurnOutcome } from "@/lib/api";
+import type { Action, TurnResult, TurnOutcome } from "@/lib/api";
 
 type RevealStage = "face_down" | "flipping" | "paused" | "outcome";
 
@@ -36,6 +36,18 @@ const ACTION_EMOJI: Record<string, string> = {
   energy_wave: "\uD83D\uDD25",
   teleport: "\uD83D\uDCA8",
 };
+
+const ACTION_LABEL: Record<Action, string> = {
+  charge: "Charge",
+  block: "Block",
+  attack: "Attack",
+  energy_wave: "Ki Burst",
+  teleport: "Teleport",
+};
+
+function formatActionLabel(action: string): string {
+  return ACTION_LABEL[action as Action] ?? action.replace(/_/g, " ");
+}
 
 const OUTCOME_DISPLAY: Record<
   TurnOutcome,
@@ -173,7 +185,7 @@ export default function TurnReveal({
       <View style={styles.faceOff}>
         <FlipCard
           emoji={ACTION_EMOJI[turnResult.p1_action] || "?"}
-          label={turnResult.p1_action.replace("_", " ")}
+          label={formatActionLabel(turnResult.p1_action)}
           who={playerName}
           whoColor={colors.green}
           frontRotate={frontRotate}
@@ -184,7 +196,7 @@ export default function TurnReveal({
         <Text style={styles.vs}>VS</Text>
         <FlipCard
           emoji={ACTION_EMOJI[turnResult.p2_action] || "?"}
-          label={turnResult.p2_action.replace("_", " ")}
+          label={formatActionLabel(turnResult.p2_action)}
           who={aiName}
           whoColor={colors.red}
           frontRotate={frontRotate}

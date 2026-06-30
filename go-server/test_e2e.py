@@ -17,13 +17,23 @@ Run while:
 
 import asyncio
 import json
+import os
+import ssl
 import sys
 import urllib.request
 import urllib.error
 import websockets
 
-PY = "http://localhost:8000"
-GO_WS = "ws://localhost:8001"
+try:
+    import certifi
+except ImportError:
+    certifi = None
+
+PY = os.environ.get("PY", "http://localhost:8000")
+GO_WS = os.environ.get("GO_WS", "ws://localhost:8001")
+SSL_CONTEXT = ssl.create_default_context(
+    cafile=certifi.where() if certifi else None
+)
 
 
 def http_json(method, path, token=None, body=None):
@@ -33,7 +43,7 @@ def http_json(method, path, token=None, body=None):
     if body is not None:
         req.add_header("Content-Type", "application/json")
         req.data = json.dumps(body).encode()
-    with urllib.request.urlopen(req) as r:
+    with urllib.request.urlopen(req, context=SSL_CONTEXT, timeout=10) as r:
         return json.loads(r.read())
 
 
@@ -54,8 +64,9 @@ async def main():
     game_id = http_json("POST", f"/api/v1/rooms/{code}/start", token=t1)["game_id"]
     print(f"Game = {game_id}")
 
-    ws1 = await websockets.connect(f"{GO_WS}/api/v1/ws/game/{game_id}?token={t1}")
-    ws2 = await websockets.connect(f"{GO_WS}/api/v1/ws/game/{game_id}?token={t2}")
+    ws_ssl = SSL_CONTEXT if GO_WS.startswith("wss://") else None
+    ws1 = await websockets.connect(f"{GO_WS}/api/v1/ws/game/{game_id}?token={t1}", ssl=ws_ssl)
+    ws2 = await websockets.connect(f"{GO_WS}/api/v1/ws/game/{game_id}?token={t2}", ssl=ws_ssl)
     print("Both WSs connected")
 
     # Both should receive a waiting_for_action after start()

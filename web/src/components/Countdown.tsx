@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface CountdownProps {
   /** Total seconds for the timer */
@@ -31,52 +31,49 @@ export default function Countdown({
   paused = false,
 }: CountdownProps) {
   const [remaining, setRemaining] = useState(seconds);
-  const startTimeRef = useRef(Date.now());
+  const startTimeRef = useRef(0);
   const rafRef = useRef<number>(0);
   const firedRef = useRef(false);
   const lastBeatRef = useRef(seconds);
 
-  // Reset when seconds or paused changes
   useEffect(() => {
+    if (paused) return;
+
     startTimeRef.current = Date.now();
-    setRemaining(seconds);
     firedRef.current = false;
     lastBeatRef.current = seconds;
-  }, [seconds, paused]);
-
-  const tick = useCallback(() => {
-    if (paused) return;
-
-    const elapsed = (Date.now() - startTimeRef.current) / 1000;
-    const left = Math.max(0, seconds - elapsed);
-    setRemaining(left);
-
-    // Fire beat on each whole-second boundary
-    const currentSecond = Math.ceil(left);
-    if (currentSecond < lastBeatRef.current && currentSecond > 0) {
-      lastBeatRef.current = currentSecond;
-      onBeat?.();
-    }
-
-    if (left <= 0 && !firedRef.current) {
-      firedRef.current = true;
-      onBeat?.();
-      onTimeout();
-      return;
-    }
-
-    rafRef.current = requestAnimationFrame(tick);
-  }, [seconds, paused, onTimeout, onBeat]);
-
-  useEffect(() => {
-    if (paused) return;
-
-    // Fire initial beat
     onBeat?.();
+    const resetTimer = window.setTimeout(() => setRemaining(seconds), 0);
+
+    const tick = () => {
+      const elapsed = (Date.now() - startTimeRef.current) / 1000;
+      const left = Math.max(0, seconds - elapsed);
+      setRemaining(left);
+
+      // Fire beat on each whole-second boundary
+      const currentSecond = Math.ceil(left);
+      if (currentSecond < lastBeatRef.current && currentSecond > 0) {
+        lastBeatRef.current = currentSecond;
+        onBeat?.();
+      }
+
+      if (left <= 0 && !firedRef.current) {
+        firedRef.current = true;
+        onBeat?.();
+        onTimeout();
+        return;
+      }
+
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
     rafRef.current = requestAnimationFrame(tick);
 
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [tick, paused, onBeat]);
+    return () => {
+      window.clearTimeout(resetTimer);
+      cancelAnimationFrame(rafRef.current);
+    };
+  }, [seconds, paused, onTimeout, onBeat]);
 
   const fraction = remaining / seconds;
   const displayNumber = Math.ceil(remaining);

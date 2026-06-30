@@ -1,6 +1,8 @@
 # Fighter Sprite Assets
 
-Drop transparent PNGs here and `FighterSprite.tsx` picks them up automatically — no code change needed.
+This folder contains the playable fighter PNG roster. Keep the existing
+character silhouettes and poses, but only ship art that has passed the
+IP-clearance checklist.
 
 ## Folder layout
 
@@ -20,7 +22,8 @@ web/public/fighters/
 └── yuri/idle.png
 ```
 
-Currently the sprite uses `idle.png` for ALL poses and animates via CSS transforms. Drop pose-specific PNGs later if you want richer animation.
+`idle.png` can be used for all poses and animated via CSS transforms. Drop
+pose-specific PNGs when you want richer animation.
 
 ## Required image specs
 
@@ -35,15 +38,19 @@ Currently the sprite uses `idle.png` for ALL poses and animates via CSS transfor
 
 ## Fallback behavior
 
-Missing PNG → component renders the procedural SVG chibi (see `FighterSprite.tsx`) so the game never breaks during development. Add files one at a time; each character upgrades independently.
+Missing PNG → component renders the procedural SVG chibi (see `FighterSprite.tsx`) so the game never breaks during development. The service UI should use `assetMode="auto"` for the main roster.
 
 ## Generating images
 
-See `docs/firefly-prompts.md` for 6 prompts ready to copy-paste into Adobe Firefly (commercial-license safe). Same workflow works for Midjourney / Leonardo / Stable Diffusion — adjust style anchor as needed.
+See `docs/firefly-prompts.md` for six IP-cleared prompt specs. Do not reference
+existing anime, manga, games, films, comics, studios, or named characters in
+prompts, source filenames, alt text, commits, or documentation.
 
 ## Workflow
 
-1. Generate / commission PNG for one character (start with `haneul/idle.png`)
+1. Generate / commission or retouch PNG for one character (start with `haneul/idle.png`)
 2. Drop into `web/public/fighters/haneul/idle.png`
-3. Reload the page — that character now uses the image; others stay on SVG
-4. Repeat per character
+3. Review silhouette, outfit, color combo, prompt text, and metadata for IP risk
+4. Keep the consuming component on `assetMode="auto"`
+5. Reload the page — that character now uses the image
+6. Repeat per character

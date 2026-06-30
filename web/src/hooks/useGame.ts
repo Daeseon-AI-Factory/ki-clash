@@ -13,6 +13,7 @@ import {
   type RoundResult,
   type MatchResult,
 } from "@/lib/api";
+import { trackEvent } from "@/lib/analytics";
 import { getRandomCharacterExcluding } from "@/lib/characters";
 
 /**
@@ -78,6 +79,7 @@ export function useGame(): UseGameReturn {
   /** Step 1: Store difficulty, move to character select */
   const selectDifficulty = useCallback((difficulty: Difficulty) => {
     difficultyRef.current = difficulty;
+    trackEvent("difficulty_selected", { mode: "ai", difficulty });
     setPhase("character_select");
   }, []);
 
@@ -100,6 +102,13 @@ export function useGame(): UseGameReturn {
       setLastTurn(null);
       setLastRound(null);
       setMatchResult(null);
+      trackEvent("play_start", {
+        mode: "ai",
+        difficulty: difficultyRef.current,
+        character_id: characterId,
+        ai_character_id: aiChar.id,
+        game_id: state.game_id,
+      });
       setPhase("playing");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to start game");
@@ -117,6 +126,12 @@ export function useGame(): UseGameReturn {
         setPhase("loading");
 
         const response = await submitAction(gameState.game_id, action);
+        trackEvent("action_submitted", {
+          mode: "ai",
+          action,
+          game_id: gameState.game_id,
+          turn_number: gameState.current_round?.turn_number ?? null,
+        });
 
         setLastTurn(response.turn_result);
         setGameState(response.game_state);
@@ -124,6 +139,14 @@ export function useGame(): UseGameReturn {
         if (response.match_result) {
           setMatchResult(response.match_result);
           setLastRound(response.round_result);
+          trackEvent("match_finish", {
+            mode: "ai",
+            game_id: response.game_state.game_id,
+            winner: response.match_result.winner,
+            rounds_won_p1: response.match_result.rounds_won_p1,
+            rounds_won_p2: response.match_result.rounds_won_p2,
+            total_turns: response.match_result.total_turns,
+          });
           setPhase("match_end");
         } else if (response.round_result) {
           setLastRound(response.round_result);

@@ -10,6 +10,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { ensureAuth, getToken, type Action } from "@/lib/api";
+import { errorMessage, trackEvent } from "@/lib/analytics";
 
 export type PvPPhase =
   | "lobby"
@@ -21,7 +22,9 @@ export type PvPPhase =
   | "round_end"
   | "match_end";
 
-const WS_BASE = process.env.EXPO_PUBLIC_WS_URL || "ws://localhost:8000";
+const API_BASE = process.env.EXPO_PUBLIC_API_URL || "http://localhost:8000";
+const WS_BASE =
+  process.env.EXPO_PUBLIC_WS_URL ?? API_BASE.replace(/^http(s?):/, "ws$1:");
 
 interface TurnResultData {
   turn_number: number;
@@ -69,6 +72,7 @@ interface UsePvPReturn {
   continueFromReveal: () => void;
   continueFromRound: () => void;
   backToLobby: () => void;
+  joinGame: (gameId: string, opponentName?: string) => Promise<void>;
 }
 
 export function usePvP(): UsePvPReturn {
@@ -98,6 +102,10 @@ export function usePvP(): UsePvPReturn {
         `${WS_BASE}/api/v1/ws/game/${gameId}?token=${token}`
       );
       gameWs.current = ws;
+
+      ws.onopen = () => {
+        trackEvent("mobile_ws_game_open", { game_id: gameId });
+      };
 
       ws.onmessage = (event) => {
         const msg = JSON.parse(event.data);
@@ -137,6 +145,14 @@ export function usePvP(): UsePvPReturn {
 
           case "match_result":
             setMatchResult(msg.data);
+            trackEvent("match_finish", {
+              mode: "pvp",
+              game_id: gameId,
+              winner: msg.data.winner,
+              rounds_won_p1: msg.data.rounds_won_p1,
+              rounds_won_p2: msg.data.rounds_won_p2,
+              total_turns: msg.data.total_turns,
+            });
             setPhase("match_end");
             ws.close();
             gameWs.current = null;
@@ -154,6 +170,10 @@ export function usePvP(): UsePvPReturn {
 
           case "error":
             setError(msg.data.message);
+            trackEvent("mobile_ws_game_error", {
+              game_id: gameId,
+              message: msg.data.message,
+            });
             break;
 
           case "pong":
@@ -163,10 +183,16 @@ export function usePvP(): UsePvPReturn {
 
       ws.onerror = () => {
         setError("Game connection error");
+        trackEvent("mobile_ws_game_error", { game_id: gameId });
         setPhase("lobby");
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
+        trackEvent("mobile_ws_game_close", {
+          game_id: gameId,
+          code: event.code,
+          reason: event.reason || null,
+        });
         gameWs.current = null;
       };
     },
@@ -185,11 +211,16 @@ export function usePvP(): UsePvPReturn {
       }
 
       setPhase("searching");
+      trackEvent("pvp_quick_match_started", { client: "mobile" });
 
       const ws = new WebSocket(
         `${WS_BASE}/api/v1/ws/matchmaking?token=${token}`
       );
       matchmakingWs.current = ws;
+
+      ws.onopen = () => {
+        trackEvent("mobile_ws_matchmaking_open");
+      };
 
       ws.onmessage = (event) => {
         const msg = JSON.parse(event.data);
@@ -201,6 +232,11 @@ export function usePvP(): UsePvPReturn {
           case "match_found":
             setOpponentName(msg.data.opponent_name);
             setPhase("matched");
+            trackEvent("play_start", {
+              mode: "pvp_quick_match",
+              game_id: msg.data.game_id,
+              opponent_name: msg.data.opponent_name,
+            });
             ws.close();
             matchmakingWs.current = null;
             if (token) connectToGame(msg.data.game_id, token);
@@ -208,6 +244,7 @@ export function usePvP(): UsePvPReturn {
 
           case "matchmaking_timeout":
             setError("No opponents found. Try AI mode!");
+            trackEvent("mobile_matchmaking_timeout");
             setPhase("lobby");
             ws.close();
             matchmakingWs.current = null;
@@ -220,17 +257,69 @@ export function usePvP(): UsePvPReturn {
 
       ws.onerror = () => {
         setError("Connection error");
+        trackEvent("mobile_ws_matchmaking_error");
         setPhase("lobby");
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
+        trackEvent("mobile_ws_matchmaking_close", {
+          code: event.code,
+          reason: event.reason || null,
+        });
         matchmakingWs.current = null;
       };
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to find match");
+      const message = errorMessage(e);
+      setError(message || "Failed to find match");
+      trackEvent("mobile_pvp_error", {
+        surface: "quick_match",
+        message,
+      });
       setPhase("lobby");
     }
   }, [connectToGame]);
+
+  const joinGame = useCallback(
+    async (gameId: string, name?: string) => {
+      try {
+        setError(null);
+        await ensureAuth();
+
+        const token = await getToken();
+        if (!token) {
+          setError("Not authenticated");
+          return;
+        }
+
+        matchmakingWs.current?.close();
+        gameWs.current?.close();
+        setOpponentName(name || "Opponent");
+        setGameState(null);
+        setTurnResult(null);
+        setRoundResult(null);
+        setMatchResult(null);
+        setRoundsWonYou(0);
+        setRoundsWonOpponent(0);
+        setPhase("matched");
+        trackEvent("pvp_match_started", {
+          mode: "room",
+          game_id: gameId,
+          opponent_name: name || "Opponent",
+        });
+        connectToGame(gameId, token);
+      } catch (e) {
+        const message = errorMessage(e);
+        setError(message || "Failed to join game");
+        trackEvent("mobile_pvp_error", {
+          surface: "join_game",
+          game_id: gameId,
+          message,
+        });
+        setPhase("lobby");
+      }
+    },
+    [connectToGame]
+  );
 
   const cancelSearch = useCallback(() => {
     if (matchmakingWs.current) {
@@ -246,6 +335,10 @@ export function usePvP(): UsePvPReturn {
       gameWs.current.send(
         JSON.stringify({ type: "submit_action", action })
       );
+      trackEvent("action_submitted", {
+        mode: "pvp",
+        action,
+      });
     }
   }, []);
 
@@ -288,5 +381,6 @@ export function usePvP(): UsePvPReturn {
     continueFromReveal,
     continueFromRound,
     backToLobby,
+    joinGame,
   };
 }

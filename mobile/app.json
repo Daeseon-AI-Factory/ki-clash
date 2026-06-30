@@ -1,8 +1,9 @@
 {
   "expo": {
-    "name": "Ki Clash",
+    "name": "JJAN! Ki Clash",
     "slug": "ki-clash",
     "version": "1.0.0",
+    "description": "A fast 1v1 ki reveal duel with AI practice, PvP, ranked groundwork, and share links.",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -14,8 +15,12 @@
       "backgroundColor": "#111827"
     },
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.kiclash.app"
+      "supportsTablet": false,
+      "bundleIdentifier": "com.kiclash.app",
+      "buildNumber": "1",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -31,6 +36,13 @@
     "plugins": [
       "expo-router",
       "expo-secure-store"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "80a0a318-e077-40d4-be1a-897cbb1fd981"
+      }
+    },
+    "owner": "daeseonyoo"
   }
 }

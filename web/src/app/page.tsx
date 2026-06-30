@@ -1,410 +1,279 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useGame } from "@/hooks/useGame";
-import { useSoundEffects } from "@/hooks/useSoundEffects";
-import { getCharacter } from "@/lib/characters";
-import type { Difficulty, TurnOutcome } from "@/lib/api";
 import Link from "next/link";
-import GameBoard from "@/components/GameBoard";
-import MatchHUD from "@/components/MatchHUD";
-import TurnReveal, { getShakeClass } from "@/components/TurnReveal";
-import CharacterSelect from "@/components/CharacterSelect";
-import AITrashTalk from "@/components/AITrashTalk";
-import MuteButton from "@/components/MuteButton";
-import KiAuraArena from "@/components/arena/KiAuraArena";
-import PixiFxOverlay, {
-  type OverlayEffect,
-} from "@/components/arena/pixi/PixiFxOverlayClient";
-import MatchFinale from "@/components/finale/MatchFinale";
-import { AdBanner, InterstitialAd } from "@/components/ads";
-import { useActionAnimation } from "@/hooks/useActionAnimation";
-import { useAdTiming } from "@/hooks/useAdTiming";
-import { API_TO_ACTION, type ActionKind } from "@/lib/actions";
+import { useMemo, useState } from "react";
+import { CHARACTERS, getCharacter } from "@/lib/characters";
+import FighterSprite, { type FighterPose } from "@/components/arena/FighterSprite";
+import { trackEvent } from "@/lib/analytics";
+import { PROMO_CAMPAIGN_BY_SLUG, buildPromoUrl } from "@/lib/promo-campaigns";
 
-/** Map turn outcomes to sound names */
-const OUTCOME_SOUND: Record<TurnOutcome, "hit" | "clash" | "block" | "dodge" | "charge"> = {
-  p1_wins_round: "hit",
-  p2_wins_round: "hit",
-  clash: "clash",
-  blocked: "block",
-  dodged: "dodge",
-  neutral: "charge",
-};
+const HERO_FIGHTERS = [
+  {
+    id: "haneul",
+    pose: "impact" as FighterPose,
+    width: 240,
+    className:
+      "left-[-4.75rem] bottom-[1.25rem] opacity-95 sm:left-[6vw] sm:bottom-[3rem]",
+  },
+  {
+    id: "bora",
+    pose: "windup" as FighterPose,
+    width: 230,
+    className:
+      "right-[-4.5rem] bottom-[1.5rem] opacity-90 sm:right-[7vw] sm:bottom-[3.25rem]",
+  },
+  {
+    id: "taeyang",
+    pose: "victory" as FighterPose,
+    width: 150,
+    className:
+      "left-1/2 top-[5.5rem] -translate-x-1/2 opacity-40 blur-[0.5px] sm:top-[5rem]",
+  },
+];
 
-export default function Home() {
-  const {
-    phase,
-    gameState,
-    lastTurn,
-    lastRound,
-    matchResult,
-    playerName,
-    playerCharacterId,
-    aiCharacterId,
-    error,
-    selectDifficulty,
-    startGame,
-    playAction,
-    continueFromReveal,
-    continueFromRound,
-    backToLobby,
-  } = useGame();
+const MODES = [
+  {
+    title: "Practice",
+    detail: "Fast AI matches with three difficulty levels.",
+    href: "/play",
+    accent: "border-cyan-400/60 text-cyan-200",
+  },
+  {
+    title: "PvP Rooms",
+    detail: "Create a four-character room and send the link.",
+    href: "/pvp",
+    accent: "border-rose-400/60 text-rose-200",
+  },
+  {
+    title: "Ranked",
+    detail: "Leaderboard groundwork is already live.",
+    href: "/ranked",
+    accent: "border-yellow-300/60 text-yellow-200",
+  },
+];
 
-  const { play, muted, toggleMute } = useSoundEffects();
-  const [shakeClass, setShakeClass] = useState("");
-  const { action: arenaAction, phase: arenaPhase, triggerAction: triggerArenaAction } =
-    useActionAnimation();
-  const { showInterstitial, showAds, onMatchEnd, dismissInterstitial } = useAdTiming();
-
-  // Derive AI's animated action from lastTurn — synced to the same phase as the player.
-  const aiArenaAction: ActionKind | null =
-    arenaAction && lastTurn ? API_TO_ACTION[lastTurn.p2_action] : null;
-
-  // Derive character objects from IDs (memoized to avoid re-lookups)
-  const playerCharacter = useMemo(
-    () => (playerCharacterId ? getCharacter(playerCharacterId) : undefined),
-    [playerCharacterId]
-  );
-  const aiCharacter = useMemo(
-    () => (aiCharacterId ? getCharacter(aiCharacterId) : undefined),
-    [aiCharacterId]
-  );
-
-  // Display names — use character name if chosen, else fall back to player/AI label.
-  const playerDisplayName = playerCharacter ? playerCharacter.name : playerName;
-  const aiDisplayName = aiCharacter ? aiCharacter.name : "AI";
-
-  // ── WebGL effect overlay (additive — layered over KiAuraArena, DR-18) ────
-  const hexToNum = (hex?: string): number =>
-    parseInt((hex ?? "").replace("#", ""), 16) || 0xffffff;
-  const playerColorNum = hexToNum(playerCharacter?.color);
-  const aiColorNum = hexToNum(aiCharacter?.color);
-  const [arenaEffect, setArenaEffect] = useState<OverlayEffect | null>(null);
-  const effectNonce = useRef(0);
-  const enemyFxTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const fireEffect = useCallback((kind: OverlayEffect["kind"], side: OverlayEffect["side"]) => {
-    effectNonce.current += 1;
-    setArenaEffect({ kind, side, nonce: effectNonce.current });
+export default function OfficialHomePage() {
+  const [copied, setCopied] = useState(false);
+  const shareUrl = useMemo(() => {
+    const origin =
+      typeof window === "undefined" ? "https://jjan.daeseon.ai" : window.location.origin;
+    return buildPromoUrl(PROMO_CAMPAIGN_BY_SLUG["friend-share"], origin);
   }, []);
-  useEffect(() => () => { if (enemyFxTimer.current) clearTimeout(enemyFxTimer.current); }, []);
 
-  // Track previous phase to detect transitions
-  const prevPhaseRef = useRef(phase);
-
-  // Auto-advance — total reveal hold ~3s per request (was 5.1s, felt too long).
-  // TurnReveal's outcome lands ~2.1s in, so this leaves a brief beat to read
-  // the result before the next turn.
-  useEffect(() => {
-    if (phase === "revealing") {
-      const t = setTimeout(continueFromReveal, 3000);
-      return () => clearTimeout(t);
+  const copyPromoLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      trackEvent("invite_copied", {
+        surface: "landing",
+        method: "clipboard",
+        promo: "friend-share",
+      });
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setCopied(false);
     }
-    if (phase === "round_end") {
-      const t = setTimeout(continueFromRound, 3000);
-      return () => clearTimeout(t);
+  };
+
+  const nativeShare = async () => {
+    if (!navigator.share) {
+      await copyPromoLink();
+      return;
     }
-  }, [phase, continueFromReveal, continueFromRound]);
-
-  // Play sounds on phase transitions
-  useEffect(() => {
-    const prevPhase = prevPhaseRef.current;
-    prevPhaseRef.current = phase;
-
-    // Reveal sound + arena animation when entering revealing/round_end/match_end from loading
-    if (
-      prevPhase === "loading" &&
-      phase !== "loading" &&
-      phase !== "playing" &&
-      phase !== "lobby" &&
-      phase !== "character_select"
-    ) {
-      play("reveal");
-
-      // Outcome sound after a short delay (let reveal sweep finish)
-      if (lastTurn) {
-        setTimeout(() => play(OUTCOME_SOUND[lastTurn.outcome]), 300);
-        // Drive KiAuraArena's action animation lifecycle (motion — untouched).
-        triggerArenaAction(API_TO_ACTION[lastTurn.p1_action]);
-        // ADD WebGL particle effects on top: player now, AI staggered ~140ms.
-        fireEffect(lastTurn.p1_action, "player");
-        if (enemyFxTimer.current) clearTimeout(enemyFxTimer.current);
-        const aiAct = lastTurn.p2_action;
-        enemyFxTimer.current = setTimeout(() => fireEffect(aiAct, "enemy"), 140);
-      }
+    try {
+      await navigator.share({
+        title: "JJAN! · Ki Clash",
+        text: "Read, charge, strike. Play JJAN!, the 1v1 ki reveal duel.",
+        url: shareUrl,
+      });
+      trackEvent("invite_copied", {
+        surface: "landing",
+        method: "native_share",
+        promo: "friend-share",
+      });
+    } catch {
+      // User cancelled the native sheet.
     }
+  };
 
-    // Round result sounds
-    if (phase === "round_end" && lastRound) {
-      setTimeout(() => {
-        play(lastRound.winner === "p1" ? "round_win" : "round_lose");
-      }, 600);
-    }
+  return (
+    <main className="min-h-screen bg-[#0b0b14] text-white">
+      <section className="relative isolate flex min-h-[86svh] overflow-hidden">
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,#10121f_0%,#0b0b14_42%,#090910_100%)]" />
+        <div className="absolute inset-0 opacity-55 [background-image:linear-gradient(rgba(255,255,255,0.07)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] [background-size:72px_72px]" />
+        <div className="absolute inset-x-0 bottom-0 h-1/3 bg-[linear-gradient(180deg,transparent,rgba(0,0,0,0.72))]" />
 
-    // Match result — sound + ad trigger. (MatchFinale handles its own visual cinematics.)
-    if (phase === "match_end" && matchResult) {
-      setTimeout(() => {
-        play(matchResult.winner === "p1" ? "round_win" : "round_lose");
-      }, 1500); // delay until after vignette + zoom — lands with the title slam
-      onMatchEnd();
-    }
-  }, [phase, lastTurn, lastRound, matchResult, play, onMatchEnd, triggerArenaAction, fireEffect]); // eslint-disable-line react-hooks/exhaustive-deps
+        {HERO_FIGHTERS.map((fighter) => (
+          <HeroFighter
+            key={fighter.id}
+            id={fighter.id}
+            pose={fighter.pose}
+            width={fighter.width}
+            className={fighter.className}
+          />
+        ))}
 
-  /** Countdown beat handler — plays click sound on each tick */
-  const handleCountdownBeat = useCallback(() => {
-    play("countdown_beat");
-  }, [play]);
+        <header className="absolute left-0 right-0 top-0 z-20 mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-5 sm:px-8">
+          <Link href="/" className="font-black tracking-wide text-white">
+            JJAN!
+          </Link>
+          <nav className="flex items-center gap-2 text-sm font-semibold text-white/72">
+            <Link className="rounded-full px-3 py-2 hover:bg-white/10 hover:text-white" href="/play">
+              Play
+            </Link>
+            <Link className="rounded-full px-3 py-2 hover:bg-white/10 hover:text-white" href="/pvp">
+              PvP
+            </Link>
+            <Link className="rounded-full px-3 py-2 hover:bg-white/10 hover:text-white" href="/invite">
+              Share
+            </Link>
+          </nav>
+        </header>
 
-  /** Screen shake when outcome is revealed inside TurnReveal */
-  const handleOutcomeRevealed = useCallback((outcome: TurnOutcome) => {
-    const cls = getShakeClass(outcome);
-    if (cls) {
-      setShakeClass(cls);
-      // Remove class after animation completes so it can re-trigger
-      setTimeout(() => setShakeClass(""), 500);
-    }
-  }, []);
+        <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-col justify-end px-5 pb-[9svh] pt-28 sm:px-8">
+          <div className="max-w-3xl">
+            <p className="mb-4 inline-flex rounded-full border border-yellow-300/45 bg-black/35 px-4 py-2 text-xs font-black uppercase tracking-[0.28em] text-yellow-200">
+              Real-time ki reveal duel
+            </p>
+            <h1 className="text-[4rem] font-black leading-[0.82] text-white sm:text-[7rem] lg:text-[9rem]">
+              JJAN<span className="text-yellow-300">!</span>
+            </h1>
+            <p className="mt-5 max-w-2xl text-lg font-medium leading-7 text-white/78 sm:text-2xl sm:leading-9">
+              Read the opponent, bank your ki, and call the strike at the
+              exact second they get greedy.
+            </p>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <Link
+                href="/play"
+                className="inline-flex items-center justify-center rounded-xl bg-yellow-300 px-6 py-4 text-base font-black text-gray-950 shadow-[0_1rem_2.5rem_rgba(250,204,21,0.24)] transition hover:bg-yellow-200"
+              >
+                Play now
+              </Link>
+              <Link
+                href="/pvp"
+                className="inline-flex items-center justify-center rounded-xl border border-white/25 bg-white/10 px-6 py-4 text-base font-black text-white backdrop-blur transition hover:bg-white/[0.16]"
+              >
+                Create PvP room
+              </Link>
+              <button
+                onClick={nativeShare}
+                className="inline-flex items-center justify-center rounded-xl border border-cyan-300/35 bg-cyan-300/10 px-6 py-4 text-base font-black text-cyan-100 transition hover:bg-cyan-300/[0.16]"
+              >
+                {copied ? "Promo link copied" : "Share promo link"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="border-y border-white/10 bg-[#11131f] px-5 py-5 sm:px-8">
+        <div className="mx-auto grid max-w-6xl grid-cols-2 gap-3 text-center sm:grid-cols-4">
+          <Stat label="Actions" value="5" />
+          <Stat label="Fighters" value={String(CHARACTERS.length)} />
+          <Stat label="Room Code" value="4" />
+          <Stat label="Rounds" value="BO3" />
+        </div>
+      </section>
+
+      <section className="mx-auto grid max-w-6xl gap-10 px-5 py-14 sm:px-8 lg:grid-cols-[0.95fr_1.05fr] lg:py-20">
+        <div>
+          <p className="text-sm font-black uppercase tracking-[0.24em] text-cyan-200">
+            Service build
+          </p>
+          <h2 className="mt-3 text-3xl font-black leading-tight sm:text-5xl">
+            A public face for the playable game.
+          </h2>
+          <p className="mt-5 text-base leading-7 text-white/68">
+            The game opens directly into practice, room PvP, or leaderboard
+            pages. The room flow now produces a real join URL, so a shared
+            link can take a friend straight into the lobby instead of stopping
+            at a dead challenge parameter.
+          </p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {MODES.map((mode) => (
+            <Link
+              key={mode.title}
+              href={mode.href}
+              className={`rounded-lg border bg-white/[0.045] p-5 transition hover:bg-white/[0.075] ${mode.accent}`}
+            >
+              <h3 className="text-lg font-black text-white">{mode.title}</h3>
+              <p className="mt-3 text-sm leading-6 text-white/62">{mode.detail}</p>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <section className="border-t border-white/10 bg-[#0f1019] px-5 py-12 sm:px-8">
+        <div className="mx-auto flex max-w-6xl flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-2xl font-black">Ready for a first public run?</h2>
+            <p className="mt-2 text-sm text-white/58">
+              Start with AI practice, then send a PvP room link to a friend.
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Link
+              href="/play"
+              className="rounded-xl bg-white px-5 py-3 text-center text-sm font-black text-gray-950 transition hover:bg-yellow-200"
+            >
+              Practice
+            </Link>
+            <Link
+              href="/pvp"
+              className="rounded-xl border border-white/20 px-5 py-3 text-center text-sm font-black text-white transition hover:bg-white/10"
+            >
+              Open PvP
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <footer className="border-t border-white/10 bg-[#090910] px-5 py-6 text-sm text-white/45 sm:px-8">
+        <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p>JJAN! Ki Clash</p>
+          <nav className="flex gap-4">
+            <Link href="/privacy" className="hover:text-white">Privacy</Link>
+            <Link href="/terms" className="hover:text-white">Terms</Link>
+            <Link href="/support" className="hover:text-white">Support</Link>
+          </nav>
+        </div>
+      </footer>
+    </main>
+  );
+}
+
+function HeroFighter({
+  id,
+  pose,
+  width,
+  className,
+}: {
+  id: string;
+  pose: FighterPose;
+  width: number;
+  className: string;
+}) {
+  const character = getCharacter(id);
+  if (!character) return null;
 
   return (
     <div
-      className={`min-h-[100svh] bg-gray-900 text-white flex flex-col items-center justify-center p-4 ${shakeClass}`}
+      className={`pointer-events-none absolute z-0 drop-shadow-[0_2rem_2.5rem_rgba(0,0,0,0.65)] ${className}`}
+      aria-hidden="true"
     >
-      {/* Mute toggle */}
-      <MuteButton muted={muted} onToggle={toggleMute} />
-
-      {/* Interstitial ad overlay (between matches, hidden if ad-free) */}
-      {showAds && <InterstitialAd show={showInterstitial} onDismiss={dismissInterstitial} />}
-
-      {/* Error display */}
-      {error && (
-        <div className="mb-4 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-300 text-sm">
-          {error}
-        </div>
-      )}
-
-      {/* LOBBY — Choose difficulty */}
-      {phase === "lobby" && (
-        <>
-          <LobbyScreen onStart={selectDifficulty} />
-          {showAds && (
-            <AdBanner
-              adSlot={process.env.NEXT_PUBLIC_ADSENSE_BANNER_SLOT || ""}
-              className="mt-6 w-full max-w-md"
-            />
-          )}
-        </>
-      )}
-
-      {/* CHARACTER SELECT — Pick your fighter */}
-      {phase === "character_select" && <CharacterSelect onSelect={startGame} />}
-
-      {/* LOADING */}
-      {phase === "loading" && (
-        <div className="text-center">
-          <div className="text-4xl animate-spin mb-4">⚡</div>
-          <p className="text-gray-400">Loading...</p>
-        </div>
-      )}
-
-      {/* UNIFIED GAMEPLAY — one fixed skeleton across playing/revealing/round_end.
-          HUD + arena stay in the SAME place/size every phase; only the
-          fixed-height bottom slot's CONTENT swaps. Nothing reflows → the screen
-          never jumps between phases. One screen, any phone, no scroll. */}
-      {(phase === "playing" || phase === "revealing" || phase === "round_end") &&
-        gameState && (
-          <div className="w-full max-w-2xl flex flex-col justify-center gap-2 overflow-hidden h-[calc(100svh-2rem)]">
-            {/* HUD — always present, same spot */}
-            <div className="shrink-0">
-              <MatchHUD
-                gameState={gameState}
-                playerName={playerName}
-                showAIThinking={phase === "playing"}
-                playerCharacter={playerCharacter}
-                aiCharacter={aiCharacter}
-              />
-            </div>
-
-            {/* Arena — always present, capped height (shorter, per request) so
-                the action cards always fit; never remounts between phases. */}
-            {playerCharacterId && aiCharacterId && (
-              <div className="relative flex-1 min-h-0 max-h-[34svh]">
-                <KiAuraArena
-                  playerCharacterId={playerCharacterId}
-                  aiCharacterId={aiCharacterId}
-                  playerAction={phase === "playing" ? null : arenaAction}
-                  aiAction={phase === "playing" ? null : aiArenaAction}
-                  phase={phase === "playing" ? "idle" : arenaPhase}
-                  outcome={phase === "playing" ? null : lastTurn?.outcome ?? null}
-                  fill
-                />
-                <PixiFxOverlay
-                  className="absolute inset-0 pointer-events-none"
-                  playerColor={playerColorNum}
-                  enemyColor={aiColorNum}
-                  effect={arenaEffect}
-                />
-              </div>
-            )}
-
-            {/* BOTTOM SLOT — natural height (never clips), min-h keeps it steady
-                across phases so the layout doesn't jump. */}
-            <div className="shrink-0 min-h-[12rem] flex flex-col justify-center">
-              {phase === "playing" && (
-                <GameBoard
-                  playerKi={gameState.current_round?.p1_ki ?? 0}
-                  disabled={false}
-                  onSubmit={playAction}
-                  onCountdownBeat={handleCountdownBeat}
-                />
-              )}
-              {phase === "revealing" && (
-                <TurnReveal
-                  turnResult={lastTurn}
-                  visible={true}
-                  onOutcomeRevealed={handleOutcomeRevealed}
-                  playerName={playerDisplayName}
-                  aiName={aiDisplayName}
-                />
-              )}
-              {phase === "round_end" && lastRound && (
-                <div className="text-center py-4 bg-gray-800 rounded-xl">
-                  <p className="text-sm text-gray-400 uppercase tracking-wider">
-                    Round {lastRound.round_number} Complete
-                  </p>
-                  <p
-                    className={`text-3xl font-black mt-2 ${
-                      lastRound.winner === "p1"
-                        ? "text-green-400"
-                        : lastRound.winner === "p2"
-                          ? "text-red-400"
-                          : "text-yellow-400"
-                    }`}
-                  >
-                    {lastRound.winner === "p1"
-                      ? "YOU WIN!"
-                      : lastRound.winner === "p2"
-                        ? "AI WINS!"
-                        : "DRAW!"}
-                  </p>
-                  <p className="text-sm text-gray-400 mt-1">
-                    {lastRound.total_turns} turns played
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-      {/* MATCH END — cinematic finale owns the entire screen */}
-      {phase === "match_end" && matchResult && (
-        <MatchFinale
-          result={
-            matchResult.winner === "p1"
-              ? "win"
-              : matchResult.winner === "p2"
-                ? "loss"
-                : "draw"
-          }
-          finalScore={{
-            player: matchResult.rounds_won_p1,
-            opponent: matchResult.rounds_won_p2,
-          }}
-          totalTurns={matchResult.total_turns}
-          playerCharacter={playerCharacter}
-          opponentCharacter={aiCharacter}
-          onPlayAgain={backToLobby}
-        />
-      )}
-
-      {/* Navigation links on lobby */}
-      {phase === "lobby" && (
-        <div className="mt-4 flex flex-col items-center gap-2">
-          <Link
-            href="/tutorial"
-            className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
-          >
-            How to Play (Tutorial) →
-          </Link>
-          <Link
-            href="/pvp"
-            className="text-sm text-red-400 hover:text-red-300 transition-colors"
-          >
-            vs Real Player (PvP) →
-          </Link>
-          <Link
-            href="/invite"
-            className="text-sm text-purple-400 hover:text-purple-300 transition-colors"
-          >
-            Challenge a Friend →
-          </Link>
-          <Link
-            href="/history"
-            className="text-sm text-gray-400 hover:text-gray-300 transition-colors"
-          >
-            Match History →
-          </Link>
-          <Link
-            href="/ranked"
-            className="text-sm text-yellow-400 hover:text-yellow-300 transition-colors"
-          >
-            Ranked Leaderboard →
-          </Link>
-          <Link
-            href="/shop"
-            className="text-sm text-green-400 hover:text-green-300 transition-colors"
-          >
-            Shop — Remove Ads →
-          </Link>
-        </div>
-      )}
+      <FighterSprite character={character} pose={pose} width={width} assetMode="auto" />
     </div>
   );
 }
 
-/** Lobby screen — title + difficulty selection */
-function LobbyScreen({
-  onStart,
-}: {
-  onStart: (difficulty: Difficulty) => void;
-}) {
-  const difficulties: { level: Difficulty; label: string; desc: string }[] = [
-    { level: "easy", label: "Easy", desc: "Random moves, charges a lot" },
-    { level: "medium", label: "Medium", desc: "Reads your patterns" },
-    { level: "hard", label: "Hard", desc: "Game-theory optimal" },
-  ];
-
+function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="text-center space-y-8 max-w-md">
-      <div>
-        <h1 className="text-6xl font-black mb-2 tracking-tighter"
-            style={{
-              textShadow: "0 0 24px #FACC1588, 0 2px 8px rgba(0,0,0,0.5)",
-              letterSpacing: "-0.04em",
-            }}>
-          JJAN<span className="text-yellow-300">!</span>
-        </h1>
-        <p className="text-xl text-gray-400">짠 · 기싸움</p>
-        <p className="text-sm text-gray-500 mt-2">
-          1-second reveal duel. Read your opponent. Charge your ki. Strike at the right moment.
-        </p>
-      </div>
-
-      <div className="space-y-3">
-        <p className="text-sm text-gray-400 uppercase tracking-wider">
-          Choose Difficulty
-        </p>
-        {difficulties.map(({ level, label, desc }) => (
-          <button
-            key={level}
-            onClick={() => onStart(level)}
-            className="w-full py-4 px-6 bg-gray-800 hover:bg-gray-700 border border-gray-700
-                       hover:border-gray-500 rounded-xl transition-all text-left"
-          >
-            <span className="text-lg font-bold">{label}</span>
-            <span className="text-sm text-gray-400 ml-3">{desc}</span>
-          </button>
-        ))}
-      </div>
+    <div className="rounded-lg border border-white/10 bg-black/[0.18] px-3 py-4">
+      <p className="text-2xl font-black text-white">{value}</p>
+      <p className="mt-1 text-[11px] font-bold uppercase tracking-[0.18em] text-white/48">
+        {label}
+      </p>
     </div>
   );
 }

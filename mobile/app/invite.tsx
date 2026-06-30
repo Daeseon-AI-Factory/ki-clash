@@ -21,7 +21,7 @@ import { CHARACTERS } from "@/lib/characters";
 import { PixelPortrait } from "@/components/deprecated/pixel-art";
 import { colors, fontSize, spacing } from "@/lib/theme";
 
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || "http://localhost:8000";
+const WEB_BASE = process.env.EXPO_PUBLIC_WEB_URL || "https://jjan.daeseon.ai";
 
 function generateUUID(): string {
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
@@ -39,11 +39,13 @@ export default function InviteScreen() {
 
   const createChallenge = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const id = generateUUID();
-    // Use a web-compatible URL for sharing
-    setChallengeLink(`${API_BASE.replace("/api", "")}/pvp?challenge=${id}`);
+    const url = new URL("/invite", WEB_BASE);
+    url.searchParams.set("ref", "mobile");
+    url.searchParams.set("character", selectedChar);
+    url.searchParams.set("share", generateUUID());
+    setChallengeLink(url.toString());
     setCopied(false);
-  }, []);
+  }, [selectedChar]);
 
   const shareLink = useCallback(async () => {
     if (!challengeLink) return;

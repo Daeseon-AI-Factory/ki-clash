@@ -17,9 +17,12 @@ import { colors, fontSize, spacing } from "@/lib/theme";
 import type { Difficulty } from "@/lib/api";
 
 const DIFFICULTIES: { level: Difficulty; label: string; desc: string }[] = [
+  { level: "novice", label: "Novice", desc: "Barely reactive — great for learning" },
   { level: "easy", label: "Easy", desc: "Random moves, charges a lot" },
-  { level: "medium", label: "Medium", desc: "Reads your patterns" },
-  { level: "hard", label: "Hard", desc: "Game-theory optimal" },
+  { level: "medium", label: "Medium", desc: "Reads your patterns, punishes habits" },
+  { level: "hard", label: "Hard", desc: "Adapts fast, manages ki aggressively" },
+  { level: "expert", label: "Expert", desc: "Calculates optimal moves — brutal" },
+  { level: "grandmaster", label: "Grandmaster", desc: "Solved the game. Punishes every habit. Near-unbeatable." },
 ];
 
 export default function LobbyScreen() {

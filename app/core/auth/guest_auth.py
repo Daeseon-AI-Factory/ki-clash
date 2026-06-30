@@ -23,7 +23,7 @@ _ADJECTIVES = [
     "Thunder", "Shadow", "Storm", "Iron", "Crystal",
 ]
 _NOUNS = [
-    "Warrior", "Fighter", "Saiyan", "Dragon", "Phoenix",
+    "Warrior", "Fighter", "Comet", "Dragon", "Phoenix",
     "Tiger", "Wolf", "Hawk", "Blaze", "Nova",
 ]
 

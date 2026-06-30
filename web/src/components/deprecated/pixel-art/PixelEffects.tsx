@@ -174,8 +174,8 @@ export function PixelChargeAura({ action, phase, color, side = "left" }: EffectP
     [-2, -3], [3, -4], [-3, 2], [4, 1], [0, -5], [-4, -1], [5, -2], [1, 3],
     [-1, -6], [4, -5], [-5, 0], [2, -7],
   ];
-  for (const [x, y] of offsets) {
-    particles.push(`${x * PX}px ${y * PX}px 0 ${Math.random() > 0.5 ? color : W}`);
+  for (const [index, [x, y]] of offsets.entries()) {
+    particles.push(`${x * PX}px ${y * PX}px 0 ${index % 2 === 0 ? color : W}`);
   }
 
   const isLeft = side === "left";

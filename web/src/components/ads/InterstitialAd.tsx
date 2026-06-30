@@ -22,14 +22,15 @@ export default function InterstitialAd({ show, onDismiss }: InterstitialAdProps)
   const [canDismiss, setCanDismiss] = useState(false);
 
   useEffect(() => {
-    if (!show) {
-      setCanDismiss(false);
-      return;
-    }
+    if (!show) return;
 
     // Allow dismiss after 2 seconds
-    const timer = setTimeout(() => setCanDismiss(true), 2000);
-    return () => clearTimeout(timer);
+    const resetTimer = setTimeout(() => setCanDismiss(false), 0);
+    const allowTimer = setTimeout(() => setCanDismiss(true), 2000);
+    return () => {
+      clearTimeout(resetTimer);
+      clearTimeout(allowTimer);
+    };
   }, [show]);
 
   if (!show) return null;

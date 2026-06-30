@@ -52,6 +52,16 @@ type PageMode = "menu" | "room" | "pvp";
 const DEFAULT_PLAYER_CHAR = "haneul";
 const DEFAULT_OPPONENT_CHAR = "bora";
 
+function readInitialRoomCode(): string {
+  if (typeof window === "undefined") return "";
+  return (new URLSearchParams(window.location.search).get("room")
+    || new URLSearchParams(window.location.search).get("code")
+    || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 4);
+}
+
 export default function PvPPage() {
   const {
     phase,
@@ -80,6 +90,9 @@ export default function PvPPage() {
     player: DEFAULT_PLAYER_CHAR,
     opponent: DEFAULT_OPPONENT_CHAR,
   });
+  const initialRoomHandledRef = useRef(false);
+  const visiblePageMode: PageMode =
+    phase === "lobby" && pageMode === "pvp" ? "menu" : pageMode;
 
   const { action: arenaAction, phase: arenaPhase, triggerAction: triggerArenaAction } =
     useActionAnimation();
@@ -133,15 +146,21 @@ export default function PvPPage() {
     if (phase === "match_end" && prev !== "match_end") {
       onMatchEnd();
     }
-  }, [phase, turnResult, triggerArenaAction, onMatchEnd, fireEffect]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [phase, turnResult, triggerArenaAction, onMatchEnd, fireEffect]);
 
-  // When usePvP returns to its own "lobby" phase (after match end + Play Again),
-  // bring the page mode back to the menu too.
+  // Direct room links: /pvp?room=ABCD opens the join-room flow after hydration.
   useEffect(() => {
-    if (phase === "lobby" && pageMode === "pvp") {
-      setPageMode("menu");
-    }
-  }, [phase, pageMode]);
+    if (initialRoomHandledRef.current) return;
+    initialRoomHandledRef.current = true;
+    const roomCode = readInitialRoomCode();
+    if (roomCode.length !== 4) return;
+    const handle = window.setTimeout(() => {
+      setJoinCodeInput(roomCode);
+      setRoomMode("join");
+      setPageMode("room");
+    }, 0);
+    return () => window.clearTimeout(handle);
+  }, []);
 
   // ── Action handlers ────────────────────────────────────────────────────
 
@@ -184,14 +203,14 @@ export default function PvPPage() {
     <div className="min-h-[100svh] bg-gray-900 text-white flex flex-col items-center justify-center p-4">
       <InterstitialAd show={showInterstitial} onDismiss={dismissInterstitial} />
 
-      {error && pageMode !== "room" && (
+      {error && visiblePageMode !== "room" && (
         <div className="mb-4 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-300 text-sm max-w-md">
           {error}
         </div>
       )}
 
       {/* MENU — Quick Match / Create Room / Join Room */}
-      {pageMode === "menu" && (
+      {visiblePageMode === "menu" && (
         <div className="text-center space-y-8 max-w-md w-full">
           <div>
             <h1 className="text-5xl font-black mb-2">PvP Mode</h1>
@@ -262,7 +281,7 @@ export default function PvPPage() {
           </div>
 
           <Link
-            href="/"
+            href="/play"
             className="block text-sm text-gray-500 hover:text-gray-300 transition-colors"
           >
             ← Back to AI Mode
@@ -275,7 +294,7 @@ export default function PvPPage() {
       )}
 
       {/* ROOM — host or guest waiting flow */}
-      {pageMode === "room" && (
+      {visiblePageMode === "room" && (
         <RoomScreen
           mode={roomMode}
           initialCode={joinCodeInput || undefined}
@@ -285,7 +304,7 @@ export default function PvPPage() {
       )}
 
       {/* PVP — usePvP-driven gameplay phases */}
-      {pageMode === "pvp" && phase === "searching" && (
+      {visiblePageMode === "pvp" && phase === "searching" && (
         <div className="text-center space-y-6 max-w-md">
           <KiAuraArena
             playerCharacterId={chars.player}
@@ -310,7 +329,7 @@ export default function PvPPage() {
         </div>
       )}
 
-      {pageMode === "pvp" && phase === "matched" && (
+      {visiblePageMode === "pvp" && phase === "matched" && (
         <div className="text-center space-y-4">
           <KiAuraArena
             playerCharacterId={chars.player}
@@ -325,7 +344,7 @@ export default function PvPPage() {
       {/* UNIFIED PVP GAMEPLAY — one fixed skeleton across playing/waiting/
           revealing/round_end. Header + arena stay put; only the bottom slot's
           content swaps. No reflow, one screen, any phone (mirrors AI page). */}
-      {pageMode === "pvp" &&
+      {visiblePageMode === "pvp" &&
         (phase === "playing" ||
           phase === "waiting" ||
           phase === "revealing" ||
@@ -464,7 +483,7 @@ export default function PvPPage() {
           </div>
         )}
 
-      {pageMode === "pvp" && phase === "match_end" && matchResult && (
+      {visiblePageMode === "pvp" && phase === "match_end" && matchResult && (
         <MatchFinale
           result={
             matchResult.winner === "you"

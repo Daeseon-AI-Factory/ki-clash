@@ -61,8 +61,8 @@ const ACTION_CONFIG: Record<Action, ActionConfig> = {
   },
   energy_wave: {
     emoji: "🔥",
-    label: "Wave",
-    korean: "에네르기파",
+    label: "Burst",
+    korean: "기폭",
     cost: 3,
     color: colors.energyWave,
     bgColor: "#431407",

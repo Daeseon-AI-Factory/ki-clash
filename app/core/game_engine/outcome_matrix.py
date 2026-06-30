@@ -92,7 +92,7 @@ def calculate_ki_after(
     Ki changes:
     - Charge: +1 ki (regardless of outcome)
     - Attack/Teleport: -1 ki cost (spent on use)
-    - Energy Wave: -3 ki cost (spent on use)
+    - Ki Burst: -3 ki cost (spent on use)
     - Block: no change
     - Clash: both attackers lose their ki cost
     - Blocked: attacker loses ki cost, blocker unchanged

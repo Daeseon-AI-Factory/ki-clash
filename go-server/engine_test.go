@@ -93,7 +93,7 @@ func TestCalcKiAfter(t *testing.T) {
 		{"charge from 9", ActionCharge, 9, 10},
 		{"block no change", ActionBlock, 5, 5},
 		{"attack -1", ActionAttack, 3, 2},
-		{"energy wave -3", ActionEnergyWave, 5, 2},
+		{"ki burst -3", ActionEnergyWave, 5, 2},
 		{"teleport -1", ActionTeleport, 4, 3},
 	}
 	for _, c := range cases {

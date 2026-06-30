@@ -40,6 +40,13 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str = ""
     stripe_ad_free_price_id: str = ""
 
+    # Lemon Squeezy (optional — Founder Pass checkout disabled if not set)
+    lemon_squeezy_api_key: str = ""
+    lemon_squeezy_store_id: str = ""
+    lemon_squeezy_founder_pass_variant_id: str = ""
+    lemon_squeezy_webhook_secret: str = ""
+    lemon_squeezy_test_mode: bool = True
+
     # Observability — Sentry (optional — error tracking disabled if no DSN)
     sentry_dsn: str = ""
     environment: str = "development"  # development | staging | production

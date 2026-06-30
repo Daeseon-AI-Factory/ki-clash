@@ -3,8 +3,8 @@
 // cached fallback offline); cache-first for static assets (icons, fighters).
 // Bump CACHE_VERSION to invalidate on deploy.
 
-const CACHE_VERSION = "jjan-v1";
-const APP_SHELL = ["/", "/pvp", "/manifest.webmanifest", "/icons/icon-192.png"];
+const CACHE_VERSION = "jjan-v2";
+const APP_SHELL = ["/", "/play", "/pvp", "/manifest.webmanifest", "/icons/icon-192.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

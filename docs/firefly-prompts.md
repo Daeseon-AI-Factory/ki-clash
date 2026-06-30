@@ -1,133 +1,117 @@
-# Adobe Firefly Prompts — Ki Clash Fighter Roster
+# Adobe Firefly Prompts - JJAN Fighter Roster
 
-Copy-paste prompts to generate the 6 character sprites at the same artistic style.
+Use these prompts to generate IP-cleared replacement sprites for the six
+fighters. Do not reference existing anime, manga, game, comic, movie, or brand
+characters in the prompt, negative prompt, filename, metadata, or commit text.
 
 ## Workflow
 
-1. Open Firefly → **Text to Image**
-2. **Aspect ratio**: Portrait (9:16) or Square (will crop later)
-3. **Content type**: Art
-4. **Style**: paste the **STYLE ANCHOR** below into the Style field (or append to prompt)
-5. **Visual intensity**: 7-9
-6. Paste a per-character prompt below
-7. Generate 4 variants → pick the best
-8. Export PNG → trim transparent background in Photoshop or [remove.bg](https://www.remove.bg)
-9. Save to `web/public/fighters/<id>/idle.png`
+1. Open Firefly -> Text to Image.
+2. Aspect ratio: Portrait (9:16).
+3. Content type: Art.
+4. Paste the style anchor below, then one fighter prompt.
+5. Generate four variants and pick the least derivative silhouette.
+6. Export PNG, remove the background, and save to `web/public/fighters/<id>/idle.png`.
+7. Keep the prompt and source export in the art log for provenance.
 
-## Style Anchor (same for all 6 — keeps consistency)
+## Current Roster Retouch Direction
 
-```
-stylized chibi anime martial artist, modern cel-shaded illustration,
-dynamic full-body kung-fu fighting stance facing right, vibrant saturated
-colors, clean bold line art, soft rim lighting, isolated character on
-plain white background, no shadow on ground, anime sprite style
-```
+For the existing playable PNG roster, do not replace the characters wholesale.
+Preserve the face, pose, proportions, expression, and readable combat
+silhouette. Korean identity should come from controlled surface treatment:
+hanbok-inspired cloth color, bojagi-style textile grids, dancheong accent
+colors, small maedeup/norigae knots, cloud/wave/stone embroidery, and restrained
+trim. Avoid turning the fighters into historical costume mascots; they should
+still read as arcade battle characters first.
 
----
+## Style Anchor
 
-## 1. Haneul (id: `haneul`) — Goku-vibe calm monk
-
-```
-chibi anime martial artist, spiky black hair with bright blue tips swept
-upward, wearing orange martial arts gi with deep blue sash belt,
-white wristbands, calm focused half-closed eyes, small blue dot on forehead,
-fingerless leather gloves, classic kung-fu fighting stance, one fist forward
-one cocked at hip
+```text
+original chibi arcade martial artist for a Korean ki mind-game,
+full-body stance facing right, crisp cel-shaded illustration, compact readable
+silhouette, bold clean line art, expressive eyes, saturated but balanced colors,
+subtle talisman and festival-fight details, isolated on a perfectly plain
+background, no watermark, no text, no existing franchise resemblance
 ```
 
-**Reference vibe:** Goku in his Master Roshi training gi era. Calm strength.
+## Avoid List
 
----
-
-## 2. Bora (id: `bora`) — Trunks-vibe purple mystic
-
-```
-chibi anime warrior, long sweeping lavender purple hair covering the left
-eye, wearing dark indigo undersuit with white armor chest plate trimmed
-in silver, high collar, mysterious serious expression, small crescent moon
-emblem on forehead, fingerless gauntlets, ready combat stance
+```text
+no orange martial arts gi with blue sash, no orange ninja jumpsuit, no forehead
+metal headband, no white captain coat, no sword-captain silhouette, no alien
+armor, no spiky blond super form, no copyrighted character likeness, no logo,
+no emblem from an existing franchise
 ```
 
-**Reference vibe:** Future Trunks before the sword reveal. Mysterious noble.
+## 1. Haneul (`haneul`) - Sky Ward
 
----
-
-## 3. Taeyang (id: `taeyang`) — Naruto-vibe golden brash
-
-```
-chibi anime ninja-warrior, bright spiky blond hair pointing in all directions,
-wearing bright orange jumpsuit with dark navy accents at shoulders and
-collar, dark blue forehead headband with a polished silver metal plate,
-big confident grin showing teeth, fierce bright blue eyes, energetic
-forward-leaning fighting stance, fists raised
+```text
+quiet Korean sky-ward duelist, short black parted hair with small blue wind
+streaks, teal-blue wrap jacket with cloud-knot trim, navy loose training pants,
+paper talisman tied to one wrist, calm focused eyes, low defensive palm stance,
+wind swirl motifs around the sleeves
 ```
 
-**Reference vibe:** Naruto in his pre-Shippuden orange jumpsuit. Loud and brash.
+## 2. Bora (`bora`) - Violet Seer
 
----
-
-## 4. Danbi (id: `danbi`) — Hitsugaya-vibe silver captain
-
-```
-chibi anime swordsman, spiky silver-white frosted hair with cyan tips,
-wearing white inner kimono robe under a teal-cyan captain's haori long coat
-with dark trim, calm intense turquoise eyes, single cyan water-drop earring
-on left ear, traditional Japanese martial arts stance, palms open
+```text
+violet seer fighter, swept deep-purple hair tied with a small charm cord,
+layered plum and indigo ceremonial streetwear, folded paper fan tucked at the
+waist, pale violet sash, sharp analytical expression, angled feinting stance,
+small abstract star-charm details with no recognizable symbols
 ```
 
-**Reference vibe:** Toshiro Hitsugaya as Bleach 10th squad captain. Cool and composed.
+## 3. Taeyang (`taeyang`) - Solar Drum
 
----
-
-## 5. Seokjin (id: `seokjin`) — old master strongman
-
-```
-chibi anime old martial arts master, dark brown hair pulled into a topknot
-bun on top of head, thick black beard, wearing earth-orange martial arts
-robe with gold trim, dark sash belt, broad shoulders muscular build, stern
-wise expression with focused brown eyes, grounded wide horse stance, palms
-pressed together at chest
+```text
+solar street brawler, dark brown tied-back hair with warm gold highlights,
+deep red sleeveless training jacket, yellow rope sash, black cropped pants,
+festival drum bead bracelet, confident grin, forward boxing stance with one
+shoulder lowered, sunburst stitching on the cuffs only
 ```
 
-**Reference vibe:** Master Roshi crossed with a sumo master. Heavy and grounded.
+## 4. Danbi (`danbi`) - Rain Caller
 
----
-
-## 6. Yuri (id: `yuri`) — Boa Hancock-vibe elegant queen
-
-```
-chibi anime warrior queen, very long flowing straight pink hair past waist,
-wearing dark wine red form-fitted elegant battle outfit with soft pink
-trim accents, pink diamond hair clip on side, half-lidded condescending
-smug expression with pink lips, slender graceful poised battle stance,
-one hand on hip
+```text
+rain caller duelist, slate hair in soft parted bangs with cyan tips, teal rain
+capelet over dark training clothes, ribboned sleeves shaped like flowing water,
+small droplet earring, patient serious expression, open-palm water-step guard,
+rounded rain motifs without weapons
 ```
 
-**Reference vibe:** Boa Hancock in elegant battle attire. Cold beauty.
+## 5. Seokjin (`seokjin`) - Stone Warden
 
----
+```text
+stone warden master, topknot, thick beard, earth-brown robe with stone-gray
+trim, weighted cloth belt, broad compact stance, stern grounded expression,
+hands held close to the chest like a mountain guard, square stone-knot patterns
+on the hem
+```
 
-## Tips for consistency across all 6
+## 6. Yuri (`yuri`) - Glass Dancer
 
-- Generate ALL 6 in the same Firefly session — Firefly tends to keep style consistent within a session
-- Use the **same style anchor** above for every generation
-- Same aspect ratio for all
-- If one comes out off-style, regenerate using the best one as a **style reference image**
-- Crop to consistent dimensions in Photoshop (e.g. 512×910)
-- Run all through [remove.bg](https://remove.bg) at the end for clean transparent backgrounds
+```text
+glass dancer fighter, long rose-black hair with one side braid, dark plum stage
+combat outfit with rose-gold glass shard trim, asymmetric sleeve, poised
+counter-stance, cool half-smile, abstract mirror-fragment motifs around the
+waist and cuffs
+```
 
-## Optional pose variants (later)
+## Pose Variants
 
-Once `idle.png` for all 6 looks good, add per-pose PNGs by appending to the per-character prompt:
+Append one of these only after the idle pose is approved:
 
-- **windup**: "in a power-up charging pose, arms cocked, ki energy gathering"
-- **impact**: "mid-strike pose, fist or palm thrust forward, dynamic"
-- **hit**: "recoiling backward from a punch, head tilted back, body twisted"
-- **ko**: "lying collapsed on the ground, defeated, dust around"
-- **victory**: "arms raised triumphantly, big grin, glowing aura"
+- `windup`: gathering ki at the hands, cloth and charm details lifting from energy
+- `impact`: palm or fist extended, burst trail moving forward
+- `hit`: recoiling backward, clothing pulled by impact
+- `ko`: collapsed in a readable but non-violent defeated pose
+- `victory`: confident standing pose, aura settling around the fighter
 
-File path convention: `web/public/fighters/<id>/<pose>.png`.
+## Shipping Checklist
 
-## Commercial license
-
-Firefly generations carry an Adobe Commercial Use license. Safe for shipping in a paid product.
+- The sprite is recognizable as this game's character without resembling a
+  famous third-party character.
+- Hair, outfit, accessory, colors, and silhouette do not recreate a known
+  franchise combination.
+- The asset has transparent background and consistent 512 x 910 framing.
+- The generation prompt and tool are recorded for provenance.

@@ -24,7 +24,13 @@ export type Action =
   | "energy_wave"
   | "teleport";
 
-export type Difficulty = "easy" | "medium" | "hard";
+export type Difficulty =
+  | "novice"
+  | "easy"
+  | "medium"
+  | "hard"
+  | "expert"
+  | "grandmaster";
 
 export type TurnOutcome =
   | "p1_wins_round"
@@ -287,6 +293,16 @@ export async function createAdFreeCheckout(
   cancelUrl: string,
 ): Promise<CheckoutResponse> {
   return apiFetch<CheckoutResponse>("/api/v1/purchases/checkout/ad-free", {
+    method: "POST",
+    body: JSON.stringify({ success_url: successUrl, cancel_url: cancelUrl }),
+  });
+}
+
+export async function createFounderPassCheckout(
+  successUrl: string,
+  cancelUrl: string,
+): Promise<CheckoutResponse> {
+  return apiFetch<CheckoutResponse>("/api/v1/purchases/checkout/founder-pass", {
     method: "POST",
     body: JSON.stringify({ success_url: successUrl, cancel_url: cancelUrl }),
   });

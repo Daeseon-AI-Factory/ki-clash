@@ -20,7 +20,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     aiAction: "charge",
     highlightActions: ["charge"],
     explanation:
-      "Both fighters charged! You gained +1 ki. Ki is your fuel — you need it for Attack (1 ki) and Energy Wave (3 ki).",
+      "Both fighters charged! You gained +1 ki. Ki is your fuel — you need it for Attack (1 ki) and Ki Burst (3 ki).",
   },
   {
     step: 2,
@@ -42,7 +42,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
     aiAction: "attack",
     highlightActions: ["block"],
     explanation:
-      "You blocked the Attack! Block costs 0 ki and stops basic Attacks. But watch out — Energy Wave pierces through Block!",
+      "You blocked the Attack! Block costs 0 ki and stops basic Attacks. But watch out — Ki Burst pierces through Block!",
   },
 ];
 

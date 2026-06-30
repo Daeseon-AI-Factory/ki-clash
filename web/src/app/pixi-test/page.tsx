@@ -16,7 +16,7 @@ const hexToNum = (hex: string): number =>
 const EFFECTS: { kind: EffectKind; label: string; emoji: string }[] = [
   { kind: "charge", label: "Charge", emoji: "⚡" },
   { kind: "attack", label: "Attack", emoji: "👊" },
-  { kind: "energy_wave", label: "Energy Wave", emoji: "🔥" },
+  { kind: "energy_wave", label: "Ki Burst", emoji: "🔥" },
   { kind: "teleport", label: "Teleport", emoji: "💨" },
   { kind: "block", label: "Block", emoji: "🛡️" },
   { kind: "finisher", label: "FINISHER", emoji: "💥" },

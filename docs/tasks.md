@@ -98,7 +98,7 @@ Ship the game loop first. If someone can play one round vs AI on their phone, yo
 - **Files:** `web/` directory scaffold
 
 ### Task 3.2: Game Board & Action Cards
-- **Description:** 5 action cards (Charge, Block, Attack, Energy Wave, Teleport) with tap selection. Cards dim when unaffordable. Selected card highlights. Ki-cost badges on cards.
+- **Description:** 5 action cards (Charge, Block, Attack, Ki Burst, Teleport) with tap selection. Cards dim when unaffordable. Selected card highlights. Ki-cost badges on cards.
 - **Effort:** 5-6 hours
 - **Dependencies:** Task 3.1
 - **Files:** `web/src/components/GameBoard.tsx`, `ActionCard.tsx`
@@ -251,5 +251,5 @@ Ship the game loop first. If someone can play one round vs AI on their phone, yo
 | WebSocket complexity delays PvP | High | Ship AI-only first (end of Phase 3), add PvP as update |
 | React Native takes longer than expected | Medium | Web is primary, mobile can launch 1-2 weeks later |
 | Low matchmaking pool (not enough players) | High | AI fallback after 30s wait. Add friend invite links early. |
-| Dragon Ball IP concerns | Low | No DB characters or names. Generic "ki" and "energy" theme. Original art style. |
+| Third-party IP concerns | Low | No DB characters or names. Generic "ki" and "energy" theme. Original art style. |
 | Game balance issues | Medium | Hard AI uses Nash equilibrium — if it's balanced for AI, it's balanced for PvP |

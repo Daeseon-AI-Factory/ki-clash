@@ -55,12 +55,14 @@ class MatchmakingService:
         redis_client: redis.Redis,
         ws_manager: WSManager,
         game_store: GameStore,
+        queue_key: str = _QUEUE_KEY,
     ) -> None:
         self._redis = redis_client
         self._ws = ws_manager
         # All PvP session state lives in Redis via the store (DR-15 — workers
         # are stateless). active_games / game_players in-memory dicts removed.
         self._store = game_store
+        self._queue_key = queue_key
         # player_id → display_name for notifications (transient, in-memory is OK
         # since this is only used during the matchmaking-pair window and dropped
         # on pairing or timeout).
@@ -84,16 +86,16 @@ class MatchmakingService:
         """
         # Score = timestamp for FIFO ordering
         score = time.time()
-        await self._redis.zadd(_QUEUE_KEY, {str(player_id): score})
+        await self._redis.zadd(self._queue_key, {str(player_id): score})
         self._player_names[player_id] = display_name
 
         # Get position in queue
-        position = await self._redis.zrank(_QUEUE_KEY, str(player_id))
+        position = await self._redis.zrank(self._queue_key, str(player_id))
         return (position or 0) + 1
 
     async def leave_queue(self, player_id: UUID) -> None:
         """Remove a player from the matchmaking queue."""
-        await self._redis.zrem(_QUEUE_KEY, str(player_id))
+        await self._redis.zrem(self._queue_key, str(player_id))
         self._player_names.pop(player_id, None)
         logger.info("Player %s left matchmaking queue", player_id)
 
@@ -104,7 +106,7 @@ class MatchmakingService:
         two players from the queue (FIFO) and creates a game.
         """
         # Get the first 2 players in queue (sorted by join time)
-        members = await self._redis.zrange(_QUEUE_KEY, 0, 1)
+        members = await self._redis.zrange(self._queue_key, 0, 1)
 
         if len(members) < 2:
             return
@@ -114,7 +116,7 @@ class MatchmakingService:
         p2_id = UUID(p2_str.decode() if isinstance(p2_str, bytes) else p2_str)
 
         # Remove both from queue
-        await self._redis.zrem(_QUEUE_KEY, str(p1_id), str(p2_id))
+        await self._redis.zrem(self._queue_key, str(p1_id), str(p2_id))
 
         # Create a PvP game and persist the runtime session in Redis.
         # Workers are stateless w.r.t. game state (DR-15) — anyone who later
@@ -162,14 +164,14 @@ class MatchmakingService:
         cutoff = time.time() - MATCHMAKING_TIMEOUT_S
         # Get all members with score (join time) before cutoff
         timed_out = await self._redis.zrangebyscore(
-            _QUEUE_KEY, "-inf", cutoff
+            self._queue_key, "-inf", cutoff
         )
 
         for member in timed_out:
             player_id = UUID(
                 member.decode() if isinstance(member, bytes) else member
             )
-            await self._redis.zrem(_QUEUE_KEY, str(player_id))
+            await self._redis.zrem(self._queue_key, str(player_id))
             self._player_names.pop(player_id, None)
 
             # Notify player: no match found, offer AI

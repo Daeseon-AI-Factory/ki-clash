@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { CHARACTERS } from "@/lib/characters";
-import { fighterAsset, type CharacterId } from "@/lib/assets";
+import { CHARACTERS, type Character } from "@/lib/characters";
+import FighterSprite from "@/components/arena/FighterSprite";
 
 interface CharacterSelectProps {
   onSelect: (characterId: string) => void;
@@ -11,8 +10,8 @@ interface CharacterSelectProps {
 /**
  * Character selection grid — 2×3 layout of fighter cards.
  *
- * Each card shows the actual fighter PNG (from /fighters/<id>/idle.png),
- * the international name, the Korean heritage name, and the bio.
+ * Each card shows the original fighter art, the international name,
+ * the Korean heritage name, and the bio.
  *
  * Tap a card → immediately enters gameplay (no confirm).
  */
@@ -28,12 +27,7 @@ export default function CharacterSelect({ onSelect }: CharacterSelectProps) {
         {CHARACTERS.map((char) => (
           <FighterCard
             key={char.id}
-            id={char.id}
-            name={char.name}
-            koreanName={char.koreanName}
-            color={char.color}
-            emoji={char.emoji}
-            bio={char.bio}
+            character={char}
             onClick={() => onSelect(char.id)}
           />
         ))}
@@ -43,19 +37,11 @@ export default function CharacterSelect({ onSelect }: CharacterSelectProps) {
 }
 
 interface FighterCardProps {
-  id: string;
-  name: string;
-  koreanName: string;
-  color: string;
-  emoji: string;
-  bio: string;
+  character: Character;
   onClick: () => void;
 }
 
-function FighterCard({ id, name, koreanName, color, emoji, bio, onClick }: FighterCardProps) {
-  const [imgBroken, setImgBroken] = useState(false);
-  const src = fighterAsset(id as CharacterId, "idle");
-
+function FighterCard({ character, onClick }: FighterCardProps) {
   return (
     <button
       onClick={onClick}
@@ -66,42 +52,33 @@ function FighterCard({ id, name, koreanName, color, emoji, bio, onClick }: Fight
                  cursor-pointer overflow-hidden relative
                  hover:shadow-2xl hover:-translate-y-1"
       style={{
-        boxShadow: `inset 0 0 0 1px ${color}22`,
+        boxShadow: `inset 0 0 0 1px ${character.color}22`,
       }}
-      onMouseEnter={(e) => { e.currentTarget.style.borderColor = color; }}
+      onMouseEnter={(e) => { e.currentTarget.style.borderColor = character.color; }}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = ""; }}
     >
       {/* Aura glow behind the sprite — character-colored radial gradient */}
       <div
         className="absolute top-0 left-0 right-0 h-44 sm:h-48 pointer-events-none opacity-50"
         style={{
-          background: `radial-gradient(ellipse at center top, ${color}55 0%, transparent 70%)`,
+          background: `radial-gradient(ellipse at center top, ${character.color}55 0%, transparent 70%)`,
         }}
       />
 
-      {/* Fighter PNG (or symbol emoji fallback) */}
       <div className="relative h-36 sm:h-44 w-full flex items-end justify-center">
-        {!imgBroken ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={src}
-            alt={name}
-            className="h-full object-contain"
-            style={{ filter: `drop-shadow(0 0 12px ${color}88) drop-shadow(0 6px 8px rgba(0,0,0,0.5))` }}
-            onError={() => setImgBroken(true)}
-          />
-        ) : (
-          <span className="text-6xl select-none" style={{ filter: `drop-shadow(0 0 8px ${color})` }}>
-            {emoji}
-          </span>
-        )}
+        <FighterSprite
+          character={character}
+          width={82}
+          assetMode="auto"
+          className="drop-shadow-[0_0_12px_rgba(255,255,255,0.16)]"
+        />
       </div>
 
       {/* Name block */}
       <div className="relative text-center">
-        <p className="font-black text-white text-base sm:text-lg leading-tight">{name}</p>
-        <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5 tracking-wider">{koreanName}</p>
-        <p className="text-[10px] sm:text-xs text-gray-500 mt-1.5 leading-snug line-clamp-2">{bio}</p>
+        <p className="font-black text-white text-base sm:text-lg leading-tight">{character.name}</p>
+        <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5 tracking-wider">{character.koreanName}</p>
+        <p className="text-[10px] sm:text-xs text-gray-500 mt-1.5 leading-snug line-clamp-2">{character.bio}</p>
       </div>
     </button>
   );

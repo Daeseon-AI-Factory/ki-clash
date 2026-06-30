@@ -1,0 +1,52 @@
+{
+  "cli": {
+    "version": ">= 15.0.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.jjan.daeseon.ai",
+        "EXPO_PUBLIC_WS_URL": "wss://api.jjan.daeseon.ai",
+        "EXPO_PUBLIC_WEB_URL": "https://jjan.daeseon.ai"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.jjan.daeseon.ai",
+        "EXPO_PUBLIC_WS_URL": "wss://api.jjan.daeseon.ai",
+        "EXPO_PUBLIC_WEB_URL": "https://jjan.daeseon.ai"
+      }
+    },
+    "simulator": {
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.jjan.daeseon.ai",
+        "EXPO_PUBLIC_WS_URL": "wss://api.jjan.daeseon.ai",
+        "EXPO_PUBLIC_WEB_URL": "https://jjan.daeseon.ai"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.jjan.daeseon.ai",
+        "EXPO_PUBLIC_WS_URL": "wss://api.jjan.daeseon.ai",
+        "EXPO_PUBLIC_WEB_URL": "https://jjan.daeseon.ai"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {}
+    }
+  }
+}

@@ -1,0 +1,119 @@
+# Production stack for a shared Naver Cloud Server/VPS.
+#
+# This is intentionally different from docker-compose.prod.yml:
+# - no bundled Caddy service
+# - no public 80/443 bindings
+# - API/Game are exposed only on localhost for a host-level reverse proxy
+#
+# Run with:
+#   docker compose --env-file deploy/naver-cloud/.env.shared.example -f docker-compose.naver.yml config
+#   COMPOSE_PROJECT_NAME=jjan docker compose -f docker-compose.naver.yml up -d --build
+#
+# Persistent data is bind-mounted under ${JJAN_DATA_DIR:-/data/jjan} so it lands
+# on the Naver Cloud data disk instead of the Docker engine disk.
+#
+# The api/game services also join the existing Mimi Caddy network. Caddy should
+# route to jjan-api:8000 and jjan-game:8001, not start another 80/443 proxy.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - ${JJAN_DATA_DIR:-/data/jjan}/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    mem_limit: 128m
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - ${JJAN_DATA_DIR:-/data/jjan}/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build: .
+    restart: unless-stopped
+    mem_limit: 512m
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      DEBUG: "false"
+      ENVIRONMENT: production
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_AD_FREE_PRICE_ID: ${STRIPE_AD_FREE_PRICE_ID:-}
+      LEMON_SQUEEZY_API_KEY: ${LEMON_SQUEEZY_API_KEY:-}
+      LEMON_SQUEEZY_STORE_ID: ${LEMON_SQUEEZY_STORE_ID:-}
+      LEMON_SQUEEZY_FOUNDER_PASS_VARIANT_ID: ${LEMON_SQUEEZY_FOUNDER_PASS_VARIANT_ID:-}
+      LEMON_SQUEEZY_WEBHOOK_SECRET: ${LEMON_SQUEEZY_WEBHOOK_SECRET:-}
+      LEMON_SQUEEZY_TEST_MODE: ${LEMON_SQUEEZY_TEST_MODE:-true}
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1"
+    ports:
+      - "127.0.0.1:${JJAN_API_PORT:-18000}:8000"
+    networks:
+      default:
+      mimi_default:
+        aliases:
+          - jjan-api
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  game:
+    build: ./go-server
+    restart: unless-stopped
+    mem_limit: 128m
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      PORT: "8001"
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      ENVIRONMENT: production
+      RELEASE: ${RELEASE:-prod}
+    ports:
+      - "127.0.0.1:${JJAN_GAME_PORT:-18001}:8001"
+    networks:
+      default:
+      mimi_default:
+        aliases:
+          - jjan-game
+    healthcheck:
+      test: ["CMD", "/ki-clash-go", "-healthcheck"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+networks:
+  mimi_default:
+    external: true

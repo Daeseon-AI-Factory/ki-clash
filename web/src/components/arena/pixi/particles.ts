@@ -209,7 +209,7 @@ export function burstSpawn(cx: number, cy: number, tint: number, power = 1): Spa
   };
 }
 
-/** RISING stream — drift up with a sine sway (plasma / energy wave). */
+/** RISING stream — drift up with a sine sway (plasma / Ki Burst). */
 export function risingSpawn(baseX: number, baseY: number, tint: number, spread = 40): SpawnConfig {
   return {
     x: baseX + (Math.random() - 0.5) * spread,

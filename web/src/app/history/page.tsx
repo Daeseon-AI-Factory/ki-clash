@@ -30,7 +30,7 @@ export default function HistoryPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-black">Match History</h1>
           <Link
-            href="/"
+            href="/play"
             className="text-sm text-gray-400 hover:text-gray-200 transition-colors"
           >
             ← Back
@@ -54,7 +54,7 @@ export default function HistoryPage() {
           <div className="text-center py-12">
             <p className="text-gray-500">No matches yet. Go play!</p>
             <Link
-              href="/"
+              href="/play"
               className="mt-4 inline-block px-6 py-3 bg-blue-600 hover:bg-blue-500
                          rounded-xl font-bold transition-colors"
             >

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import type { TurnResult, TurnOutcome } from "@/lib/api";
+import { formatActionLabel } from "@/lib/actions";
 
 type RevealStage = "face_down" | "flipping" | "paused" | "outcome";
 
@@ -99,20 +100,17 @@ export default function TurnReveal({
     timersRef.current = [];
 
     if (!visible || !turnResult) {
-      setStage("face_down");
       return;
     }
 
+    const queueStage = (nextStage: RevealStage, delay: number) => {
+      timersRef.current.push(setTimeout(() => setStage(nextStage), delay));
+    };
+
     // Start face-down, then advance through stages
-    setStage("face_down");
-
-    timersRef.current.push(
-      setTimeout(() => setStage("flipping"), 300) // brief pause before flip
-    );
-
-    timersRef.current.push(
-      setTimeout(() => setStage("paused"), 1100) // after 800ms flip
-    );
+    queueStage("face_down", 0);
+    queueStage("flipping", 300); // brief pause before flip
+    queueStage("paused", 1100); // after 800ms flip
 
     timersRef.current.push(
       setTimeout(() => {
@@ -140,7 +138,7 @@ export default function TurnReveal({
         {/* Player's card */}
         <FlipCard
           emoji={ACTION_EMOJI[turnResult.p1_action]}
-          label={turnResult.p1_action.replace("_", " ")}
+          label={formatActionLabel(turnResult.p1_action)}
           who={playerName}
           whoColor="text-green-400"
           flipped={isFlipped}
@@ -152,7 +150,7 @@ export default function TurnReveal({
         {/* AI's card */}
         <FlipCard
           emoji={ACTION_EMOJI[turnResult.p2_action]}
-          label={turnResult.p2_action.replace("_", " ")}
+          label={formatActionLabel(turnResult.p2_action)}
           who={aiName}
           whoColor="text-red-400"
           flipped={isFlipped}

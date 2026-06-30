@@ -22,7 +22,7 @@ export default function TestAnimationsPage() {
       {/* Header */}
       <div className="max-w-5xl mx-auto mb-6">
         <Link
-          href="/"
+          href="/play"
           className="text-sm text-gray-400 hover:text-gray-200 transition-colors"
         >
           &larr; Back to game

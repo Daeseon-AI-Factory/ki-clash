@@ -18,7 +18,7 @@ ACTION_DISPLAY = {
     Action.CHARGE: "Charge (기 모으기)",
     Action.BLOCK: "Block (막기)",
     Action.ATTACK: "Attack (파)",
-    Action.ENERGY_WAVE: "Energy Wave (에네르기파)",
+    Action.ENERGY_WAVE: "Ki Burst (기폭)",
     Action.TELEPORT: "Teleport (순간이동)",
 }
 

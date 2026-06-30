@@ -23,8 +23,9 @@ from app.core.game_store import GameStore, _key as game_key
 from app.services.matchmaking_service import (
     MATCHMAKING_TIMEOUT_S,
     MatchmakingService,
-    _QUEUE_KEY,
 )
+
+TEST_QUEUE_KEY = "ki_clash:test:matchmaking:queue"
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -86,9 +87,9 @@ async def redis_client() -> aioredis.Redis:
     created during the test (using SCAN since we don't know game_ids
     upfront)."""
     client = aioredis.from_url("redis://localhost:6379/0", decode_responses=False)
-    await client.delete(_QUEUE_KEY)
+    await client.delete(TEST_QUEUE_KEY)
     yield client
-    await client.delete(_QUEUE_KEY)
+    await client.delete(TEST_QUEUE_KEY)
     # Best-effort cleanup of any game keys this test created
     async for key in client.scan_iter(match="ki_clash:game:*", count=100):
         await client.delete(key)
@@ -115,6 +116,7 @@ async def service(
         redis_client=redis_client,
         ws_manager=ws_manager,  # type: ignore[arg-type]
         game_store=game_store,
+        queue_key=TEST_QUEUE_KEY,
     )
 
 
@@ -148,10 +150,10 @@ class TestJoinAndLeaveQueue:
     ) -> None:
         p1 = uuid4()
         await service.join_queue(p1, "Player1")
-        assert await redis_client.zcard(_QUEUE_KEY) == 1
+        assert await redis_client.zcard(TEST_QUEUE_KEY) == 1
 
         await service.leave_queue(p1)
-        assert await redis_client.zcard(_QUEUE_KEY) == 0
+        assert await redis_client.zcard(TEST_QUEUE_KEY) == 0
 
     async def test_leave_queue_clears_display_name_cache(
         self, service: MatchmakingService
@@ -211,7 +213,7 @@ class TestMatchPlayers:
         await service.match_players()
 
         # Queue drained
-        assert await redis_client.zcard(_QUEUE_KEY) == 0
+        assert await redis_client.zcard(TEST_QUEUE_KEY) == 0
         # Game state persisted in Redis (verify via the match_found event)
         match_founds = ws_manager.messages_of_type("match_found")
         assert len(match_founds) == 2
@@ -334,7 +336,7 @@ class TestCheckTimeouts:
         await service.check_timeouts()
 
         # Still in queue, no notifications
-        assert await redis_client.zcard(_QUEUE_KEY) == 1
+        assert await redis_client.zcard(TEST_QUEUE_KEY) == 1
         assert len(ws_manager.messages_of_type("matchmaking_timeout")) == 0
 
     async def test_old_players_are_removed_and_notified(
@@ -346,12 +348,12 @@ class TestCheckTimeouts:
         p1 = uuid4()
         # Insert directly with a stale timestamp (T - timeout - 5s)
         stale_score = time.time() - MATCHMAKING_TIMEOUT_S - 5
-        await redis_client.zadd(_QUEUE_KEY, {str(p1): stale_score})
+        await redis_client.zadd(TEST_QUEUE_KEY, {str(p1): stale_score})
         service._player_names[p1] = "OldOne"
 
         await service.check_timeouts()
 
-        assert await redis_client.zcard(_QUEUE_KEY) == 0
+        assert await redis_client.zcard(TEST_QUEUE_KEY) == 0
         timeouts = ws_manager.messages_of_type("matchmaking_timeout")
         assert len(timeouts) == 1
         assert timeouts[0][0] == p1

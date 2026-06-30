@@ -2,7 +2,7 @@
 
 ## Product Overview
 
-Ki Clash is a real-time 1v1 strategy game based on the Korean schoolyard hand game "기싸움" (Dragon Ball Ki Battle). Players simultaneously choose actions each turn — charging ki, blocking, attacking, or using special moves — creating a tense mind-game of prediction and resource management. Available on web and mobile with AI opponents and online PvP matchmaking.
+Ki Clash is a real-time 1v1 strategy game based on the Korean schoolyard hand game "기싸움" (Korean ki duel). Players simultaneously choose actions each turn — charging ki, blocking, attacking, or using special moves — creating a tense mind-game of prediction and resource management. Available on web and mobile with AI opponents and online PvP matchmaking.
 
 ## Target Instinct
 
@@ -29,19 +29,19 @@ Each turn, both players simultaneously select one action. A 3-second countdown p
 | Action | Name (KR) | Ki Cost | Ki Gain | Description |
 |---|---|---|---|---|
 | **Charge** | 기 모으기 | 0 | +1 | Accumulate ki. Vulnerable to all attacks. |
-| **Block** | 막기 | 0 | 0 | Blocks Attack (파). Fails against Energy Wave. |
+| **Block** | 막기 | 0 | 0 | Blocks Attack (파). Fails against Ki Burst. |
 | **Attack** | 파 | 1 | 0 | Basic attack. Hits Charge. Blocked by Block. Dodged by Teleport. |
-| **Energy Wave** | 에네르기파 | 3 | 0 | Pierces Block. Hits Charge. Dodged by Teleport. |
-| **Teleport** | 순간이동 | 1 | 0 | Dodges Attack and Energy Wave. Wastes ki vs Charge/Block. |
+| **Ki Burst** | 기폭 | 3 | 0 | Pierces Block. Hits Charge. Dodged by Teleport. |
+| **Teleport** | 순간이동 | 1 | 0 | Dodges Attack and Ki Burst. Wastes ki vs Charge/Block. |
 
 ### Outcome Matrix
 
-| Attacker → / Defender ↓ | Charge | Block | Attack | Energy Wave | Teleport |
+| Attacker → / Defender ↓ | Charge | Block | Attack | Ki Burst | Teleport |
 |---|---|---|---|---|---|
 | **Charge** | Draw | Draw | **DEF WINS** | **DEF WINS** | Draw |
 | **Block** | Draw | Draw | **ATK WINS** (blocked) | **DEF WINS** | Draw |
 | **Attack** | **ATK WINS** | **DEF WINS** (blocked) | Clash (both -1 ki) | **DEF WINS** | **DEF WINS** (dodged) |
-| **Energy Wave** | **ATK WINS** | **ATK WINS** (pierced) | **ATK WINS** | Clash (both -3 ki) | **DEF WINS** (dodged) |
+| **Ki Burst** | **ATK WINS** | **ATK WINS** (pierced) | **ATK WINS** | Clash (both -3 ki) | **DEF WINS** (dodged) |
 | **Teleport** | Draw | Draw | **ATK WINS** (dodged) | **ATK WINS** (dodged) | Draw |
 
 **Correction on matrix reading:** Each cell = "Row player vs Column player". Result is from Row player's perspective.
@@ -51,11 +51,11 @@ Simplified outcome logic:
 - **Attack vs Block** → Attack is blocked, no one wins, attacker loses 1 ki
 - **Attack vs Attack** → Clash, both lose 1 ki, no winner
 - **Attack vs Teleport** → Attack is dodged, attacker loses 1 ki
-- **Energy Wave vs Charge** → Energy Wave wins the round
-- **Energy Wave vs Block** → Energy Wave pierces, wins the round
-- **Energy Wave vs Attack** → Energy Wave wins the round
-- **Energy Wave vs Teleport** → Energy Wave is dodged, attacker loses 3 ki
-- **Energy Wave vs Energy Wave** → Clash, both lose 3 ki, no winner
+- **Ki Burst vs Charge** → Ki Burst wins the round
+- **Ki Burst vs Block** → Ki Burst pierces, wins the round
+- **Ki Burst vs Attack** → Ki Burst wins the round
+- **Ki Burst vs Teleport** → Ki Burst is dodged, attacker loses 3 ki
+- **Ki Burst vs Ki Burst** → Clash, both lose 3 ki, no winner
 - **All other combinations** → No winner, game continues (ki costs still apply)
 
 ### Match Format

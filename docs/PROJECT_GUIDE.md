@@ -29,7 +29,7 @@ Everything you need to explain this project in an interview, debug it, deploy it
 
 ## 1. What Is This Project?
 
-Ki Clash (기싸움) is a **real-time 1v1 strategy game** inspired by the Korean schoolyard game "Dragon Ball Ki Battle." Two players simultaneously choose actions each turn (charge, block, attack, etc.) creating a mind-game of prediction and resource management.
+Ki Clash (기싸움) is a **real-time 1v1 strategy game** inspired by the Korean schoolyard game "Korean ki duel." Two players simultaneously choose actions each turn (charge, block, attack, etc.) creating a mind-game of prediction and resource management.
 
 **What makes it interesting:**
 - Full-stack: Python backend + Next.js web + React Native mobile
@@ -54,18 +54,18 @@ Ki Clash (기싸움) is a **real-time 1v1 strategy game** inspired by the Korean
 | Action | Ki Cost | Ki Gain | What It Does |
 |--------|---------|---------|--------------|
 | **Charge** | 0 | +1 | Build ki. You're vulnerable while charging. |
-| **Block** | 0 | 0 | Blocks Attack. Fails against Energy Wave. |
+| **Block** | 0 | 0 | Blocks Attack. Fails against Ki Burst. |
 | **Attack** | 1 | 0 | Hits a charging opponent. Blocked by Block. Dodged by Teleport. |
-| **Energy Wave** | 3 | 0 | Pierces Block. Hits Charge. Dodged by Teleport. |
-| **Teleport** | 1 | 0 | Dodges Attack and Energy Wave. Wastes ki vs Charge/Block. |
+| **Ki Burst** | 3 | 0 | Pierces Block. Hits Charge. Dodged by Teleport. |
+| **Teleport** | 1 | 0 | Dodges Attack and Ki Burst. Wastes ki vs Charge/Block. |
 
 ### Outcome Matrix
 
 Think of it like advanced rock-paper-scissors with a resource economy:
 - **Attack beats Charge** (you hit them while they're powering up)
 - **Block beats Attack** (you deflected their punch)
-- **Energy Wave beats Block** (your beam pierces their shield)
-- **Teleport beats Attack and Energy Wave** (you dodged)
+- **Ki Burst beats Block** (your beam pierces their shield)
+- **Teleport beats Attack and Ki Burst** (you dodged)
 - **Attack vs Attack** = Clash (both lose ki)
 
 ### Match Format
@@ -114,7 +114,7 @@ This is clever but has limits — it works for small sprites (12x16 pixels) but 
 ## 4. Project Structure
 
 ```
-Product003_DragonballTurnGame/
+Product003_KiDuelGame/
 │
 ├── app/                          # BACKEND (Python/FastAPI)
 │   ├── main.py                   # App entry point, lifespan, CORS
@@ -286,7 +286,7 @@ state, turn_result = engine.submit_turn(state, p1_action="attack", p2_action="ch
 Three strategies, each implementing the same interface:
 
 **Easy (`easy.py`):**
-- Weighted random: Charge 45%, Block 20%, Attack 20%, Energy Wave 10%, Teleport 5%
+- Weighted random: Charge 45%, Block 20%, Attack 20%, Ki Burst 10%, Teleport 5%
 - Dumb but not completely random — charges a lot, which feels realistic
 
 **Medium (`medium.py`):**
@@ -499,7 +499,7 @@ The `usePixelAnimation` hook drives this timing. Components read `phase` and app
 | **Charge** | Crouch down, scale 0.85 | Burst up, scale 1.4 | Float, scale 1.1 |
 | **Block** | Brace, lean back, scale 0.8 | Absorb, push back | Stand up |
 | **Attack** | Pull back 20px, rotate -12deg | Lunge forward 55px, leap up | Bounce back |
-| **Energy Wave** | Lean back, scale 1.3, rotate | Recoil forward, scale 0.8 | Settle |
+| **Ki Burst** | Lean back, scale 1.3, rotate | Recoil forward, scale 0.8 | Settle |
 | **Teleport** | Phase out, opacity 0.3, spin | Vanish upward, opacity 0 | Reappear 40px ahead |
 | **Victory** | Crouch | Jump up, scale 1.5 | Float big |
 | **Defeat** | Stagger | Fall down, rotate -25deg, fade | Stay down |
@@ -515,8 +515,8 @@ Each phase uses different CSS timing:
 
 | Effect | When | What |
 |--------|------|------|
-| PixelEnergyBall | Energy Wave windup | Glowing orb with radial gradient |
-| PixelBeam | Energy Wave impact | Wide beam across 60% of arena |
+| PixelEnergyBall | Ki Burst windup | Glowing orb with radial gradient |
+| PixelBeam | Ki Burst impact | Wide beam across 60% of arena |
 | PixelShield | Block windup/impact | Checkerboard pixel wall |
 | PixelFlash | Attack/Wave impact | White screen flash |
 | PixelChargeAura | Charge windup/impact | Scattered pulsing particles |

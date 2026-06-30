@@ -1,0 +1,33 @@
+# Add this block to the existing host-level Caddyfile on the Naver Cloud server.
+# Do not run the bundled Caddy service from docker-compose.prod.yml on a shared host.
+#
+# Required DNS:
+#   A  api-ncp.jjan.daeseon.ai  223.130.161.55
+#
+# After testing, move the canonical API domain:
+#   A  api.jjan.daeseon.ai      223.130.161.55
+
+api-ncp.jjan.daeseon.ai, api.jjan.daeseon.ai {
+    @gameWS {
+        path /api/v1/ws/game/*
+    }
+    reverse_proxy @gameWS 127.0.0.1:18001
+
+    reverse_proxy 127.0.0.1:18000
+
+    encode zstd gzip
+
+    header {
+        Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+        -Server
+    }
+
+    log {
+        output stdout
+        format json
+        level INFO
+    }
+}

@@ -15,6 +15,7 @@ import {
 } from "@/lib/api";
 import { CHARACTERS, getCharacter } from "@/lib/characters";
 import CharacterAvatar from "@/components/arena/CharacterAvatar";
+import { trackEvent } from "@/lib/analytics";
 
 /**
  * Room screen — Tekken-style online lobby.
@@ -81,6 +82,7 @@ export default function RoomScreen({
         if (mode === "create") {
           const { room: r } = await createRoom();
           setRoom(r);
+          trackEvent("pvp_room_created", { code: r.code });
         } else {
           if (!initialCode) {
             setError("missing room code");
@@ -88,6 +90,7 @@ export default function RoomScreen({
           }
           const r = await joinRoom(initialCode);
           setRoom(r);
+          trackEvent("pvp_room_joined", { code: r.code });
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : "failed to enter room");
@@ -176,8 +179,15 @@ export default function RoomScreen({
 
   const handleCopy = useCallback(() => {
     if (!room) return;
-    navigator.clipboard.writeText(room.code).then(() => {
+    const origin = window.location.origin;
+    const roomLink = `${origin}/pvp?room=${room.code}`;
+    navigator.clipboard.writeText(roomLink).then(() => {
       setCopied(true);
+      trackEvent("invite_copied", {
+        surface: "room",
+        room_code: room.code,
+        method: "clipboard",
+      });
       setTimeout(() => setCopied(false), 2000);
     });
   }, [room]);
@@ -255,7 +265,6 @@ export default function RoomScreen({
   const myId = myIdRef.current;
   const isHost = myId === room.host.id;
   const me = isHost ? room.host : room.guest;
-  const opponent = isHost ? room.guest : room.host;
   const myCharId = me?.character_id ?? null;
   const myReady = me?.ready ?? false;
   const opponentJoined = !!room.guest;
@@ -283,7 +292,7 @@ export default function RoomScreen({
               onClick={handleCopy}
               className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm font-medium"
             >
-              {copied ? "✓ Copied" : "Copy"}
+              {copied ? "✓ Link copied" : "Copy link"}
             </button>
           </div>
         </div>
@@ -312,8 +321,9 @@ export default function RoomScreen({
       <div className="text-center text-sm text-gray-400">
         {!opponentJoined && (
           <p>
-            Share the code <span className="font-bold text-yellow-300">{room.code}</span> with a friend.
-            They tap <span className="font-bold">Join Room</span> on the lobby.
+            Send the room link or share code{" "}
+            <span className="font-bold text-yellow-300">{room.code}</span>{" "}
+            with a friend.
           </p>
         )}
         {opponentJoined && room.status === "both_present" && (
@@ -432,4 +442,3 @@ function PlayerCard({
     </div>
   );
 }
-

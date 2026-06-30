@@ -1,147 +1,124 @@
 "use client";
 
-import { useState, useCallback } from "react";
 import Link from "next/link";
+import { useMemo, useState } from "react";
 import CharacterAvatar from "@/components/arena/CharacterAvatar";
 import { CHARACTERS } from "@/lib/characters";
+import { trackEvent } from "@/lib/analytics";
+import { PROMO_CAMPAIGN_BY_SLUG, buildPromoUrl } from "@/lib/promo-campaigns";
 
-/**
- * Friend invite page — generate a shareable PvP challenge link.
- *
- * Flow:
- * 1. Player picks a character (optional flair)
- * 2. Clicks "Create Challenge Link"
- * 3. Gets a share URL they can send to a friend
- * 4. Friend opens the link → lands on /pvp with the challenge ID
- *
- * For MVP, the link format is: /pvp?challenge={id}
- * The actual matchmaking uses the same WebSocket flow —
- * the challenge ID is used to pair two specific players.
- */
 export default function InvitePage() {
-  const [selectedChar, setSelectedChar] = useState("haneul");
-  const [challengeLink, setChallengeLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-
-  const createChallenge = useCallback(() => {
-    // Generate a simple challenge ID (UUID-like)
-    const id = crypto.randomUUID();
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    setChallengeLink(`${origin}/pvp?challenge=${id}`);
-    setCopied(false);
+  const promoLink = useMemo(() => {
+    const origin =
+      typeof window === "undefined" ? "https://jjan.daeseon.ai" : window.location.origin;
+    return buildPromoUrl(PROMO_CAMPAIGN_BY_SLUG["friend-share"], origin);
   }, []);
 
-  const copyLink = useCallback(async () => {
-    if (!challengeLink) return;
+  const copyPromoLink = async () => {
     try {
-      await navigator.clipboard.writeText(challengeLink);
+      await navigator.clipboard.writeText(promoLink);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      trackEvent("invite_copied", {
+        surface: "invite_page",
+        method: "clipboard",
+        promo: "friend-share",
+      });
+      window.setTimeout(() => setCopied(false), 1800);
     } catch {
-      // Fallback: select the text
+      setCopied(false);
     }
-  }, [challengeLink]);
+  };
 
-  const shareLink = useCallback(async () => {
-    if (!challengeLink) return;
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: "JJAN! Challenge",
-          text: "Read me in JJAN! — 1-second 1v1 duel. JJAN!",
-          url: challengeLink,
-        });
-      } catch {
-        // User cancelled share
-      }
-    } else {
-      copyLink();
+  const sharePromoLink = async () => {
+    if (!navigator.share) {
+      await copyPromoLink();
+      return;
     }
-  }, [challengeLink, copyLink]);
+    try {
+      await navigator.share({
+        title: "JJAN! · Ki Clash",
+        text: "Play JJAN!, the 1v1 ki reveal duel.",
+        url: promoLink,
+      });
+      trackEvent("invite_copied", {
+        surface: "invite_page",
+        method: "native_share",
+        promo: "friend-share",
+      });
+    } catch {
+      // User cancelled the native share sheet.
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-8 text-center">
-        <div>
-          <h1 className="text-3xl font-black mb-2">Challenge a Friend</h1>
-          <p className="text-gray-400">
-            Pick your fighter and send the link!
-          </p>
-        </div>
-
-        {/* Character picker */}
-        <div className="grid grid-cols-3 gap-3">
-          {CHARACTERS.map((char) => (
-            <button
-              key={char.id}
-              onClick={() => setSelectedChar(char.id)}
-              className={`flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all ${
-                selectedChar === char.id
-                  ? "border-opacity-100 bg-gray-700"
-                  : "border-gray-700 bg-gray-800 hover:bg-gray-700"
-              }`}
-              style={{
-                borderColor: selectedChar === char.id ? char.color : undefined,
-              }}
+    <main className="min-h-screen bg-[#0b0b14] text-white">
+      <section className="mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-center px-5 py-10 sm:px-8">
+        <div className="grid gap-8 lg:grid-cols-[0.92fr_1.08fr] lg:items-center">
+          <div>
+            <Link
+              href="/"
+              className="text-sm font-bold text-white/52 transition hover:text-white"
             >
-              <CharacterAvatar characterId={char.id} size="md" />
-              <span className="text-xs font-bold">{char.name}</span>
-            </button>
-          ))}
-        </div>
+              ← Official page
+            </Link>
+            <p className="mt-10 text-sm font-black uppercase tracking-[0.24em] text-yellow-200">
+              Share JJAN!
+            </p>
+            <h1 className="mt-3 text-4xl font-black leading-tight sm:text-6xl">
+              Send the promo link, or open a real PvP room.
+            </h1>
+            <p className="mt-5 text-base leading-7 text-white/66">
+              The promo link points to the official page. For a direct match,
+              create a PvP room and copy the room link from the lobby.
+            </p>
 
-        {!challengeLink ? (
-          <button
-            onClick={createChallenge}
-            className="w-full py-4 bg-red-600 hover:bg-red-500 rounded-xl
-                       text-xl font-bold transition-colors"
-          >
-            Create Challenge Link
-          </button>
-        ) : (
-          <div className="space-y-4">
-            <div className="bg-gray-800 rounded-xl p-4">
-              <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">
-                Challenge Link
-              </p>
-              <p className="text-sm text-blue-400 break-all font-mono">
-                {challengeLink}
-              </p>
-            </div>
-
-            <div className="flex gap-3">
+            <div className="mt-8 grid gap-3 sm:grid-cols-2">
               <button
-                onClick={copyLink}
-                className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl
-                           font-bold transition-colors"
+                onClick={copyPromoLink}
+                className="rounded-xl bg-yellow-300 px-5 py-4 text-sm font-black text-gray-950 transition hover:bg-yellow-200"
               >
-                {copied ? "Copied!" : "Copy Link"}
+                {copied ? "Promo link copied" : "Copy promo link"}
               </button>
               <button
-                onClick={shareLink}
-                className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl
-                           font-bold transition-colors"
+                onClick={sharePromoLink}
+                className="rounded-xl border border-cyan-300/35 bg-cyan-300/10 px-5 py-4 text-sm font-black text-cyan-100 transition hover:bg-cyan-300/16"
               >
                 Share
               </button>
+              <Link
+                href="/pvp"
+                className="rounded-xl border border-white/[0.18] bg-white/[0.08] px-5 py-4 text-center text-sm font-black text-white transition hover:bg-white/[0.12] sm:col-span-2"
+              >
+                Create PvP room
+              </Link>
             </div>
 
-            <button
-              onClick={createChallenge}
-              className="text-sm text-gray-500 hover:text-gray-300 transition-colors"
-            >
-              Generate new link
-            </button>
+            <div className="mt-5 rounded-lg border border-white/10 bg-white/[0.045] p-4">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/42">
+                Promo URL
+              </p>
+              <p className="mt-2 break-all font-mono text-sm text-cyan-200">
+                {promoLink}
+              </p>
+            </div>
           </div>
-        )}
 
-        <Link
-          href="/"
-          className="block text-sm text-gray-500 hover:text-gray-300 transition-colors"
-        >
-          ← Back to game
-        </Link>
-      </div>
-    </div>
+          <div className="grid grid-cols-3 gap-3">
+            {CHARACTERS.map((char) => (
+              <div
+                key={char.id}
+                className="rounded-lg border border-white/10 bg-white/[0.045] p-3 text-center"
+                style={{ borderColor: `${char.color}66` }}
+              >
+                <CharacterAvatar characterId={char.id} size="md" />
+                <p className="mt-2 text-sm font-black">{char.name}</p>
+                <p className="mt-1 text-[11px] text-white/45">{char.koreanName}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    </main>
   );
 }

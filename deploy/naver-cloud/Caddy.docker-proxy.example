@@ -1,0 +1,28 @@
+# Use this only when the existing Caddy itself runs as a Docker container.
+#
+# Required:
+#   COMPOSE_PROJECT_NAME=jjan docker compose -f docker-compose.naver.yml up -d --build
+#   DNS A api-ncp.jjan.daeseon.ai -> 223.130.161.55
+#
+# docker-compose.naver.yml attaches JJAN api/game to the external mimi_default
+# network with aliases jjan-api and jjan-game. Add this block to the existing
+# Mimi Caddyfile and restart only the existing caddy service.
+
+api-ncp.jjan.daeseon.ai, api.jjan.daeseon.ai {
+    @gameWS {
+        path /api/v1/ws/game/*
+    }
+    reverse_proxy @gameWS jjan-game:8001
+
+    reverse_proxy jjan-api:8000
+
+    encode zstd gzip
+
+    header {
+        Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+        -Server
+    }
+}
