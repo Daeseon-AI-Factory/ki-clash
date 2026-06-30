@@ -34,7 +34,7 @@ const HERO_FIGHTERS = [
 const MODES = [
   {
     title: "Practice",
-    detail: "Fast AI matches with three difficulty levels.",
+    detail: "Fast AI matches from Novice to a game-solving Grandmaster.",
     href: "/play",
     accent: "border-cyan-400/60 text-cyan-200",
   },
