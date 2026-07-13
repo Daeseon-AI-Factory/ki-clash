@@ -218,6 +218,7 @@ function FighterWithAura({
             pose={pose}
             flip={flip}
             width={92}
+            fx
           />
         </div>
 

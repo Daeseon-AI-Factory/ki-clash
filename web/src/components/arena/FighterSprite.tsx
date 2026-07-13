@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { motion } from "framer-motion";
+import { motion, type Transition } from "framer-motion";
 import type { Character } from "@/lib/characters";
 import { fighterAsset, type CharacterId } from "@/lib/assets";
 
@@ -51,6 +51,8 @@ interface FighterSpriteProps {
   width?: number;
   /** "auto" uses the original PNG roster first; "svg" forces fallback art. */
   assetMode?: "auto" | "svg";
+  /** Enable the impact FX layer (flash + sparks on impact/hit). Battle only. */
+  fx?: boolean;
   className?: string;
 }
 
@@ -151,6 +153,7 @@ export default function FighterSprite({
   flip = false,
   width = 80,
   assetMode = "auto",
+  fx = false,
   className = "",
 }: FighterSpriteProps) {
   const assetPose = poseToAssetPose(pose);
@@ -163,6 +166,7 @@ export default function FighterSprite({
       flip={flip}
       width={width}
       assetMode={assetMode}
+      fx={fx}
       className={className}
       assetPose={assetPose}
     />
@@ -175,6 +179,7 @@ function FighterSpriteFrame({
   flip = false,
   width = 80,
   assetMode = "auto",
+  fx = false,
   className = "",
   assetPose,
 }: FighterSpriteProps & { pose: FighterPose; assetPose: FighterPoseAsset }) {
@@ -212,27 +217,31 @@ function FighterSpriteFrame({
   // (small scale/translate, no big rotate) when attempt === "pose", and
   // the original "puppet" transforms when we're on idle/SVG fallback.
   const hasPosePng = attempt === "pose";
+  // Motion feel ported from the FX lab: anticipation on windup, an
+  // overshoot "pop" on impact, a snappy recoil on hit, a bounce on victory.
+  // Keyframe arrays (x/scale/y) express the anticipation→overshoot arc;
+  // `poseTransition` below gives each pose its own curve.
   const poseTransform = (() => {
     if (hasPosePng) {
-      // Pose baked into asset — only add subtle motion bias.
+      // Pose baked into asset — subtle motion bias so the PNG stays readable.
       switch (pose) {
-        case "windup":
-          return { scale: 0.97, rotate: 0, x: 0, y: 2 };
-        case "impact":
-          return { scale: 1.08, rotate: 0, x: flip ? -8 : 8, y: -2 };
-        case "recover":
-          return { scale: 1.02, rotate: 0, x: 0, y: 0 };
-        case "hit":
+        case "windup": // coil back + crouch (anticipation)
+          return { scale: 0.95, rotate: 0, x: flip ? 4 : -4, y: 3 };
+        case "impact": // lunge forward then overshoot back to settle
           return {
-            scale: 0.96,
+            scale: [0.98, 1.14, 1.07],
             rotate: 0,
-            x: flip ? 10 : -10,
-            y: -2,
+            x: flip ? [-2, -14, -10] : [2, 14, 10],
+            y: [1, -4, -2],
           };
+        case "recover":
+          return { scale: 1.0, rotate: 0, x: 0, y: 0 };
+        case "hit": // recoil away from the blow
+          return { scale: 0.95, rotate: flip ? 6 : -6, x: flip ? 12 : -12, y: -2 };
         case "ko":
           return { scale: 0.95, rotate: 0, x: 0, y: 6 };
-        case "victory":
-          return { scale: 1.1, rotate: 0, x: 0, y: -6 };
+        case "victory": // jump + settle bounce
+          return { scale: [1.0, 1.12, 1.08], rotate: 0, x: 0, y: [0, -10, -6] };
         default:
           return { scale: 1, rotate: 0, x: 0, y: 0 };
       }
@@ -241,9 +250,14 @@ function FighterSpriteFrame({
     // pose-aware so we fake motion by rotating/scaling the whole sprite.
     switch (pose) {
       case "windup":
-        return { scale: 0.96, rotate: 0, x: 0, y: 0 };
+        return { scale: 0.95, rotate: flip ? 3 : -3, x: flip ? 5 : -5, y: 1 };
       case "impact":
-        return { scale: 1.06, rotate: 0, x: flip ? -10 : 10, y: 0 };
+        return {
+          scale: [0.98, 1.13, 1.05],
+          rotate: 0,
+          x: flip ? [-3, -16, -11] : [3, 16, 11],
+          y: [0, -3, 0],
+        };
       case "recover":
         return { scale: 1.02, rotate: 0, x: 0, y: 0 };
       case "hit":
@@ -261,9 +275,28 @@ function FighterSpriteFrame({
           y: height * 0.22,
         };
       case "victory":
-        return { scale: 1.1, rotate: 0, x: 0, y: -6 };
+        return { scale: [1.0, 1.12, 1.08], rotate: 0, x: 0, y: [0, -10, -6] };
       default:
         return { scale: 1, rotate: 0, x: 0, y: 0 };
+    }
+  })();
+
+  // Per-pose curve: keyframed poses (impact/victory) use a back-out tween so
+  // the overshoot reads; the rest use springs tuned for weight vs snap.
+  const poseTransition: Transition = (() => {
+    switch (pose) {
+      case "impact":
+        return { duration: 0.34, ease: [0.34, 1.5, 0.5, 1], times: [0, 0.55, 1] };
+      case "victory":
+        return { duration: 0.55, ease: [0.34, 1.45, 0.5, 1], times: [0, 0.5, 1] };
+      case "hit":
+        return { type: "spring", stiffness: 620, damping: 16, mass: 0.7 };
+      case "windup":
+        return { type: "spring", stiffness: 210, damping: 18 };
+      case "ko":
+        return { type: "spring", stiffness: 130, damping: 15 };
+      default:
+        return { type: "spring", stiffness: 280, damping: 20, mass: 0.9 };
     }
   })();
 
@@ -282,7 +315,7 @@ function FighterSpriteFrame({
         transform: flip ? "scaleX(-1)" : undefined,
       }}
       animate={poseTransform}
-      transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+      transition={poseTransition}
     >
       <div className={pose === "idle" ? "idle-bob w-full h-full" : "w-full h-full"}>
         {attempt !== "svg" && imageSrc ? (
@@ -353,6 +386,42 @@ function FighterSpriteFrame({
           animate={{ opacity: [0, 0.9, 0] }}
           transition={{ duration: 0.5 }}
         />
+      )}
+
+      {/* Impact FX (battle only): white flash + radial sparks on impact/hit. */}
+      {fx && (pose === "impact" || pose === "hit") && (
+        <div key={`fx-${pose}`} className="absolute inset-0 pointer-events-none z-20">
+          <motion.div
+            className="absolute inset-0 mix-blend-screen"
+            style={{
+              background: `radial-gradient(circle at 50% 45%, #ffffff, ${character.color} 42%, transparent 64%)`,
+            }}
+            initial={{ opacity: 0.8 }}
+            animate={{ opacity: 0 }}
+            transition={{ duration: 0.26 }}
+          />
+          {Array.from({ length: 8 }).map((_, i) => {
+            const angle = (i / 8) * Math.PI * 2;
+            return (
+              <motion.span
+                key={i}
+                className="absolute left-1/2 top-1/2 block h-1.5 w-1.5 rounded-full"
+                initial={{ x: 0, y: 0, opacity: 1 }}
+                animate={{
+                  x: Math.cos(angle) * width * 0.42,
+                  y: Math.sin(angle) * width * 0.42,
+                  opacity: 0,
+                  scale: 0.3,
+                }}
+                transition={{ duration: 0.34, ease: "easeOut" }}
+                style={{
+                  background: i % 2 ? "#ffffff" : character.color,
+                  boxShadow: `0 0 6px ${character.color}`,
+                }}
+              />
+            );
+          })}
+        </div>
       )}
     </motion.div>
   );
