@@ -8,6 +8,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch: {}  # manual "Run workflow" → redeploy backend on demand
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -135,3 +136,52 @@ jobs:
           node-version: "20"
       - name: Check launch marketing links
         run: node scripts/check-launch-marketing.mjs
+
+  # ── Backend CD (rsync): on push to main (after Python+Go gates pass), rsync the
+  #    backend source to the NCP server and rebuild the containers. This matches
+  #    how the server is actually deployed: /data/jjan/app has NO git — it is a
+  #    plain source dir with `build: .`, so we push files (rsync) and rebuild,
+  #    NOT `git pull`. Connects by DOMAIN so a changing server IP is irrelevant.
+  #
+  #    Requires three repo secrets (Settings → Secrets and variables → Actions):
+  #      NCP_SSH_KEY   private key that logs into the server (the mimi-ops key)
+  #      NCP_USER      ssh user (root)
+  #      NCP_HOST      optional ssh host; defaults to api.jjan.daeseon.ai
+  #    No-ops (warns, never fails CI) until the secrets exist. Manual run via the
+  #    Actions tab → "Run workflow". ──
+  deploy-backend:
+    needs: [python-test, go-test]
+    if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-backend-main
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: rsync backend to NCP + rebuild
+        env:
+          NCP_SSH_KEY: ${{ secrets.NCP_SSH_KEY }}
+          NCP_USER: ${{ secrets.NCP_USER }}
+          NCP_HOST: ${{ secrets.NCP_HOST || 'api.jjan.daeseon.ai' }}
+        run: |
+          if [ -z "$NCP_SSH_KEY" ] || [ -z "$NCP_USER" ]; then
+            echo "::warning::NCP_SSH_KEY/NCP_USER not set — skipping backend deploy. Add them in Settings → Secrets → Actions to enable CD (host defaults to api.jjan.daeseon.ai)."
+            exit 0
+          fi
+          mkdir -p ~/.ssh
+          printf '%s\n' "$NCP_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$NCP_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          SSH="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new"
+          echo "Deploying to $NCP_USER@$NCP_HOST"
+          # Push backend source subdirs only — NEVER the server's /data/jjan/app/.env
+          rsync -az --delete --exclude='__pycache__' --exclude='*.pyc' -e "$SSH" \
+            app/ "$NCP_USER@$NCP_HOST:/data/jjan/app/app/"
+          rsync -az --delete --exclude='__pycache__' -e "$SSH" \
+            go-server/ "$NCP_USER@$NCP_HOST:/data/jjan/app/go-server/"
+          $SSH "$NCP_USER@$NCP_HOST" '
+            set -e
+            cd /data/jjan/app
+            COMPOSE_PROJECT_NAME=jjan docker compose -f docker-compose.naver.yml up -d --build api game
+            COMPOSE_PROJECT_NAME=jjan docker compose -f docker-compose.naver.yml ps
+          '
