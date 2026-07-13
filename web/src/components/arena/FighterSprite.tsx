@@ -133,6 +133,36 @@ const CHARACTER_DESIGN: Record<string, CharacterDesign> = {
     iris: "#BE185D",
     accessory: "clip",
   },
+  // Frost duelist: silver braids, ice-blue robe.
+  seorin: {
+    hair: "long-flow",
+    hairColor: "#CBD5E1",
+    hairTip: "#7DD3FC",
+    outfitMain: "#0891B2",   // ice teal
+    outfitTrim: "#E0F2FE",   // pale ice
+    iris: "#06B6D4",
+    accessory: "clip",
+  },
+  // Thunder brawler: blue spike + yellow tips, purple vest.
+  cheon: {
+    hair: "burst-spike",
+    hairColor: "#3B82F6",
+    hairTip: "#FDE047",
+    outfitMain: "#4C1D95",   // deep purple
+    outfitTrim: "#FBBF24",   // gold
+    iris: "#7C3AED",
+    accessory: "none",
+  },
+  // Shadow duelist: black topknot, dark robe.
+  yeonhwa: {
+    hair: "topknot",
+    hairColor: "#1E1B2E",
+    hairTip: "#4C1D95",
+    outfitMain: "#1E1B4B",   // near-black indigo
+    outfitTrim: "#7C3AED",
+    iris: "#F59E0B",   // amber
+    accessory: "none",
+  },
 };
 
 const FALLBACK_DESIGN: CharacterDesign = {

@@ -104,6 +104,50 @@ export const CHARACTERS: Character[] = [
       "Try harder. Or don't. The result is the same.",
     ],
   },
+  {
+    id: "seorin",
+    name: "Seorin",
+    koreanName: "서린",
+    emoji: "❄️",
+    color: "#38BDF8", // sky-400
+    bio: "Frost-calm duelist. Still as a frozen lake — until she strikes.",
+    trashTalk: [
+      "Cold reads win. Yours are lukewarm.",
+      "The ice already knows where you'll step.",
+      "Struggle. It's warmer that way.",
+      "Freeze. ...Too late.",
+    ],
+  },
+  {
+    id: "cheon",
+    name: "Cheon",
+    koreanName: "천둥",
+    emoji: "⚡",
+    color: "#818CF8", // indigo-400
+    bio: "Storm-born brawler. Faster than the thunder that chases him.",
+    trashTalk: [
+      "Blink and it's over. So... blink.",
+      "You're slow. Painfully slow.",
+      "The strike lands before the sound. You lose twice.",
+      "Zap. That was you, by the way.",
+      "Too fast for you? Skill issue.",
+    ],
+  },
+  {
+    id: "yeonhwa",
+    name: "Yeonhwa",
+    koreanName: "그림자",
+    emoji: "🌑",
+    color: "#7C3AED", // violet-600
+    bio: "Shadow-step duelist. You never see the strike that lands.",
+    trashTalk: [
+      "You're fighting a shadow. Good luck.",
+      "I was behind you three moves ago.",
+      "The dark doesn't miss.",
+      "Look away. It won't help.",
+      "Silence is the last thing you'll read.",
+    ],
+  },
 ];
 
 /** Look up a character by ID */
